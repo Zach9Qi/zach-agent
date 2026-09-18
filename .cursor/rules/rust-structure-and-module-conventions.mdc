@@ -1,0 +1,35 @@
+---
+description: Rust 架构设计、模块组织（禁用 mod.rs）、单文件长度与多 Crate 分层规范
+globs: **/*.rs
+alwaysApply: false
+---
+
+# Rust 结构设计与模块组织规范
+
+## 1. 模块组织规范（严禁 `mod.rs`）
+- **Rust 2018+ 风格**：当模块包含子模块时，入口必须是同名 `.rs` 文件（置于父目录），子模块置于同名子目录中。
+  - ✅ 正确：`src/parser.rs` 与 `src/parser/ast.rs`
+  - ❌ 严禁：`src/parser/mod.rs`
+- **模块入口职责**：在入口 `.rs` 文件中声明子模块（`pub mod xxx;`），并按需对外 re-export 常用类型（`pub use xxx::*`）。
+
+## 2. 单文件长度与单一职责
+- **行数控制**：单个源码文件建议控制在 **300 行以内**，硬性上限不得超过 **500 行**。
+- **职责拆分**：复杂模块应解耦拆分，例如：
+  - 错误定义拆分至 `error.rs`
+  - 数据模型/结构体拆分至 `types.rs`
+  - 辅助工具函数拆分至 `utils.rs`
+
+## 3. 多 Crate 分层架构与依赖约束
+遵循 Cargo Workspace 单向分层依赖，严禁反向依赖与循环依赖：
+```text
+zach-ai-core (底层契约: Trait/基础模型/Error) 
+  ▲
+zach-ai      (实现层: API客户端/Provider/数据流)
+  ▲
+zach-agent   (编排层: Agent运行时/状态机/工具调度)
+```
+
+## 4. 可见性与代码复用
+- **最小可见性**：优先使用 `pub(crate)` 或 `pub(super)`，非必要不暴露为 `pub`。
+- **公共抽象下沉**：跨 crate 共用的 Trait 和契约沉淀到 `*-core`，面向接口编程。
+- **门面模式（Façade）**：在 crate 的 `lib.rs` 中精选导出关键类型，为外部提供简洁统一的导入路径。
