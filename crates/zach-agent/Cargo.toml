@@ -1,0 +1,23 @@
+[package]
+name = "zach-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+zach-ai-core.workspace = true
+zach-ai = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+tracing.workspace = true
+schemars.workspace = true
+
+[features]
+default = []
+providers = ["dep:zach-ai"]
