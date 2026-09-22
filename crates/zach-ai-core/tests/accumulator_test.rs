@@ -292,6 +292,31 @@ fn streamed_and_complete_tool_call_collapse_to_one() {
 }
 
 #[test]
+fn empty_tool_input_replays_as_empty_object() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::ToolInputStart {
+        id: "call_1".to_string(),
+        tool_name: "now".to_string(),
+        provider_executed: false,
+        dynamic: false,
+        title: None,
+        provider_metadata: None,
+    });
+    accumulator.process(StreamPart::ToolInputEnd {
+        id: "call_1".to_string(),
+        provider_metadata: None,
+    });
+
+    match accumulator.finish().into_assistant_message() {
+        Message::Assistant { content, .. } => match &content[0] {
+            AssistantPart::ToolCall { input, .. } => assert_eq!(input, &json!({})),
+            other => panic!("期望工具调用，实际是 {other:?}"),
+        },
+        other => panic!("期望助手消息，实际是 {other:?}"),
+    }
+}
+
+#[test]
 fn provider_tool_result_is_replayed_into_assistant_message() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::ToolResult {

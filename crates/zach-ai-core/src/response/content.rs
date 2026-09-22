@@ -166,16 +166,13 @@ impl OutputContent {
                 provider_executed,
                 provider_metadata,
                 ..
-            } => {
-                let parsed_input = serde_json::from_str(&input).unwrap_or(Value::String(input));
-                Some(AssistantPart::ToolCall {
-                    tool_call_id,
-                    tool_name,
-                    input: parsed_input,
-                    provider_executed,
-                    provider_options: provider_metadata,
-                })
-            }
+            } => Some(AssistantPart::ToolCall {
+                tool_call_id,
+                tool_name,
+                input: parse_tool_input(&input),
+                provider_executed,
+                provider_options: provider_metadata,
+            }),
             Self::ToolResult {
                 tool_call_id,
                 tool_name,
@@ -209,6 +206,19 @@ impl OutputContent {
             _ => None,
         }
     }
+}
+
+/// 将流式拼接得到的原始入参字符串解析为结构化 JSON。
+///
+/// - 空白串（无参工具在流式场景下的常态）视为空对象 `{}`；
+/// - 合法 JSON 原样解析；
+/// - 非法 JSON（截断、畸形）保留为字符串，交由上层决定如何处理。
+pub fn parse_tool_input(input: &str) -> Value {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Value::Object(Default::default());
+    }
+    serde_json::from_str(trimmed).unwrap_or_else(|_| Value::String(input.to_string()))
 }
 
 fn tool_result_output(is_error: bool, result: Value) -> ToolResultOutput {
