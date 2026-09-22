@@ -36,6 +36,23 @@ impl ProviderOptions {
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+
+    /// 将另一份选项并入当前选项。
+    ///
+    /// 同一厂商键下若双方都是 JSON 对象，则按字段合并（后者覆盖同名字段）；
+    /// 否则以后者整体替换。
+    pub fn merge(&mut self, other: ProviderOptions) {
+        for (provider, incoming) in other.inner {
+            match (self.inner.get_mut(&provider), incoming) {
+                (Some(Value::Object(existing)), Value::Object(fields)) => {
+                    existing.extend(fields);
+                }
+                (_, incoming) => {
+                    self.inner.insert(provider, incoming);
+                }
+            }
+        }
+    }
 }
 
 /// 厂商专有出参/响应元数据

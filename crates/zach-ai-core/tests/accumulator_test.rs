@@ -169,6 +169,47 @@ fn end_event_metadata_is_preserved() {
 }
 
 #[test]
+fn start_and_end_metadata_are_merged_per_provider() {
+    let mut start_meta = ProviderMetadata::new();
+    start_meta.insert("anthropic", json!({ "item_id": "abc" }));
+    let mut end_meta = ProviderMetadata::new();
+    end_meta.insert("anthropic", json!({ "signature": "sig" }));
+    end_meta.insert("openai", json!({ "cached": true }));
+
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::ReasoningStart {
+        id: "r1".to_string(),
+        provider_metadata: Some(start_meta),
+    });
+    accumulator.process(StreamPart::ReasoningDelta {
+        id: "r1".to_string(),
+        delta: "思考".to_string(),
+        provider_metadata: None,
+    });
+    accumulator.process(StreamPart::ReasoningEnd {
+        id: "r1".to_string(),
+        provider_metadata: Some(end_meta),
+    });
+
+    let result = accumulator.finish();
+    match &result.content[0] {
+        OutputContent::Reasoning {
+            provider_metadata, ..
+        } => {
+            let stored = provider_metadata.as_ref().expect("合并后的元数据");
+            let anthropic = stored.get::<serde_json::Value>("anthropic").unwrap();
+            assert_eq!(anthropic["item_id"], "abc");
+            assert_eq!(anthropic["signature"], "sig");
+            assert_eq!(
+                stored.get::<serde_json::Value>("openai").unwrap()["cached"],
+                true
+            );
+        }
+        other => panic!("期望推理块，实际是 {other:?}"),
+    }
+}
+
+#[test]
 fn empty_reasoning_with_metadata_is_kept_while_bare_empty_block_is_dropped() {
     let mut accumulator = StreamAccumulator::new();
     // 类似 Anthropic redacted_thinking：无正文，信息全在元数据

@@ -222,11 +222,18 @@ impl StreamAccumulator {
 }
 
 /// 将新到达的元数据并入槽位；`None` 不会清空既有值。
+///
+/// Start / Delta / End 各阶段可能分别携带不同字段（如 Anthropic 在 End 才给出 `signature`），
+/// 因此按厂商键合并而不是整体覆盖。
 pub(super) fn merge_metadata(
     slot: &mut Option<ProviderMetadata>,
     incoming: Option<ProviderMetadata>,
 ) {
-    if incoming.is_some() {
-        *slot = incoming;
+    let Some(incoming) = incoming else {
+        return;
+    };
+    match slot {
+        Some(existing) => existing.merge(incoming),
+        None => *slot = Some(incoming),
     }
 }
