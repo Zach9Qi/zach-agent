@@ -1,6 +1,5 @@
 //! 非流式完整生成结果定义
 
-use std::collections::HashMap;
 use crate::options::{ModelWarning, ProviderMetadata};
 use crate::prompt::message::Message;
 use crate::prompt::part::AssistantPart;
@@ -8,6 +7,7 @@ use crate::response::content::OutputContent;
 use crate::response::usage::Usage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// 统一归一化的模型结束原因
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

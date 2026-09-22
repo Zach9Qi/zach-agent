@@ -41,9 +41,7 @@ pub enum ToolResultOutput {
         provider_options: Option<ProviderOptions>,
     },
     /// 复合结果（支持文本、文件与自定义块组合）
-    Content {
-        value: Vec<ToolResultContentBlock>,
-    },
+    Content { value: Vec<ToolResultContentBlock> },
 }
 
 impl ToolResultOutput {

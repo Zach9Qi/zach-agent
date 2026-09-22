@@ -1,10 +1,10 @@
 //! 文件与多模态数据载荷模块
 
-use std::collections::HashMap;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use bytes::Bytes;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 
 /// 文件与多模态数据载荷
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

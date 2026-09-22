@@ -1,12 +1,12 @@
 //! 统一语言模型（LanguageModel）Trait 抽象契约
 
-use std::pin::Pin;
-use async_trait::async_trait;
-use futures_core::Stream;
 use crate::call_options::CallOptions;
 use crate::error::ModelError;
 use crate::response::GenerateResult;
 use crate::stream::StreamPart;
+use async_trait::async_trait;
+use futures_core::Stream;
+use std::pin::Pin;
 
 /// 流式生成返回的异步流类型别名
 pub type LanguageModelStream =

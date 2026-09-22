@@ -59,10 +59,7 @@ impl Message {
         data: FileData,
     ) -> Self {
         Self::User {
-            content: vec![
-                UserPart::text(text),
-                UserPart::file(media_type, data),
-            ],
+            content: vec![UserPart::text(text), UserPart::file(media_type, data)],
             provider_options: None,
         }
     }

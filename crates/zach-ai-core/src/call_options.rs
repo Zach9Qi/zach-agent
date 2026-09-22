@@ -1,11 +1,11 @@
 //! 模型调用选项与超参数配置
 
-use std::collections::HashMap;
 use crate::options::ProviderOptions;
 use crate::prompt::Prompt;
 use crate::tool::{ToolChoice, ToolDefinition};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// 期望的模型响应输出格式
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

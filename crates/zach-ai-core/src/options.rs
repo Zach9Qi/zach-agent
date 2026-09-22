@@ -1,8 +1,8 @@
 //! 厂商专有扩展选项与元数据
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// 厂商专有入参字典。
 /// 外层 key 是厂商标识（如 "openai"、"anthropic"），内层是厂商私有参数字段。
@@ -58,12 +58,7 @@ pub enum ModelWarning {
         details: Option<String>,
     },
     /// 使用了已弃用的设置项
-    Deprecated {
-        setting: String,
-        message: String,
-    },
+    Deprecated { setting: String, message: String },
     /// 其他警告信息
-    Other {
-        message: String,
-    },
+    Other { message: String },
 }
