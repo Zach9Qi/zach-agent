@@ -31,6 +31,8 @@ pub struct StreamAccumulator {
     text_index: HashMap<String, usize>,
     reasoning_index: HashMap<String, usize>,
     tool_index: HashMap<String, usize>,
+    /// 按 `tool_call_id` 定位工具结果块，后续（中间态或最终）结果原地替换
+    tool_result_index: HashMap<String, usize>,
     /// 已收到完整入参的工具调用。之后的增量片段不再拼接，避免和完整 `ToolCall` 重复。
     sealed_tools: HashSet<String>,
     explicit_finish: Option<FinishReason>,
@@ -180,7 +182,7 @@ impl StreamAccumulator {
                 dynamic,
                 provider_metadata,
             } => {
-                self.content.push(OutputContent::ToolResult {
+                self.apply_tool_result(OutputContent::ToolResult {
                     tool_call_id,
                     tool_name,
                     result,

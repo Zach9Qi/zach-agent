@@ -202,6 +202,21 @@ impl StreamAccumulator {
         }
     }
 
+    /// 写入工具结果：同一 `tool_call_id` 的后续结果（如中间态进度 → 最终结果）原地替换，
+    /// 位置沿用首次出现处，避免 `content` 中残留多份进度快照。
+    pub(super) fn apply_tool_result(&mut self, result: OutputContent) {
+        let OutputContent::ToolResult { tool_call_id, .. } = &result else {
+            return;
+        };
+        if let Some(&idx) = self.tool_result_index.get(tool_call_id) {
+            self.content[idx] = result;
+        } else {
+            self.tool_result_index
+                .insert(tool_call_id.clone(), self.content.len());
+            self.content.push(result);
+        }
+    }
+
     fn ensure_tool(&mut self, id: &str) -> usize {
         if let Some(&idx) = self.tool_index.get(id) {
             idx

@@ -421,7 +421,21 @@ fn provider_tool_result_is_replayed_into_assistant_message() {
     });
 
     let result = accumulator.finish();
-    assert_eq!(result.content.len(), 3);
+    // 同一 call_1 的中间态结果被最终结果原地替换，不残留进度快照
+    assert_eq!(result.content.len(), 2);
+    match &result.content[0] {
+        OutputContent::ToolResult {
+            tool_call_id,
+            result,
+            preliminary,
+            ..
+        } => {
+            assert_eq!(tool_call_id, "call_1");
+            assert_eq!(result, &json!({ "hits": 1 }));
+            assert!(!preliminary);
+        }
+        other => panic!("期望工具结果，实际是 {other:?}"),
+    }
 
     match result.into_assistant_message() {
         Message::Assistant { content, .. } => {
