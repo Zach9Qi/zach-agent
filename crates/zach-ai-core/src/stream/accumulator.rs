@@ -1,22 +1,16 @@
 //! 流式分块累加器（将 StreamPart 流还原为 GenerateResult）
+//!
+//! 文本、推理和工具入参按**第一次出现**的位置占位，后续增量原地拼接。
+//! 因此未发送 End、或 End 晚于其他内容到达时，最终顺序仍与流的起始顺序一致。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
 use crate::options::{ModelWarning, ProviderMetadata};
 use crate::response::{
     FinishReason, GenerateResult, OutputContent, ResponseMetadata, UnifiedFinishReason, Usage,
 };
 use crate::stream::part::StreamPart;
-
-/// 工具入参累积状态
-#[derive(Debug, Default)]
-struct ToolInputAccumulator {
-    id: String,
-    tool_name: String,
-    input_buffer: String,
-    provider_executed: bool,
-    dynamic: bool,
-    provider_metadata: Option<ProviderMetadata>,
-}
+use serde_json::Value;
 
 /// 流式事件聚合器
 #[derive(Debug, Default)]
@@ -25,20 +19,24 @@ pub struct StreamAccumulator {
     pub warnings: Vec<ModelWarning>,
     /// 响应元数据
     pub response: Option<ResponseMetadata>,
-    /// 文本块累加器（按 id 索引文本缓冲）
-    text_buffers: HashMap<String, (String, Option<ProviderMetadata>)>,
-    /// 思考链累加器（按 id 索引）
-    reasoning_buffers: HashMap<String, (String, Option<ProviderMetadata>)>,
-    /// 工具入参累加器（按 id 索引）
-    tool_input_buffers: HashMap<String, ToolInputAccumulator>,
-    /// 已经完成的有序输出内容
+    /// 按首次出现顺序排列的实时内容。
+    ///
+    /// 只收到 Start、尚无增量的文本或推理段会暂时是空字符串，[`Self::finish`] 时剔除。
     pub content: Vec<OutputContent>,
-    /// 结束原因
+    /// 当前已解析的结束原因。仅在收到 `Finish` 或 `Error` 后有值；二者都没有时由 `finish` 视为正常停止。
     pub finish_reason: Option<FinishReason>,
     /// Token 消耗统计
     pub usage: Option<Usage>,
     /// 最终厂商元数据
     pub provider_metadata: Option<ProviderMetadata>,
+
+    text_index: HashMap<String, usize>,
+    reasoning_index: HashMap<String, usize>,
+    tool_index: HashMap<String, usize>,
+    /// 已收到完整入参的工具调用。之后的增量片段不再拼接，避免和完整 `ToolCall` 重复。
+    sealed_tools: HashSet<String>,
+    explicit_finish: Option<FinishReason>,
+    stream_error: Option<String>,
 }
 
 impl StreamAccumulator {
@@ -60,63 +58,41 @@ impl StreamAccumulator {
                 id,
                 provider_metadata,
             } => {
-                self.text_buffers
-                    .insert(id, (String::new(), provider_metadata));
+                self.ensure_text(&id, provider_metadata);
             }
             StreamPart::TextDelta {
                 id,
                 delta,
                 provider_metadata,
             } => {
-                let entry = self
-                    .text_buffers
-                    .entry(id)
-                    .or_insert_with(|| (String::new(), provider_metadata.clone()));
-                entry.0.push_str(&delta);
-                if provider_metadata.is_some() {
-                    entry.1 = provider_metadata;
-                }
+                let idx = self.ensure_text(&id, None);
+                self.append_text(idx, &delta, provider_metadata);
             }
-            StreamPart::TextEnd { id, .. } => {
-                if let Some((text, provider_metadata)) = self.text_buffers.remove(&id) {
-                    if !text.is_empty() {
-                        self.content.push(OutputContent::Text {
-                            text,
-                            provider_metadata,
-                        });
-                    }
-                }
+            StreamPart::TextEnd {
+                id,
+                provider_metadata,
+            } => {
+                self.finish_text(&id, provider_metadata);
             }
             StreamPart::ReasoningStart {
                 id,
                 provider_metadata,
             } => {
-                self.reasoning_buffers
-                    .insert(id, (String::new(), provider_metadata));
+                self.ensure_reasoning(&id, provider_metadata);
             }
             StreamPart::ReasoningDelta {
                 id,
                 delta,
                 provider_metadata,
             } => {
-                let entry = self
-                    .reasoning_buffers
-                    .entry(id)
-                    .or_insert_with(|| (String::new(), provider_metadata.clone()));
-                entry.0.push_str(&delta);
-                if provider_metadata.is_some() {
-                    entry.1 = provider_metadata;
-                }
+                let idx = self.ensure_reasoning(&id, None);
+                self.append_reasoning(idx, &delta, provider_metadata);
             }
-            StreamPart::ReasoningEnd { id, .. } => {
-                if let Some((text, provider_metadata)) = self.reasoning_buffers.remove(&id) {
-                    if !text.is_empty() {
-                        self.content.push(OutputContent::Reasoning {
-                            text,
-                            provider_metadata,
-                        });
-                    }
-                }
+            StreamPart::ReasoningEnd {
+                id,
+                provider_metadata,
+            } => {
+                self.finish_reasoning(&id, provider_metadata);
             }
             StreamPart::ToolInputStart {
                 id,
@@ -126,34 +102,26 @@ impl StreamAccumulator {
                 provider_metadata,
                 ..
             } => {
-                self.tool_input_buffers.insert(
-                    id.clone(),
-                    ToolInputAccumulator {
-                        id,
-                        tool_name,
-                        input_buffer: String::new(),
-                        provider_executed,
-                        dynamic,
-                        provider_metadata,
-                    },
+                self.begin_tool(
+                    &id,
+                    tool_name,
+                    provider_executed,
+                    dynamic,
+                    provider_metadata,
                 );
             }
-            StreamPart::ToolInputDelta { id, delta, .. } => {
-                if let Some(acc) = self.tool_input_buffers.get_mut(&id) {
-                    acc.input_buffer.push_str(&delta);
-                }
+            StreamPart::ToolInputDelta {
+                id,
+                delta,
+                provider_metadata,
+            } => {
+                self.append_tool_input(&id, &delta, provider_metadata);
             }
-            StreamPart::ToolInputEnd { id, .. } => {
-                if let Some(acc) = self.tool_input_buffers.remove(&id) {
-                    self.content.push(OutputContent::ToolCall {
-                        tool_call_id: acc.id,
-                        tool_name: acc.tool_name,
-                        input: acc.input_buffer,
-                        provider_executed: acc.provider_executed,
-                        dynamic: acc.dynamic,
-                        provider_metadata: acc.provider_metadata,
-                    });
-                }
+            StreamPart::ToolInputEnd {
+                id,
+                provider_metadata,
+            } => {
+                self.finish_tool_input(&id, provider_metadata);
             }
             StreamPart::ToolCall {
                 tool_call_id,
@@ -163,14 +131,14 @@ impl StreamAccumulator {
                 dynamic,
                 provider_metadata,
             } => {
-                self.content.push(OutputContent::ToolCall {
+                self.apply_tool_call(
                     tool_call_id,
                     tool_name,
                     input,
                     provider_executed,
                     dynamic,
                     provider_metadata,
-                });
+                );
             }
             StreamPart::ToolResult {
                 tool_call_id,
@@ -244,50 +212,24 @@ impl StreamAccumulator {
                 provider_metadata,
             } => {
                 self.usage = Some(usage);
-                self.finish_reason = Some(finish_reason);
+                self.explicit_finish = Some(finish_reason);
+                self.publish_finish_reason();
                 if provider_metadata.is_some() {
                     self.provider_metadata = provider_metadata;
                 }
             }
-            StreamPart::Error { .. } | StreamPart::Raw { .. } => {}
+            StreamPart::Error { message, raw } => {
+                self.stream_error = Some(describe_stream_error(message, raw));
+                self.publish_finish_reason();
+            }
+            StreamPart::Raw { .. } => {}
         }
     }
 
-    /// 结束聚合，生成最终的 GenerateResult
+    /// 结束聚合，生成最终的 [`GenerateResult`]
     pub fn finish(mut self) -> GenerateResult {
-        // 刷新所有未显式通过 end 闭合的残余 buffer
-        for (_id, (text, metadata)) in self.text_buffers {
-            if !text.is_empty() {
-                self.content.push(OutputContent::Text {
-                    text,
-                    provider_metadata: metadata,
-                });
-            }
-        }
-        for (_id, (text, metadata)) in self.reasoning_buffers {
-            if !text.is_empty() {
-                self.content.push(OutputContent::Reasoning {
-                    text,
-                    provider_metadata: metadata,
-                });
-            }
-        }
-        for (_id, acc) in self.tool_input_buffers {
-            self.content.push(OutputContent::ToolCall {
-                tool_call_id: acc.id,
-                tool_name: acc.tool_name,
-                input: acc.input_buffer,
-                provider_executed: acc.provider_executed,
-                dynamic: acc.dynamic,
-                provider_metadata: acc.provider_metadata,
-            });
-        }
-
-        let finish_reason = self.finish_reason.unwrap_or(FinishReason {
-            unified: UnifiedFinishReason::Stop,
-            raw: None,
-        });
-
+        self.content.retain(keep_in_final_content);
+        let finish_reason = self.resolved_finish_reason();
         GenerateResult {
             content: self.content,
             finish_reason,
@@ -298,5 +240,250 @@ impl StreamAccumulator {
             request_body: None,
             response_headers: None,
         }
+    }
+
+    fn ensure_text(&mut self, id: &str, metadata: Option<ProviderMetadata>) -> usize {
+        if let Some(&idx) = self.text_index.get(id) {
+            if let OutputContent::Text {
+                provider_metadata, ..
+            } = &mut self.content[idx]
+            {
+                merge_metadata(provider_metadata, metadata);
+            }
+            idx
+        } else {
+            let idx = self.content.len();
+            self.content.push(OutputContent::Text {
+                text: String::new(),
+                provider_metadata: metadata,
+            });
+            self.text_index.insert(id.to_string(), idx);
+            idx
+        }
+    }
+
+    fn append_text(&mut self, idx: usize, delta: &str, metadata: Option<ProviderMetadata>) {
+        if let OutputContent::Text {
+            text,
+            provider_metadata,
+        } = &mut self.content[idx]
+        {
+            text.push_str(delta);
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn finish_text(&mut self, id: &str, metadata: Option<ProviderMetadata>) {
+        let Some(&idx) = self.text_index.get(id) else {
+            return;
+        };
+        if let OutputContent::Text {
+            provider_metadata, ..
+        } = &mut self.content[idx]
+        {
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn ensure_reasoning(&mut self, id: &str, metadata: Option<ProviderMetadata>) -> usize {
+        if let Some(&idx) = self.reasoning_index.get(id) {
+            if let OutputContent::Reasoning {
+                provider_metadata, ..
+            } = &mut self.content[idx]
+            {
+                merge_metadata(provider_metadata, metadata);
+            }
+            idx
+        } else {
+            let idx = self.content.len();
+            self.content.push(OutputContent::Reasoning {
+                text: String::new(),
+                provider_metadata: metadata,
+            });
+            self.reasoning_index.insert(id.to_string(), idx);
+            idx
+        }
+    }
+
+    fn append_reasoning(&mut self, idx: usize, delta: &str, metadata: Option<ProviderMetadata>) {
+        if let OutputContent::Reasoning {
+            text,
+            provider_metadata,
+        } = &mut self.content[idx]
+        {
+            text.push_str(delta);
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn finish_reasoning(&mut self, id: &str, metadata: Option<ProviderMetadata>) {
+        let Some(&idx) = self.reasoning_index.get(id) else {
+            return;
+        };
+        if let OutputContent::Reasoning {
+            provider_metadata, ..
+        } = &mut self.content[idx]
+        {
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn begin_tool(
+        &mut self,
+        id: &str,
+        tool_name: String,
+        provider_executed: bool,
+        dynamic: bool,
+        metadata: Option<ProviderMetadata>,
+    ) {
+        let idx = self.ensure_tool(id);
+        let sealed = self.sealed_tools.contains(id);
+        if let OutputContent::ToolCall {
+            tool_name: name,
+            provider_executed: executed,
+            dynamic: is_dynamic,
+            provider_metadata,
+            ..
+        } = &mut self.content[idx]
+        {
+            if !tool_name.is_empty() && (name.is_empty() || !sealed) {
+                *name = tool_name;
+            }
+            if !sealed {
+                *executed = provider_executed;
+                *is_dynamic = dynamic;
+            }
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn append_tool_input(&mut self, id: &str, delta: &str, metadata: Option<ProviderMetadata>) {
+        let idx = self.ensure_tool(id);
+        let sealed = self.sealed_tools.contains(id);
+        if let OutputContent::ToolCall {
+            input,
+            provider_metadata,
+            ..
+        } = &mut self.content[idx]
+        {
+            if !sealed {
+                input.push_str(delta);
+            }
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn finish_tool_input(&mut self, id: &str, metadata: Option<ProviderMetadata>) {
+        let Some(&idx) = self.tool_index.get(id) else {
+            return;
+        };
+        if let OutputContent::ToolCall {
+            provider_metadata, ..
+        } = &mut self.content[idx]
+        {
+            merge_metadata(provider_metadata, metadata);
+        }
+    }
+
+    fn apply_tool_call(
+        &mut self,
+        id: String,
+        tool_name: String,
+        input: String,
+        provider_executed: bool,
+        dynamic: bool,
+        metadata: Option<ProviderMetadata>,
+    ) {
+        let seal = !input.is_empty();
+        let idx = self.ensure_tool(&id);
+        if let OutputContent::ToolCall {
+            tool_name: name,
+            input: slot_input,
+            provider_executed: executed,
+            dynamic: is_dynamic,
+            provider_metadata,
+            ..
+        } = &mut self.content[idx]
+        {
+            if !tool_name.is_empty() {
+                *name = tool_name;
+            }
+            if seal {
+                *slot_input = input;
+            }
+            *executed = provider_executed;
+            *is_dynamic = dynamic;
+            merge_metadata(provider_metadata, metadata);
+        }
+        if seal {
+            self.sealed_tools.insert(id);
+        }
+    }
+
+    fn ensure_tool(&mut self, id: &str) -> usize {
+        if let Some(&idx) = self.tool_index.get(id) {
+            idx
+        } else {
+            let idx = self.content.len();
+            self.content.push(OutputContent::ToolCall {
+                tool_call_id: id.to_string(),
+                tool_name: String::new(),
+                input: String::new(),
+                provider_executed: false,
+                dynamic: false,
+                provider_metadata: None,
+            });
+            self.tool_index.insert(id.to_string(), idx);
+            idx
+        }
+    }
+
+    fn publish_finish_reason(&mut self) {
+        self.finish_reason = Some(self.resolved_finish_reason());
+    }
+
+    fn resolved_finish_reason(&self) -> FinishReason {
+        match (&self.explicit_finish, &self.stream_error) {
+            (Some(reason), Some(err)) if reason.unified == UnifiedFinishReason::Stop => {
+                FinishReason {
+                    unified: UnifiedFinishReason::Error,
+                    raw: Some(err.clone()),
+                }
+            }
+            (Some(reason), _) => reason.clone(),
+            (None, Some(err)) => FinishReason {
+                unified: UnifiedFinishReason::Error,
+                raw: Some(err.clone()),
+            },
+            (None, None) => FinishReason {
+                unified: UnifiedFinishReason::Stop,
+                raw: None,
+            },
+        }
+    }
+}
+
+fn merge_metadata(slot: &mut Option<ProviderMetadata>, incoming: Option<ProviderMetadata>) {
+    if incoming.is_some() {
+        *slot = incoming;
+    }
+}
+
+fn keep_in_final_content(part: &OutputContent) -> bool {
+    match part {
+        OutputContent::Text { text, .. } | OutputContent::Reasoning { text, .. } => {
+            !text.is_empty()
+        }
+        _ => true,
+    }
+}
+
+fn describe_stream_error(message: String, raw: Option<Value>) -> String {
+    if !message.is_empty() {
+        message
+    } else if let Some(raw) = raw {
+        raw.to_string()
+    } else {
+        "未知流式错误".to_string()
     }
 }

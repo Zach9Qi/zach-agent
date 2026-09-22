@@ -3,6 +3,7 @@
 use crate::file::FileData;
 use crate::options::ProviderMetadata;
 use crate::prompt::part::AssistantPart;
+use crate::tool::ToolResultOutput;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -166,8 +167,7 @@ impl OutputContent {
                 provider_metadata,
                 ..
             } => {
-                let parsed_input =
-                    serde_json::from_str(&input).unwrap_or(Value::String(input));
+                let parsed_input = serde_json::from_str(&input).unwrap_or(Value::String(input));
                 Some(AssistantPart::ToolCall {
                     tool_call_id,
                     tool_name,
@@ -175,6 +175,26 @@ impl OutputContent {
                     provider_executed,
                     provider_options: provider_metadata,
                 })
+            }
+            Self::ToolResult {
+                tool_call_id,
+                tool_name,
+                result,
+                is_error,
+                preliminary,
+                provider_metadata,
+                ..
+            } => {
+                if preliminary {
+                    None
+                } else {
+                    Some(AssistantPart::ToolResult {
+                        tool_call_id,
+                        tool_name,
+                        output: tool_result_output(is_error, result),
+                        provider_options: provider_metadata,
+                    })
+                }
             }
             Self::Custom {
                 kind,
@@ -185,8 +205,20 @@ impl OutputContent {
                 data,
                 provider_options: provider_metadata,
             }),
-            // 审批请求、引用源等无需作为历史回填
+            // 审批请求、引用源不进入下一轮历史
             _ => None,
         }
+    }
+}
+
+fn tool_result_output(is_error: bool, result: Value) -> ToolResultOutput {
+    match (is_error, result) {
+        (false, Value::String(text)) => ToolResultOutput::text(text),
+        (false, value) => ToolResultOutput::json(value),
+        (true, Value::String(text)) => ToolResultOutput::error_text(text),
+        (true, value) => ToolResultOutput::ErrorJson {
+            value,
+            provider_options: None,
+        },
     }
 }
