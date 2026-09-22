@@ -272,6 +272,22 @@ fn interleaved_text_stays_before_later_tool_call() {
 }
 
 #[test]
+fn truncated_stream_is_reported_as_unknown() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::TextDelta {
+        id: "t1".to_string(),
+        delta: "半截".to_string(),
+        provider_metadata: None,
+    });
+    assert!(!accumulator.is_complete());
+    assert_eq!(accumulator.finish_reason(), None);
+
+    let result = accumulator.finish();
+    assert_eq!(result.text(), "半截");
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Unknown);
+}
+
+#[test]
 fn stream_error_is_not_reported_as_stop() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::TextDelta {

@@ -60,12 +60,17 @@ impl StreamAccumulator {
         &self.content
     }
 
-    /// 当前已解析的结束原因。仅在收到 `Finish` 或 `Error` 后有值。
+    /// 流是否已正常收尾（收到 `Finish` 事件或明确的错误）
+    ///
+    /// 为 `false` 时调用 [`Self::finish`] 会得到 [`UnifiedFinishReason::Unknown`]，
+    /// 提示调用方该结果可能是被静默截断的半截内容。
+    pub fn is_complete(&self) -> bool {
+        self.explicit_finish.is_some() || self.stream_error.is_some()
+    }
+
+    /// 当前已解析的结束原因。仅在流已收尾（见 [`Self::is_complete`]）后有值。
     pub fn finish_reason(&self) -> Option<FinishReason> {
-        if self.explicit_finish.is_none() && self.stream_error.is_none() {
-            return None;
-        }
-        Some(self.resolved_finish_reason())
+        self.is_complete().then(|| self.resolved_finish_reason())
     }
 
     /// 已收到的 Token 用量
@@ -286,8 +291,9 @@ impl StreamAccumulator {
                 unified: UnifiedFinishReason::Error,
                 raw: Some(err.clone()),
             },
+            // 既无 Finish 也无 Error：流被静默截断，不能伪装成正常停止
             (None, None) => FinishReason {
-                unified: UnifiedFinishReason::Stop,
+                unified: UnifiedFinishReason::Unknown,
                 raw: None,
             },
         }
