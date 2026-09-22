@@ -169,6 +169,38 @@ fn end_event_metadata_is_preserved() {
 }
 
 #[test]
+fn empty_reasoning_with_metadata_is_kept_while_bare_empty_block_is_dropped() {
+    let mut accumulator = StreamAccumulator::new();
+    // 类似 Anthropic redacted_thinking：无正文，信息全在元数据
+    accumulator.process(StreamPart::ReasoningStart {
+        id: "r1".to_string(),
+        provider_metadata: Some(meta()),
+    });
+    accumulator.process(StreamPart::ReasoningEnd {
+        id: "r1".to_string(),
+        provider_metadata: None,
+    });
+    // 纯空块：只 Start 没内容也没元数据
+    accumulator.process(StreamPart::TextStart {
+        id: "t1".to_string(),
+        provider_metadata: None,
+    });
+
+    let result = accumulator.finish();
+    assert_eq!(result.content.len(), 1);
+    match &result.content[0] {
+        OutputContent::Reasoning {
+            text,
+            provider_metadata,
+        } => {
+            assert!(text.is_empty());
+            assert!(provider_metadata.is_some());
+        }
+        other => panic!("期望推理块，实际是 {other:?}"),
+    }
+}
+
+#[test]
 fn interleaved_text_stays_before_later_tool_call() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::TextStart {

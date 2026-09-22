@@ -23,7 +23,7 @@ pub struct StreamAccumulator {
     warnings: Vec<ModelWarning>,
     response: Option<ResponseMetadata>,
     /// 按首次出现顺序排列的实时内容。
-    /// 只收到 Start、尚无增量的文本或推理段会暂时是空字符串，`finish` 时剔除。
+    /// 只收到 Start、尚无增量且无元数据的文本或推理段会暂时是空字符串，`finish` 时剔除。
     content: Vec<OutputContent>,
     usage: Option<Usage>,
     provider_metadata: Option<ProviderMetadata>,
@@ -292,11 +292,20 @@ impl StreamAccumulator {
     }
 }
 
+/// 剔除既无正文也无厂商元数据的空块。
+///
+/// 只带元数据的空块必须保留：例如 Anthropic 的 `redacted_thinking` 正文为空，
+/// 全部信息都在元数据里，丢弃会导致下一轮回放缺块。
 fn keep_in_final_content(part: &OutputContent) -> bool {
     match part {
-        OutputContent::Text { text, .. } | OutputContent::Reasoning { text, .. } => {
-            !text.is_empty()
+        OutputContent::Text {
+            text,
+            provider_metadata,
         }
+        | OutputContent::Reasoning {
+            text,
+            provider_metadata,
+        } => !text.is_empty() || provider_metadata.is_some(),
         _ => true,
     }
 }
