@@ -313,12 +313,30 @@ fn stream_error_is_not_reported_as_stop() {
 }
 
 #[test]
+fn stream_error_without_finish_is_reported_as_error() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::Error {
+        message: "连接中断".to_string(),
+        raw: None,
+    });
+    assert!(!accumulator.is_complete());
+
+    let result = accumulator.finish();
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
+    assert_eq!(result.finish_reason.raw.as_deref(), Some("连接中断"));
+}
+
+#[test]
 fn explicit_non_stop_finish_survives_stream_error() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::Error {
         message: "连接中断".to_string(),
         raw: None,
     });
+    // Error 不终止流：此时尚未收尾，不应提前报出结束原因
+    assert!(!accumulator.is_complete());
+    assert_eq!(accumulator.finish_reason(), None);
+
     accumulator.process(StreamPart::Finish {
         usage: Usage::default(),
         finish_reason: FinishReason {
@@ -327,6 +345,11 @@ fn explicit_non_stop_finish_survives_stream_error() {
         },
         provider_metadata: None,
     });
+    assert!(accumulator.is_complete());
+    assert_eq!(
+        accumulator.finish_reason().map(|reason| reason.unified),
+        Some(UnifiedFinishReason::Length)
+    );
 
     let result = accumulator.finish();
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Length);

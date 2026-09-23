@@ -60,12 +60,13 @@ impl StreamAccumulator {
         &self.content
     }
 
-    /// 流是否已正常收尾（收到 `Finish` 事件或明确的错误）
+    /// 流是否已收尾（收到 `Finish` 事件）
     ///
-    /// 为 `false` 时调用 [`Self::finish`] 会得到 [`UnifiedFinishReason::Unknown`]，
-    /// 提示调用方该结果可能是被静默截断的半截内容。
+    /// `Error` 事件不终止流，之后仍可能到达内容或 `Finish`，因此不计入收尾。
+    /// 为 `false` 时调用 [`Self::finish`]：出过错会得到 [`UnifiedFinishReason::Error`]，
+    /// 否则得到 [`UnifiedFinishReason::Unknown`]，提示调用方该结果可能是被静默截断的半截内容。
     pub fn is_complete(&self) -> bool {
-        self.explicit_finish.is_some() || self.stream_error.is_some()
+        self.explicit_finish.is_some()
     }
 
     /// 当前已解析的结束原因。仅在流已收尾（见 [`Self::is_complete`]）后有值。
