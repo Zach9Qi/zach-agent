@@ -32,7 +32,7 @@ pub enum ModelError {
         raw: Option<serde_json::Value>,
     },
 
-    /// 流式传输解析或网络中断错误
+    /// 流式传输中断或读取超时（不可恢复，流随即结束）
     #[error("流式传输错误: {0}")]
     StreamError(String),
 

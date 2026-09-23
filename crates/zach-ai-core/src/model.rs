@@ -9,6 +9,11 @@ use futures_core::Stream;
 use std::pin::Pin;
 
 /// 流式生成返回的异步流类型别名
+///
+/// 错误分三层：
+/// - `do_stream` 返回 `Err`：流建立前失败，尚无输出，可安全重试；
+/// - `Ok(StreamPart::Error)`：厂商错误事件或单个分块解析失败，不终止流，可多次出现；
+/// - `Err(ModelError)`：传输中断等不可恢复错误，产出后流必须立即结束。
 pub type LanguageModelStream =
     Pin<Box<dyn Stream<Item = Result<StreamPart, ModelError>> + Send + 'static>>;
 

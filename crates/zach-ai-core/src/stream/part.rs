@@ -230,7 +230,7 @@ pub enum StreamPart {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_metadata: Option<ProviderMetadata>,
     },
-    /// 流传输或解析过程中发生的异常错误事件
+    /// 厂商下发的错误事件或单个分块解析失败（不终止流，可多次出现）
     Error {
         /// 格式化后的错误可读描述信息
         message: String,
