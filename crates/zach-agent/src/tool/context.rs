@@ -24,6 +24,11 @@ impl ToolContext {
         }
     }
 
+    pub(crate) fn with_progress(mut self, sender: mpsc::UnboundedSender<ToolResultOutput>) -> Self {
+        self.progress = Some(sender);
+        self
+    }
+
     /// 本次工具调用 ID
     pub fn tool_call_id(&self) -> &str {
         &self.tool_call_id
