@@ -30,7 +30,12 @@ impl AgentContext {
             .tools
             .iter()
             .map(|tool| ToolDefinition::Function(tool.definition().clone()))
-            .chain(self.provider_tools.iter().cloned().map(ToolDefinition::Provider))
+            .chain(
+                self.provider_tools
+                    .iter()
+                    .cloned()
+                    .map(ToolDefinition::Provider),
+            )
             .collect();
         (!definitions.is_empty()).then_some(definitions)
     }

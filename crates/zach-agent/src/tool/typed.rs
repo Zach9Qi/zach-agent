@@ -107,7 +107,8 @@ fn input_schema<I: JsonSchema>() -> Value {
     let mut settings = SchemaSettings::draft07();
     settings.inline_subschemas = true;
     let root = settings.into_generator().into_root_schema_for::<I>();
-    let mut schema = serde_json::to_value(root).unwrap_or_else(|_| Value::Object(Default::default()));
+    let mut schema =
+        serde_json::to_value(root).unwrap_or_else(|_| Value::Object(Default::default()));
     if let Value::Object(map) = &mut schema {
         map.remove("$schema");
     }

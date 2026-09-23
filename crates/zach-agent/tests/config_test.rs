@@ -55,9 +55,11 @@ fn context_declares_local_and_provider_tools() {
     assert!(context.tool_definitions().is_none());
 
     context.tools.push(typed_tool(Echo));
-    context
-        .provider_tools
-        .push(ProviderTool::new("openai.web_search", "web_search", json!({})));
+    context.provider_tools.push(ProviderTool::new(
+        "openai.web_search",
+        "web_search",
+        json!({}),
+    ));
 
     let definitions = context.tool_definitions().unwrap();
     assert_eq!(definitions.len(), 2);
