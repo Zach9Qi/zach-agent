@@ -2,8 +2,8 @@
 
 use serde_json::json;
 use zach_ai_core::{
-    AssistantPart, FinishReason, Message, OutputContent, ProviderMetadata, StreamAccumulator,
-    StreamPart, ToolResultOutput, UnifiedFinishReason, Usage,
+    AssistantPart, FinishReason, Message, OutputContent, ProviderMetadata, ResponseMetadata,
+    StreamAccumulator, StreamPart, ToolResultOutput, UnifiedFinishReason, Usage,
 };
 
 fn meta() -> ProviderMetadata {
@@ -207,6 +207,26 @@ fn start_and_end_metadata_are_merged_per_provider() {
         }
         other => panic!("期望推理块，实际是 {other:?}"),
     }
+}
+
+#[test]
+fn response_metadata_is_merged_per_field() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::ResponseMetadata(ResponseMetadata {
+        id: Some("resp_1".to_string()),
+        timestamp: Some(1),
+        model_id: None,
+    }));
+    accumulator.process(StreamPart::ResponseMetadata(ResponseMetadata {
+        id: None,
+        timestamp: Some(2),
+        model_id: Some("gpt-4o".to_string()),
+    }));
+
+    let response = accumulator.finish().response.expect("响应元数据");
+    assert_eq!(response.id.as_deref(), Some("resp_1"));
+    assert_eq!(response.timestamp, Some(2));
+    assert_eq!(response.model_id.as_deref(), Some("gpt-4o"));
 }
 
 #[test]

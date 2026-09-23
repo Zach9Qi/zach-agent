@@ -67,6 +67,21 @@ pub struct ResponseMetadata {
     pub model_id: Option<String>,
 }
 
+impl ResponseMetadata {
+    /// 按字段合并：`other` 中为 `Some` 的字段覆盖当前值，`None` 不会清空已有字段
+    pub fn merge(&mut self, other: ResponseMetadata) {
+        if other.id.is_some() {
+            self.id = other.id;
+        }
+        if other.timestamp.is_some() {
+            self.timestamp = other.timestamp;
+        }
+        if other.model_id.is_some() {
+            self.model_id = other.model_id;
+        }
+    }
+}
+
 /// 非流式生成结果
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerateResult {

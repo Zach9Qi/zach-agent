@@ -118,9 +118,10 @@ impl StreamAccumulator {
             StreamPart::StreamStart { warnings } => {
                 self.warnings.extend(warnings);
             }
-            StreamPart::ResponseMetadata(metadata) => {
-                self.response = Some(metadata);
-            }
+            StreamPart::ResponseMetadata(metadata) => match &mut self.response {
+                Some(existing) => existing.merge(metadata),
+                None => self.response = Some(metadata),
+            },
             StreamPart::TextStart {
                 id,
                 provider_metadata,
