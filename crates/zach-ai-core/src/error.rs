@@ -55,6 +55,13 @@ pub enum ModelError {
 }
 
 impl ModelError {
+    /// 该错误本身是否属于暂时性故障（限流、传输中断），重试可能成功
+    ///
+    /// 只判断错误性质；流中途失败时可能已产出部分内容，是否真正重试由上层决定。
+    pub fn is_retryable(&self) -> bool {
+        matches!(self, Self::RateLimit(_) | Self::StreamError { .. })
+    }
+
     /// 构造厂商返回错误
     pub fn provider_error(
         provider: impl Into<String>,

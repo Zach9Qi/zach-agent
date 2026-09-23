@@ -17,3 +17,13 @@ fn stream_error_keeps_underlying_source() {
         Some(io::ErrorKind::ConnectionReset)
     );
 }
+
+#[test]
+fn only_transient_errors_are_retryable() {
+    assert!(ModelError::RateLimit("429".to_string()).is_retryable());
+    assert!(ModelError::stream_error("连接重置", "reset").is_retryable());
+
+    assert!(!ModelError::Authentication("key 无效".to_string()).is_retryable());
+    assert!(!ModelError::InvalidRequest("缺少 model".to_string()).is_retryable());
+    assert!(!ModelError::provider_error("openai", "bad request", None).is_retryable());
+}
