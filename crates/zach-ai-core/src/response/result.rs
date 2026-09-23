@@ -10,8 +10,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 /// 统一归一化的模型结束原因
+///
+/// 序列化值使用 `snake_case`（如 `tool_calls`、`content_filter`），与字段名及厂商原始原因的常见写法一致。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "snake_case")]
 pub enum UnifiedFinishReason {
     /// 正常完成（遇到天然结束符或自定义停词）
     Stop,

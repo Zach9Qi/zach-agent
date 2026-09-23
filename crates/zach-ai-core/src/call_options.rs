@@ -39,8 +39,10 @@ impl ResponseFormat {
 }
 
 /// 模型思考/推理强度预设档位
+///
+/// 序列化值使用 `snake_case`（如 `provider_default`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "snake_case")]
 pub enum ReasoningEffort {
     /// 厂商与模型默认档位
     ProviderDefault,

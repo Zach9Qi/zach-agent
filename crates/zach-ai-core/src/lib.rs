@@ -1,6 +1,10 @@
 //! `zach-ai-core`: 大语言模型（LLM）统一中间形态抽象层。
 //!
 //! 提供模型中立的消息模型、提示词系统、工具定义、流式事件生命周期与通用 Trait 契约。
+//!
+//! JSON 约定：枚举判别值与字段名统一为 `snake_case`。同一个概念只保留一种写法，
+//! 例如工具调用在 [`StreamPart`]、[`OutputContent`]、[`AssistantPart`] 上都是 `tool_call`，
+//! 结束原因 [`UnifiedFinishReason::ToolCalls`] 是 `tool_calls`。
 
 pub mod call_options;
 pub mod error;

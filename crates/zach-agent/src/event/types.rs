@@ -29,7 +29,7 @@ pub enum AgentEvent {
     /// 整个 Agent 运行正常结束
     #[serde(rename_all = "camelCase")]
     RunFinish {
-        /// 运行结束原因（如正常停止 stop、工具调用 tool-calls 等）
+        /// 运行结束原因（如正常停止 stop、工具调用 tool_calls 等）
         #[serde(default, skip_serializing_if = "Option::is_none")]
         finish_reason: Option<FinishReason>,
         /// 运行完成时更新或附加的消息元数据（如全局 Token 用量 usage）

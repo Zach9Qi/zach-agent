@@ -10,8 +10,11 @@ use serde_json::Value;
 ///
 /// 统一抽象各 LLM 厂商的 Server-Sent Events (SSE) 流式传输事件，
 /// 涵盖流生命周期、文本/思考链增量、工具参数流、服务端工具执行结果及审批流。
+///
+/// `type` 与本 crate 其余枚举一样使用 `snake_case`，因此和 [`crate::OutputContent`]、
+/// [`crate::AssistantPart`] 上的同名概念对齐（工具调用都是 `tool_call`）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamPart {
     // -----------------------------------------------------------------------
     // 流生命周期与元数据
