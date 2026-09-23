@@ -230,6 +230,41 @@ fn response_metadata_is_merged_per_field() {
 }
 
 #[test]
+fn finish_metadata_is_merged_per_provider() {
+    let mut first = ProviderMetadata::new();
+    first.insert("openai", json!({ "service_tier": "default" }));
+    let mut second = ProviderMetadata::new();
+    second.insert("openai", json!({ "cached": true }));
+    second.insert("anthropic", json!({ "stop_sequence": "END" }));
+
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::Finish {
+        usage: Usage::default(),
+        finish_reason: FinishReason::stop(),
+        provider_metadata: Some(first),
+    });
+    accumulator.process(StreamPart::Finish {
+        usage: Usage::default(),
+        finish_reason: FinishReason::stop(),
+        provider_metadata: Some(second),
+    });
+    accumulator.process(StreamPart::Finish {
+        usage: Usage::default(),
+        finish_reason: FinishReason::stop(),
+        provider_metadata: None,
+    });
+
+    let stored = accumulator.finish().provider_metadata.expect("响应级元数据");
+    let openai = stored.get::<serde_json::Value>("openai").unwrap();
+    assert_eq!(openai["service_tier"], "default");
+    assert_eq!(openai["cached"], true);
+    assert_eq!(
+        stored.get::<serde_json::Value>("anthropic").unwrap()["stop_sequence"],
+        "END"
+    );
+}
+
+#[test]
 fn empty_reasoning_with_metadata_is_kept_while_bare_empty_block_is_dropped() {
     let mut accumulator = StreamAccumulator::new();
     // 类似 Anthropic redacted_thinking：无正文，信息全在元数据

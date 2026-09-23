@@ -281,9 +281,7 @@ impl StreamAccumulator {
             } => {
                 self.usage = Some(usage);
                 self.explicit_finish = Some(finish_reason);
-                if provider_metadata.is_some() {
-                    self.provider_metadata = provider_metadata;
-                }
+                slots::merge_metadata(&mut self.provider_metadata, provider_metadata);
             }
             StreamPart::Error { message, raw } => {
                 self.errors.push(StreamPartError { message, raw });
