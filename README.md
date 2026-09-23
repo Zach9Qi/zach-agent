@@ -53,7 +53,7 @@ zach-agent   (编排层: Agent 运行时)
 | :--- | :--- | :--- |
 | **`zach-ai-core`** | `crates/zach-ai-core` | **底层抽象契约**。定义 `LanguageModel` 统一接口、`Prompt`/`Message` 结构、流式事件 (`StreamPart`)、流聚合器 (`StreamAccumulator`)、工具协议与调用参数 (`CallOptions`)。 |
 | **`zach-ai`** | `crates/zach-ai` | **厂商实现层**。负责将各大模型厂商特有的 API 协议（OpenAI、Anthropic 等）双向转换为 `zach-ai-core` 的统一中间形态。 |
-| **`zach-agent`** | `crates/zach-agent` | **Agent 编排与运行时**。工具调度将重新设计，当前不包含工具注册与执行实现。 |
+| **`zach-agent`** | `crates/zach-agent` | **Agent 编排与运行时**。提供低层循环（`run_agent_loop`）与有状态的 `Agent` 句柄：多轮工具调用、并行/串行工具执行、人工审批、插队/追加消息、策略钩子、失败重试与中止，运行过程以 `AgentEvent` 事件流透出。 |
 
 ---
 
@@ -88,6 +88,69 @@ fn create_sample_prompt() -> Prompt {
     ])
 }
 ```
+
+### 运行 Agent
+
+`Agent` 持有对话记录与配置，每次 `prompt` 返回一个 `AgentRun`：它本身是 `Stream<Item = AgentEvent>`，消费完事件后可通过 `outcome()` 取得本次新增的消息与累计用量。`Agent` 可廉价克隆，运行中可在其他任务里调用 `steer`、`follow_up`、`abort`、`respond_approval`。
+
+```rust
+use futures::StreamExt;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::sync::Arc;
+use zach_agent::{typed_tool, Agent, AgentEvent, ApprovalDecision, ToolContext, ToolError, ToolOutcome, TypedTool};
+use zach_ai_core::LanguageModel;
+
+#[derive(Deserialize, JsonSchema)]
+struct WeatherInput {
+    /// 城市名
+    city: String,
+}
+
+struct Weather;
+
+#[async_trait::async_trait]
+impl TypedTool for Weather {
+    type Input = WeatherInput;
+
+    fn name(&self) -> &str { "get_weather" }
+    fn description(&self) -> &str { "查询城市天气" }
+
+    async fn call(&self, input: WeatherInput, _ctx: ToolContext) -> Result<ToolOutcome, ToolError> {
+        Ok(ToolOutcome::text(format!("{} 晴，25℃", input.city)))
+    }
+}
+
+async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentError> {
+    let agent = Agent::builder(model)
+        .system_prompt("你是天气助手")
+        .tool(typed_tool(Weather))
+        .build();
+
+    let mut run = agent.prompt_text("北京今天天气怎么样？")?;
+    while let Some(event) = run.next().await {
+        match event {
+            AgentEvent::TextDelta { delta, .. } => print!("{delta}"),
+            AgentEvent::ToolApprovalRequest { approval_id, .. } => {
+                agent.respond_approval(&approval_id, ApprovalDecision::approve())?;
+            }
+            _ => {}
+        }
+    }
+    let output = run.outcome().await?;
+    println!("\n本次共 {} 轮", output.steps);
+    Ok(())
+}
+```
+
+运行流程要点：
+
+- **轮次**：一轮 = 一次模型响应 + 执行其中的工具调用。有工具结果、插队消息或钩子要求继续时进入下一轮；本应结束时若有追加消息也会继续。
+- **工具**：默认先依次准备（校验入参、`before_tool_call`、审批），再并发执行，结果按模型给出的顺序写回；`ToolExecutionMode::Sequential` 或任一工具声明串行时整批串行。模型因长度上限截断时不执行工具。
+- **钩子**（`AgentHooks`）：`transform_context`、`prepare_request`、`before_tool_call`、`after_tool_call`、`finish_turn`、`prepare_next_turn`，可逐轮替换模型、调用参数与上下文。
+- **失败与中止**：可重试的模型错误按 `RetryPolicy` 退避重试并发出 `StepRetry`；重试用尽发出 `RunError`，失败那一轮不写入对话记录，可直接 `continue_run()` 重试。中止发出 `RunAbort`，已生成的文本保留，未完成的工具调用补"已中止"结果。
+
+不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复。
 
 ---
 
