@@ -33,8 +33,13 @@ pub enum ModelError {
     },
 
     /// 流式传输中断或读取超时（不可恢复，流随即结束）
-    #[error("流式传输错误: {0}")]
-    StreamError(String),
+    #[error("流式传输错误: {message}")]
+    StreamError {
+        message: String,
+        /// 底层错误（如 `reqwest::Error`），根因常在其 `source()` 链深处
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 
     /// JSON 序列化或反序列化失败
     #[error("JSON 序列化/反序列化错误: {0}")]
@@ -60,6 +65,17 @@ impl ModelError {
             provider: provider.into(),
             message: message.into(),
             raw,
+        }
+    }
+
+    /// 构造流式传输错误，保留底层错误作为 `source`
+    pub fn stream_error(
+        message: impl Into<String>,
+        source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+    ) -> Self {
+        Self::StreamError {
+            message: message.into(),
+            source: Some(source.into()),
         }
     }
 
