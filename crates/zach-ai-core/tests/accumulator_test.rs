@@ -296,7 +296,7 @@ fn stream_error_is_not_reported_as_stop() {
         provider_metadata: None,
     });
     accumulator.process(StreamPart::Error {
-        message: "连接中断".to_string(),
+        message: "overloaded_error".to_string(),
         raw: None,
     });
     accumulator.process(StreamPart::Finish {
@@ -308,7 +308,7 @@ fn stream_error_is_not_reported_as_stop() {
     let result = accumulator.finish();
     assert_eq!(result.text(), "部分");
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("连接中断"));
+    assert_eq!(result.finish_reason.raw.as_deref(), Some("overloaded_error"));
     assert_eq!(result.usage.input_tokens.total, Some(3));
 }
 
@@ -316,21 +316,21 @@ fn stream_error_is_not_reported_as_stop() {
 fn stream_error_without_finish_is_reported_as_error() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::Error {
-        message: "连接中断".to_string(),
+        message: "overloaded_error".to_string(),
         raw: None,
     });
     assert!(!accumulator.is_complete());
 
     let result = accumulator.finish();
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("连接中断"));
+    assert_eq!(result.finish_reason.raw.as_deref(), Some("overloaded_error"));
 }
 
 #[test]
 fn explicit_non_stop_finish_survives_stream_error() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::Error {
-        message: "连接中断".to_string(),
+        message: "overloaded_error".to_string(),
         raw: None,
     });
     // Error 不终止流：此时尚未收尾，不应提前报出结束原因
