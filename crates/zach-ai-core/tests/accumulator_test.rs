@@ -357,6 +357,49 @@ fn explicit_non_stop_finish_survives_stream_error() {
 }
 
 #[test]
+fn all_stream_errors_are_kept_in_order_with_raw() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::Error {
+        message: "invalid chunk".to_string(),
+        raw: Some(json!("data: {bad")),
+    });
+    accumulator.process(StreamPart::Error {
+        message: String::new(),
+        raw: Some(json!({ "type": "overloaded_error" })),
+    });
+
+    let errors = accumulator.errors();
+    assert_eq!(errors.len(), 2);
+    assert_eq!(errors[0].message, "invalid chunk");
+    assert_eq!(errors[0].raw, Some(json!("data: {bad")));
+    assert_eq!(errors[1].raw, Some(json!({ "type": "overloaded_error" })));
+
+    let result = accumulator.finish();
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
+    assert_eq!(result.finish_reason.raw.as_deref(), Some("invalid chunk"));
+}
+
+#[test]
+fn stream_errors_stay_visible_when_finish_is_tool_calls() {
+    let mut accumulator = StreamAccumulator::new();
+    accumulator.process(StreamPart::Error {
+        message: "invalid chunk".to_string(),
+        raw: None,
+    });
+    accumulator.process(StreamPart::Finish {
+        usage: Usage::default(),
+        finish_reason: FinishReason::tool_calls(),
+        provider_metadata: None,
+    });
+
+    assert_eq!(
+        accumulator.finish_reason().map(|reason| reason.unified),
+        Some(UnifiedFinishReason::ToolCalls)
+    );
+    assert_eq!(accumulator.errors().len(), 1);
+}
+
+#[test]
 fn streamed_and_complete_tool_call_collapse_to_one() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(StreamPart::ToolInputStart {

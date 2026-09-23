@@ -14,6 +14,26 @@ use crate::response::{
 use crate::stream::part::StreamPart;
 use serde_json::Value;
 
+/// 流内收到的一次 [`StreamPart::Error`]
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreamPartError {
+    pub message: String,
+    pub raw: Option<Value>,
+}
+
+impl StreamPartError {
+    /// 可读描述：优先使用 `message`，为空时退回原始载荷
+    fn describe(&self) -> String {
+        if !self.message.is_empty() {
+            self.message.clone()
+        } else if let Some(raw) = &self.raw {
+            raw.to_string()
+        } else {
+            "未知流式错误".to_string()
+        }
+    }
+}
+
 /// 流式事件聚合器
 ///
 /// 内部维护按 id 定位内容块的索引，因此不暴露可写字段；
@@ -36,7 +56,7 @@ pub struct StreamAccumulator {
     /// 已收到完整入参的工具调用。之后的增量片段不再拼接，避免和完整 `ToolCall` 重复。
     sealed_tools: HashSet<String>,
     explicit_finish: Option<FinishReason>,
-    stream_error: Option<String>,
+    errors: Vec<StreamPartError>,
 }
 
 impl StreamAccumulator {
@@ -82,6 +102,14 @@ impl StreamAccumulator {
     /// 已收到的最终厂商元数据
     pub fn provider_metadata(&self) -> Option<&ProviderMetadata> {
         self.provider_metadata.as_ref()
+    }
+
+    /// 流内收到的全部错误，按到达顺序排列
+    ///
+    /// 结束原因非 `Stop`（如 `ToolCalls`、`Length`）时错误不会体现在 [`Self::finish`] 的结果中，
+    /// 调用方需在收尾前自行检查，例如丢弃可能残缺的工具入参。
+    pub fn errors(&self) -> &[StreamPartError] {
+        &self.errors
     }
 
     /// 接收并处理一个流式事件分块
@@ -257,7 +285,7 @@ impl StreamAccumulator {
                 }
             }
             StreamPart::Error { message, raw } => {
-                self.stream_error = Some(describe_stream_error(message, raw));
+                self.errors.push(StreamPartError { message, raw });
             }
             StreamPart::Raw { .. } => {}
         }
@@ -279,18 +307,19 @@ impl StreamAccumulator {
         }
     }
 
+    /// 出错时以第一个错误作为原始原因，它通常是根因
     fn resolved_finish_reason(&self) -> FinishReason {
-        match (&self.explicit_finish, &self.stream_error) {
+        match (&self.explicit_finish, self.errors.first()) {
             (Some(reason), Some(err)) if reason.unified == UnifiedFinishReason::Stop => {
                 FinishReason {
                     unified: UnifiedFinishReason::Error,
-                    raw: Some(err.clone()),
+                    raw: Some(err.describe()),
                 }
             }
             (Some(reason), _) => reason.clone(),
             (None, Some(err)) => FinishReason {
                 unified: UnifiedFinishReason::Error,
-                raw: Some(err.clone()),
+                raw: Some(err.describe()),
             },
             // 既无 Finish 也无 Error：流被静默截断，不能伪装成正常停止
             (None, None) => FinishReason {
@@ -316,15 +345,5 @@ fn keep_in_final_content(part: &OutputContent) -> bool {
             provider_metadata,
         } => !text.is_empty() || provider_metadata.is_some(),
         _ => true,
-    }
-}
-
-fn describe_stream_error(message: String, raw: Option<Value>) -> String {
-    if !message.is_empty() {
-        message
-    } else if let Some(raw) = raw {
-        raw.to_string()
-    } else {
-        "未知流式错误".to_string()
     }
 }

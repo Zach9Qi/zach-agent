@@ -23,7 +23,7 @@ pub use response::{
     FinishReason, GenerateResult, InputTokenUsage, OutputContent, OutputTokenUsage,
     ResponseMetadata, SourceContent, UnifiedFinishReason, Usage,
 };
-pub use stream::{StreamAccumulator, StreamPart};
+pub use stream::{StreamAccumulator, StreamPart, StreamPartError};
 pub use tool::{
     FunctionTool, ProviderTool, ToolChoice, ToolDefinition, ToolResultContentBlock,
     ToolResultOutput,

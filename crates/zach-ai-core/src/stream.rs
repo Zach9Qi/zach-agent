@@ -3,5 +3,5 @@
 pub mod accumulator;
 pub mod part;
 
-pub use accumulator::StreamAccumulator;
+pub use accumulator::{StreamAccumulator, StreamPartError};
 pub use part::StreamPart;
