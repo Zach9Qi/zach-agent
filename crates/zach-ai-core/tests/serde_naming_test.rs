@@ -80,6 +80,14 @@ fn shared_concepts_serialize_as_snake_case() {
         json!("provider_default")
     );
     assert_eq!(
+        serde_json::to_value(ReasoningEffort::Xhigh).unwrap(),
+        json!("xhigh")
+    );
+    assert_eq!(
+        serde_json::to_value(ReasoningEffort::Max).unwrap(),
+        json!("max")
+    );
+    assert_eq!(
         type_tag(&serde_json::to_value(&ToolChoice::specific("bash")).unwrap()),
         "tool"
     );

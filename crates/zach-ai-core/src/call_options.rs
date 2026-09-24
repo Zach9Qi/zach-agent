@@ -56,8 +56,10 @@ pub enum ReasoningEffort {
     Medium,
     /// 高思考强度
     High,
-    /// 极限思考强度
+    /// 极高思考强度
     Xhigh,
+    /// 最高思考强度（厂商提供的上限档位，如 DeepSeek、Claude 的 `max`）
+    Max,
 }
 
 /// 统一调用入参（发送给具体厂商前所持有的标准形态）
