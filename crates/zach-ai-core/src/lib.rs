@@ -10,6 +10,7 @@ pub mod call_options;
 pub mod error;
 pub mod file;
 pub mod model;
+pub mod model_profile;
 pub mod options;
 pub mod prompt;
 pub mod response;
@@ -21,6 +22,10 @@ pub use call_options::{CallOptions, ReasoningEffort, ResponseFormat};
 pub use error::ModelError;
 pub use file::FileData;
 pub use model::{LanguageModel, LanguageModelStream};
+pub use model_profile::{
+    CostBreakdown, Modalities, Modality, ModelLimits, ModelPricing, ModelProfile, ModelStatus,
+    PricingRates, PricingTier, ReasoningProfile,
+};
 pub use options::{ModelWarning, ProviderMetadata, ProviderOptions};
 pub use prompt::{AssistantPart, Message, Prompt, ToolPart, UserPart};
 pub use response::{
