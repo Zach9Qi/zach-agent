@@ -2,6 +2,7 @@
 
 use crate::call_options::CallOptions;
 use crate::error::ModelError;
+use crate::model_profile::ModelProfile;
 use crate::response::GenerateResult;
 use crate::stream::StreamPart;
 use async_trait::async_trait;
@@ -31,6 +32,11 @@ pub trait LanguageModel: Send + Sync {
 
     /// 模型唯一标识（如 "gpt-4o", "claude-3-7-sonnet"）
     fn model_id(&self) -> &str;
+
+    /// 模型档案（能力、限制与计费信息）；未知模型（自定义端点、本地模型等）返回 `None`
+    fn profile(&self) -> Option<&ModelProfile> {
+        None
+    }
 
     /// 判断该模型是否原生支持指定媒体类型的直传 URL（无需客户端先下载为字节）
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {

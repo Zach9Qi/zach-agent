@@ -1,10 +1,60 @@
 //! 模型档案：JSON 缺省值、推理档位判断与费用计算。
 
+use async_trait::async_trait;
 use serde_json::json;
 use zach_ai_core::{
-    InputTokenUsage, Modality, ModelPricing, ModelProfile, ModelStatus, OutputTokenUsage,
-    PricingRates, PricingTier, ReasoningEffort, ReasoningProfile, Usage,
+    CallOptions, GenerateResult, InputTokenUsage, LanguageModel, LanguageModelStream, Modality,
+    ModelError, ModelPricing, ModelProfile, ModelStatus, OutputTokenUsage, PricingRates,
+    PricingTier, ReasoningEffort, ReasoningProfile, Usage,
 };
+
+struct StubModel {
+    profile: Option<ModelProfile>,
+}
+
+#[async_trait]
+impl LanguageModel for StubModel {
+    fn provider(&self) -> &str {
+        "stub"
+    }
+
+    fn model_id(&self) -> &str {
+        "stub-model"
+    }
+
+    fn profile(&self) -> Option<&ModelProfile> {
+        self.profile.as_ref()
+    }
+
+    async fn do_generate(&self, _options: CallOptions) -> Result<GenerateResult, ModelError> {
+        unimplemented!("档案测试不发起调用")
+    }
+
+    async fn do_stream(&self, _options: CallOptions) -> Result<LanguageModelStream, ModelError> {
+        unimplemented!("档案测试不发起调用")
+    }
+}
+
+struct BareModel;
+
+#[async_trait]
+impl LanguageModel for BareModel {
+    fn provider(&self) -> &str {
+        "bare"
+    }
+
+    fn model_id(&self) -> &str {
+        "bare-model"
+    }
+
+    async fn do_generate(&self, _options: CallOptions) -> Result<GenerateResult, ModelError> {
+        unimplemented!("档案测试不发起调用")
+    }
+
+    async fn do_stream(&self, _options: CallOptions) -> Result<LanguageModelStream, ModelError> {
+        unimplemented!("档案测试不发起调用")
+    }
+}
 
 fn assert_close(actual: f64, expected: f64) {
     assert!(
@@ -27,6 +77,19 @@ fn usage(no_cache: Option<u64>, total: Option<u64>, cache_read: u64, output: u64
         },
         raw: None,
     }
+}
+
+#[test]
+fn language_model_exposes_optional_profile() {
+    let bare: Box<dyn LanguageModel> = Box::new(BareModel);
+    assert!(bare.profile().is_none());
+
+    let stub: Box<dyn LanguageModel> = Box::new(StubModel {
+        profile: Some(ModelProfile::new("stub", "stub-model", 128_000, 16_384)),
+    });
+    let profile = stub.profile().expect("应返回档案");
+    assert_eq!(profile.id, stub.model_id());
+    assert_eq!(profile.limits.context_window, 128_000);
 }
 
 #[test]
