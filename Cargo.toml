@@ -4,6 +4,7 @@ members = [
     "crates/zach-ai-core",
     "crates/zach-ai",
     "crates/zach-agent",
+    "xtask",
 ]
 
 [workspace.package]
