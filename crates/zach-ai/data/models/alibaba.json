@@ -1,0 +1,1515 @@
+[
+  {
+    "provider": "alibaba",
+    "id": "deepseek-v4-flash-0731",
+    "name": "DeepSeek V4 Flash 0731",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 384000
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 0.4,
+      "cache_read": 0.04
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "glm-5.2",
+    "name": "GLM-5.2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.28,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "kimi-k3",
+    "name": "Kimi K3",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1048576,
+      "max_output_tokens": 1048576
+    },
+    "pricing": {
+      "input": 3.0,
+      "output": 15.0,
+      "cache_read": 0.3
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qvq-max",
+    "name": "QVQ Max",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 1.2,
+      "output": 4.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-flash",
+    "name": "Qwen Flash",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.05,
+      "output": 0.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-max",
+    "name": "Qwen Max",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32768,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 1.6,
+      "output": 6.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-omni-turbo",
+    "name": "Qwen-Omni Turbo",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32768,
+      "max_output_tokens": 2048
+    },
+    "pricing": {
+      "input": 0.07,
+      "output": 0.27
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-omni-turbo-realtime",
+    "name": "Qwen-Omni Turbo Realtime",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "audio"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32768,
+      "max_output_tokens": 2048
+    },
+    "pricing": {
+      "input": 0.27,
+      "output": 1.07
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-plus",
+    "name": "Qwen Plus",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 1.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-plus-character-ja",
+    "name": "Qwen Plus Character (Japanese)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 8192,
+      "max_output_tokens": 512
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 1.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-turbo",
+    "name": "Qwen Turbo",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.05,
+      "output": 0.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-vl-max",
+    "name": "Qwen-VL Max",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.8,
+      "output": 3.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen-vl-plus",
+    "name": "Qwen-VL Plus",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.21,
+      "output": 0.63
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-14b-instruct",
+    "name": "Qwen2.5 14B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.35,
+      "output": 1.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-32b-instruct",
+    "name": "Qwen2.5 32B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.7,
+      "output": 2.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-72b-instruct",
+    "name": "Qwen2.5 72B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 5.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-7b-instruct",
+    "name": "Qwen2.5 7B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.175,
+      "output": 0.7
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-omni-7b",
+    "name": "Qwen2.5-Omni 7B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32768,
+      "max_output_tokens": 2048
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-vl-72b-instruct",
+    "name": "Qwen2.5-VL 72B Instruct",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 2.8,
+      "output": 8.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen2-5-vl-7b-instruct",
+    "name": "Qwen2.5-VL 7B Instruct",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.35,
+      "output": 1.05
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-14b",
+    "name": "Qwen3 14B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.35,
+      "output": 1.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-235b-a22b",
+    "name": "Qwen3 235B-A22B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.7,
+      "output": 2.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-32b",
+    "name": "Qwen3 32B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.7,
+      "output": 2.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-8b",
+    "name": "Qwen3 8B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.18,
+      "output": 0.7
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-coder-30b-a3b-instruct",
+    "name": "Qwen3-Coder 30B-A3B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.45,
+      "output": 2.25,
+      "tiers": [
+        {
+          "input_tokens_above": 32000,
+          "input": 0.75,
+          "output": 3.75
+        },
+        {
+          "input_tokens_above": 128000,
+          "input": 1.2,
+          "output": 6.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-coder-480b-a35b-instruct",
+    "name": "Qwen3-Coder 480B-A35B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 1.5,
+      "output": 7.5,
+      "tiers": [
+        {
+          "input_tokens_above": 32000,
+          "input": 2.7,
+          "output": 13.5
+        },
+        {
+          "input_tokens_above": 128000,
+          "input": 4.5,
+          "output": 22.5
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-coder-flash",
+    "name": "Qwen3 Coder Flash",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-coder-plus",
+    "name": "Qwen3 Coder Plus",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 1048576,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 1.0,
+      "output": 5.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-max",
+    "name": "Qwen3 Max",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 1.2,
+      "output": 6.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-next-80b-a3b-instruct",
+    "name": "Qwen3-Next 80B-A3B Instruct",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 2.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-next-80b-a3b-thinking",
+    "name": "Qwen3-Next 80B-A3B (Thinking)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 6.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-omni-flash",
+    "name": "Qwen3-Omni Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 65536,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.43,
+      "output": 1.66
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-omni-flash-realtime",
+    "name": "Qwen3-Omni Flash Realtime",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 65536,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.52,
+      "output": 1.99
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-vl-235b-a22b",
+    "name": "Qwen3-VL 235B-A22B",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.7,
+      "output": 2.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-vl-30b-a3b",
+    "name": "Qwen3-VL 30B-A3B",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 0.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3-vl-plus",
+    "name": "Qwen3-VL Plus",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 1.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.5-122b-a10b",
+    "name": "Qwen3.5 122B-A10B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 3.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.5-27b",
+    "name": "Qwen3.5 27B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 2.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.5-35b-a3b",
+    "name": "Qwen3.5 35B-A3B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.25,
+      "output": 2.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.5-397b-a17b",
+    "name": "Qwen3.5 397B-A17B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 3.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.5-plus",
+    "name": "Qwen3.5 Plus",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.6-27b",
+    "name": "Qwen3.6 27B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 3.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.6-35b-a3b",
+    "name": "Qwen3.6 35B-A3B",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.248,
+      "output": 1.485
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.6-flash",
+    "name": "Qwen3.6 Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.1875,
+      "output": 1.125,
+      "cache_write": 0.234375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.6-max-preview",
+    "name": "Qwen3.6 Max Preview",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 1.3,
+      "output": 7.8,
+      "cache_read": 0.13,
+      "cache_write": 1.625
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.6-plus",
+    "name": "Qwen3.6 Plus",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 65536
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 3.0,
+      "cache_read": 0.05,
+      "cache_write": 0.625,
+      "tiers": [
+        {
+          "input_tokens_above": 256000,
+          "input": 2.0,
+          "output": 6.0,
+          "cache_read": 0.2,
+          "cache_write": 2.5
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.7-max",
+    "name": "Qwen3.7 Max",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 2.5,
+      "output": 7.5,
+      "cache_read": 0.5,
+      "cache_write": 3.125
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.7-plus",
+    "name": "Qwen3.7 Plus",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 3.0,
+      "cache_read": 0.05,
+      "cache_write": 0.625,
+      "tiers": [
+        {
+          "input_tokens_above": 256000,
+          "input": 2.0,
+          "output": 6.0,
+          "cache_read": 0.2,
+          "cache_write": 2.5
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.8-flash",
+    "name": "Qwen3.8 Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.47,
+      "cache_read": 0.016,
+      "cache_write": 0.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwen3.8-max",
+    "name": "Qwen3.8 Max",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 6.0,
+      "cache_read": 0.25,
+      "cache_write": 2.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "alibaba",
+    "id": "qwq-plus",
+    "name": "QwQ Plus",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 0.8,
+      "output": 2.4
+    },
+    "status": "active"
+  }
+]

@@ -1,0 +1,542 @@
+[
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.5",
+    "name": "GLM-4.5",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 98304
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 2.2,
+      "cache_read": 0.11,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.5-air",
+    "name": "GLM-4.5-Air",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 98304
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 1.1,
+      "cache_read": 0.03,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.5-flash",
+    "name": "GLM-4.5-Flash",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 98304
+    },
+    "pricing": {
+      "input": 0.0,
+      "output": 0.0,
+      "cache_read": 0.0,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.5v",
+    "name": "GLM-4.5V",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 64000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 1.8
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.6",
+    "name": "GLM-4.6",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 2.2,
+      "cache_read": 0.11,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.6v",
+    "name": "GLM-4.6V",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 0.9
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.6v-flash",
+    "name": "GLM-4.6V-Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.0,
+      "output": 0.0,
+      "cache_read": 0.0,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.7",
+    "name": "GLM-4.7",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 2.2,
+      "cache_read": 0.11,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.7-flash",
+    "name": "GLM-4.7-Flash",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.0,
+      "output": 0.0,
+      "cache_read": 0.0,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-4.7-flashx",
+    "name": "GLM-4.7-FlashX",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.07,
+      "output": 0.4,
+      "cache_read": 0.01,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5",
+    "name": "GLM-5",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.0,
+      "output": 3.2,
+      "cache_read": 0.2,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5.1",
+    "name": "GLM-5.1",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.26,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5.2",
+    "name": "GLM-5.2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.26,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5.3",
+    "name": "GLM-5.3",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.26,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5.3-flash",
+    "name": "GLM-5.3-Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.5,
+      "cache_read": 0.03,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5.3-flashx",
+    "name": "GLM-5.3-FlashX",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.37,
+      "output": 1.25,
+      "cache_read": 0.075,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "zhipuai",
+    "id": "glm-5v-turbo",
+    "name": "GLM-5V-Turbo",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 22.0,
+      "cache_read": 1.2,
+      "cache_write": 0.0
+    },
+    "status": "active"
+  }
+]

@@ -1,0 +1,141 @@
+[
+  {
+    "provider": "deepseek",
+    "id": "deepseek-flash",
+    "name": "DeepSeek V4.1 Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 393216
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6,
+      "cache_read": 0.003
+    },
+    "status": "active"
+  },
+  {
+    "provider": "deepseek",
+    "id": "deepseek-v4-flash",
+    "name": "DeepSeek V4 Flash",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 393216
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6,
+      "cache_read": 0.003
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "deepseek",
+    "id": "deepseek-v4-flash-vision-exp",
+    "name": "DeepSeek V4 Flash Vision Exp",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 393216
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6,
+      "cache_read": 0.003
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "deepseek",
+    "id": "deepseek-v4-pro",
+    "name": "DeepSeek V4 Pro",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 393216
+    },
+    "pricing": {
+      "input": 0.435,
+      "output": 0.87,
+      "cache_read": 0.003625
+    },
+    "status": "active"
+  }
+]

@@ -1,0 +1,553 @@
+[
+  {
+    "provider": "anthropic",
+    "id": "claude-fable-5",
+    "name": "Claude Fable 5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_read": 1.0,
+      "cache_write": 12.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-fable-5-1",
+    "name": "Claude Fable 5.1",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_read": 0.25,
+      "cache_write": 12.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-haiku-4-5",
+    "name": "Claude Haiku 4.5 (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 1.0,
+      "output": 5.0,
+      "cache_read": 0.1,
+      "cache_write": 1.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-haiku-4-5-20251001",
+    "name": "Claude Haiku 4.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 1.0,
+      "output": 5.0,
+      "cache_read": 0.1,
+      "cache_write": 1.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-4-5",
+    "name": "Claude Opus 4.5 (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-4-5-20251101",
+    "name": "Claude Opus 4.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-4-6",
+    "name": "Claude Opus 4.6",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-4-7",
+    "name": "Claude Opus 4.7",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-4-8",
+    "name": "Claude Opus 4.8",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-5",
+    "name": "Claude Opus 5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_read": 0.5,
+      "cache_write": 6.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-opus-5-5",
+    "name": "Claude Opus 5.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_read": 0.2,
+      "cache_write": 5.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-sonnet-4-5",
+    "name": "Claude Sonnet 4.5 (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 3.0,
+      "output": 15.0,
+      "cache_read": 0.3,
+      "cache_write": 3.75
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-sonnet-4-5-20250929",
+    "name": "Claude Sonnet 4.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 3.0,
+      "output": 15.0,
+      "cache_read": 0.3,
+      "cache_write": 3.75
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-sonnet-4-6",
+    "name": "Claude Sonnet 4.6",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 3.0,
+      "output": 15.0,
+      "cache_read": 0.3,
+      "cache_write": 3.75
+    },
+    "status": "active"
+  },
+  {
+    "provider": "anthropic",
+    "id": "claude-sonnet-5",
+    "name": "Claude Sonnet 5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_read": 0.2,
+      "cache_write": 2.5
+    },
+    "status": "active"
+  }
+]

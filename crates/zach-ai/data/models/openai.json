@@ -1,0 +1,1591 @@
+[
+  {
+    "provider": "openai",
+    "id": "gpt-4",
+    "name": "GPT-4",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 8192,
+      "max_output_tokens": 8192
+    },
+    "pricing": {
+      "input": 30.0,
+      "output": 60.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4-turbo",
+    "name": "GPT-4 Turbo",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 4096
+    },
+    "pricing": {
+      "input": 10.0,
+      "output": 30.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4.1",
+    "name": "GPT-4.1",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 1047576,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 8.0,
+      "cache_read": 0.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4.1-mini",
+    "name": "GPT-4.1 mini",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 1047576,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 1.6,
+      "cache_read": 0.1
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4.1-nano",
+    "name": "GPT-4.1 nano",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 1047576,
+      "max_output_tokens": 32768
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.4,
+      "cache_read": 0.025
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4o",
+    "name": "GPT-4o",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 2.5,
+      "output": 10.0,
+      "cache_read": 1.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4o-2024-05-13",
+    "name": "GPT-4o (2024-05-13)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 4096
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 15.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4o-2024-08-06",
+    "name": "GPT-4o (2024-08-06)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 2.5,
+      "output": 10.0,
+      "cache_read": 1.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4o-2024-11-20",
+    "name": "GPT-4o (2024-11-20)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 2.5,
+      "output": 10.0,
+      "cache_read": 1.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6,
+      "cache_read": 0.075
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5",
+    "name": "GPT-5",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 1.25,
+      "output": 10.0,
+      "cache_read": 0.125
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5-mini",
+    "name": "GPT-5 Mini",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 0.25,
+      "output": 2.0,
+      "cache_read": 0.025
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5-nano",
+    "name": "GPT-5 Nano",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 0.05,
+      "output": 0.4,
+      "cache_read": 0.005
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5-pro",
+    "name": "GPT-5 Pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 272000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 15.0,
+      "output": 120.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.1",
+    "name": "GPT-5.1",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 1.25,
+      "output": 10.0,
+      "cache_read": 0.125
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.2",
+    "name": "GPT-5.2",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 1.75,
+      "output": 14.0,
+      "cache_read": 0.175
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.2-chat-latest",
+    "name": "GPT-5.2 Chat",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "medium"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 1.75,
+      "output": 14.0,
+      "cache_read": 0.175
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.2-pro",
+    "name": "GPT-5.2 Pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 21.0,
+      "output": 168.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.3-chat-latest",
+    "name": "GPT-5.3 Chat (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 1.75,
+      "output": 14.0,
+      "cache_read": 0.175
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.3-codex",
+    "name": "GPT-5.3 Codex",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 1.75,
+      "output": 14.0,
+      "cache_read": 0.175
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.3-codex-spark",
+    "name": "GPT-5.3 Codex Spark",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 32000,
+      "max_input_tokens": 100000
+    },
+    "pricing": {
+      "input": 1.75,
+      "output": 14.0,
+      "cache_read": 0.175
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.4",
+    "name": "GPT-5.4",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 2.5,
+      "output": 15.0,
+      "cache_read": 0.25,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 5.0,
+          "output": 22.5,
+          "cache_read": 0.5
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.4-mini",
+    "name": "GPT-5.4 mini",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 0.75,
+      "output": 4.5,
+      "cache_read": 0.075
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.4-nano",
+    "name": "GPT-5.4 nano",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 1.25,
+      "cache_read": 0.02
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.4-pro",
+    "name": "GPT-5.4 Pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 30.0,
+      "output": 180.0,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 60.0,
+          "output": 270.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.5",
+    "name": "GPT-5.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 5.0,
+      "output": 30.0,
+      "cache_read": 0.5,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 10.0,
+          "output": 45.0,
+          "cache_read": 1.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.5-pro",
+    "name": "GPT-5.5 Pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 30.0,
+      "output": 180.0,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 60.0,
+          "output": 270.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.6",
+    "name": "GPT-5.6",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_read": 0.4,
+      "cache_write": 5.0,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 8.0,
+          "output": 30.0,
+          "cache_read": 0.8,
+          "cache_write": 10.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.6-luna",
+    "name": "GPT-5.6 Luna",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 0.2,
+      "output": 1.2,
+      "cache_read": 0.02,
+      "cache_write": 0.25,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 0.4,
+          "output": 1.8,
+          "cache_read": 0.04,
+          "cache_write": 0.5
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.6-sol",
+    "name": "GPT-5.6 Sol",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_read": 0.4,
+      "cache_write": 5.0,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 8.0,
+          "output": 30.0,
+          "cache_read": 0.8,
+          "cache_write": 10.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-5.6-terra",
+    "name": "GPT-5.6 Terra",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 12.0,
+      "cache_read": 0.2,
+      "cache_write": 2.5,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 4.0,
+          "output": 18.0,
+          "cache_read": 0.4,
+          "cache_write": 5.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-6-astra",
+    "name": "GPT-6 Astra",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_read": 1.0,
+      "cache_write": 12.5,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 20.0,
+          "output": 75.0,
+          "cache_read": 2.0,
+          "cache_write": 25.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-6-luna",
+    "name": "GPT-6 Luna",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.5,
+      "cache_read": 0.01,
+      "cache_write": 0.125,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 0.2,
+          "output": 0.75,
+          "cache_read": 0.02,
+          "cache_write": 0.25
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-6-sol",
+    "name": "GPT-6 Sol",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_read": 0.2,
+      "cache_write": 2.5,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 4.0,
+          "output": 15.0,
+          "cache_read": 0.4,
+          "cache_write": 5.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-daybreak-blue-latest",
+    "name": "Daybreak Blue",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_read": 0.4,
+      "cache_write": 5.0,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 8.0,
+          "output": 30.0,
+          "cache_read": 0.8,
+          "cache_write": 10.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-daybreak-red-latest",
+    "name": "Daybreak Red",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 272000
+    },
+    "pricing": {
+      "input": 12.5,
+      "output": 75.0,
+      "cache_read": 1.25,
+      "cache_write": 15.625
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "gpt-realtime-2.1",
+    "name": "GPT-Realtime-2.1",
+    "modalities": {
+      "input": [
+        "text",
+        "audio",
+        "image"
+      ],
+      "output": [
+        "text",
+        "audio"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 32000,
+      "max_input_tokens": 96000
+    },
+    "pricing": {
+      "input": 4.0,
+      "output": 24.0,
+      "cache_read": 0.4
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "o1",
+    "name": "o1",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 15.0,
+      "output": 60.0,
+      "cache_read": 7.5
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "o1-pro",
+    "name": "o1-pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 150.0,
+      "output": 600.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "o3",
+    "name": "o3",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 8.0,
+      "cache_read": 0.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "o3-mini",
+    "name": "o3-mini",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 1.1,
+      "output": 4.4,
+      "cache_read": 0.55
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "openai",
+    "id": "o3-pro",
+    "name": "o3-pro",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 20.0,
+      "output": 80.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
+    "id": "o4-mini",
+    "name": "o4-mini",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 200000,
+      "max_output_tokens": 100000
+    },
+    "pricing": {
+      "input": 1.1,
+      "output": 4.4,
+      "cache_read": 0.275
+    },
+    "status": "deprecated"
+  }
+]

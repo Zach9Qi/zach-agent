@@ -1,0 +1,862 @@
+[
+  {
+    "provider": "mistral",
+    "id": "codestral-latest",
+    "name": "Codestral (latest)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 256000,
+      "max_output_tokens": 4096
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 0.9
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-2512",
+    "name": "Devstral 2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-latest",
+    "name": "Devstral 2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-medium-2507",
+    "name": "Devstral Medium",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-medium-latest",
+    "name": "Devstral 2 (latest)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-small-2505",
+    "name": "Devstral Small 2505",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "devstral-small-2507",
+    "name": "Devstral Small",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "labs-devstral-small-2512",
+    "name": "Devstral Small 2",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 256000,
+      "max_output_tokens": 256000
+    },
+    "pricing": {
+      "input": 0.0,
+      "output": 0.0
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "magistral-medium-latest",
+    "name": "Magistral Medium (latest)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 5.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "magistral-small",
+    "name": "Magistral Small",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 1.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "ministral-3b-latest",
+    "name": "Ministral 3B (latest)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.04,
+      "output": 0.04
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "ministral-8b-latest",
+    "name": "Ministral 8B (latest)",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.1
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-large-2411",
+    "name": "Mistral Large 2.1",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 6.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-large-2512",
+    "name": "Mistral Large 3",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 1.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-large-latest",
+    "name": "Mistral Large (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.5,
+      "output": 1.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-medium-2505",
+    "name": "Mistral Medium 3",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 131072,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-medium-2508",
+    "name": "Mistral Medium 3.1",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 0.4,
+      "output": 2.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-medium-2604",
+    "name": "Mistral Medium 3.5",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 1.5,
+      "output": 7.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-medium-latest",
+    "name": "Mistral Medium (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 262144,
+      "max_output_tokens": 262144
+    },
+    "pricing": {
+      "input": 1.5,
+      "output": 7.5
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-nemo",
+    "name": "Mistral Nemo",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.15
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-small-2506",
+    "name": "Mistral Small 3.2",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 16384
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-small-2603",
+    "name": "Mistral Small 4",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 256000,
+      "max_output_tokens": 256000
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "mistral-small-latest",
+    "name": "Mistral Small (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 256000,
+      "max_output_tokens": 256000
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.6
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "open-mistral-7b",
+    "name": "Mistral 7B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 8000,
+      "max_output_tokens": 8000
+    },
+    "pricing": {
+      "input": 0.25,
+      "output": 0.25
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "open-mistral-nemo",
+    "name": "Open Mistral Nemo",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.15
+    },
+    "status": "deprecated"
+  },
+  {
+    "provider": "mistral",
+    "id": "open-mixtral-8x22b",
+    "name": "Mixtral 8x22B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 64000,
+      "max_output_tokens": 64000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 6.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "open-mixtral-8x7b",
+    "name": "Mixtral 8x7B",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32000,
+      "max_output_tokens": 32000
+    },
+    "pricing": {
+      "input": 0.7,
+      "output": 0.7
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "pixtral-12b",
+    "name": "Pixtral 12B",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 0.15,
+      "output": 0.15
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "pixtral-large-latest",
+    "name": "Pixtral Large (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "image"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 128000,
+      "max_output_tokens": 128000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 6.0
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "voxtral-small-latest",
+    "name": "Voxtral Small (latest)",
+    "modalities": {
+      "input": [
+        "text",
+        "audio"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "limits": {
+      "context_window": 32000,
+      "max_output_tokens": 32000
+    },
+    "pricing": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "status": "active"
+  },
+  {
+    "provider": "mistral",
+    "id": "zai-glm-5-2",
+    "name": "GLM-5.2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "high",
+        "max"
+      ],
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.14
+    },
+    "status": "beta"
+  },
+  {
+    "provider": "mistral",
+    "id": "zai-glm-5-3",
+    "name": "GLM-5.3",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": true,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 1.4,
+      "output": 4.4,
+      "cache_read": 0.14
+    },
+    "status": "active"
+  }
+]

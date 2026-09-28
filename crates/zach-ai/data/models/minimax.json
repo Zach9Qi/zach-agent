@@ -1,0 +1,219 @@
+[
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2",
+    "name": "MiniMax-M2",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.2
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2.1",
+    "name": "MiniMax-M2.1",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.2,
+      "cache_read": 0.03,
+      "cache_write": 0.375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2.5",
+    "name": "MiniMax-M2.5",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.2,
+      "cache_read": 0.03,
+      "cache_write": 0.375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2.5-highspeed",
+    "name": "MiniMax-M2.5-highspeed",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 2.4,
+      "cache_read": 0.06,
+      "cache_write": 0.375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2.7",
+    "name": "MiniMax-M2.7",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.2,
+      "cache_read": 0.06,
+      "cache_write": 0.375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M2.7-highspeed",
+    "name": "MiniMax-M2.7-highspeed",
+    "modalities": {
+      "input": [
+        "text"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 204800,
+      "max_output_tokens": 131072
+    },
+    "pricing": {
+      "input": 0.6,
+      "output": 2.4,
+      "cache_read": 0.06,
+      "cache_write": 0.375
+    },
+    "status": "active"
+  },
+  {
+    "provider": "minimax",
+    "id": "MiniMax-M3",
+    "name": "MiniMax-M3",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": false,
+    "temperature": true,
+    "reasoning": {
+      "can_disable": true
+    },
+    "limits": {
+      "context_window": 1000000,
+      "max_output_tokens": 512000
+    },
+    "pricing": {
+      "input": 0.3,
+      "output": 1.2,
+      "cache_read": 0.06,
+      "tiers": [
+        {
+          "input_tokens_above": 512000,
+          "input": 0.6,
+          "output": 2.4,
+          "cache_read": 0.12
+        }
+      ]
+    },
+    "status": "active"
+  }
+]
