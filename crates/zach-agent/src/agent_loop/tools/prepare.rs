@@ -85,7 +85,7 @@ pub(super) async fn prepare<'a>(call: &LocalCall, batch: &BatchInput<'a>) -> Pre
     Prepared::Ready { tool, input }
 }
 
-/// 发出审批请求并等待答复；运行被中止时返回 `None`
+/// 请求审批并等待答复；运行被中止时返回 `None`
 async fn request_approval(
     call: &LocalCall,
     input: &Value,
@@ -94,20 +94,6 @@ async fn request_approval(
     batch: &BatchInput<'_>,
 ) -> Option<(bool, Option<String>)> {
     let approval_id = new_id("approval");
-    batch
-        .host
-        .emit(AgentEvent::ToolApprovalRequest {
-            approval_id: approval_id.clone(),
-            tool_call_id: call.tool_call_id.clone(),
-            tool_name: call.tool_name.clone(),
-            input: input.clone(),
-            approval_descriptor: descriptor.clone(),
-            reason: reason.clone(),
-            is_automatic: None,
-            signature: None,
-        })
-        .await;
-
     let request = ApprovalRequest {
         approval_id: approval_id.clone(),
         tool_call_id: call.tool_call_id.clone(),

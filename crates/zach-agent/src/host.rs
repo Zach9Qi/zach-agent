@@ -29,7 +29,11 @@ pub trait LoopHost: Send + Sync {
         Vec::new()
     }
 
-    /// 等待审批答复。运行被中止时该等待会被丢弃并按拒绝处理。
+    /// 裁决一个审批请求
+    ///
+    /// 宿主负责把请求呈现给裁决方（转交人工时应发出 [`ApprovalRequest::to_event`] 事件，
+    /// 自动裁决时无需发出）并返回结论；循环随后发出 `ToolApprovalResponse`。
+    /// 运行被中止时该等待会被丢弃并按拒绝处理。
     async fn wait_approval(&self, request: ApprovalRequest) -> ApprovalDecision {
         let _ = request;
         ApprovalDecision::deny("未配置审批通道")

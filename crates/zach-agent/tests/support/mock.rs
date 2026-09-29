@@ -281,6 +281,7 @@ impl LoopHost for TestHost {
     }
 
     async fn wait_approval(&self, request: ApprovalRequest) -> ApprovalDecision {
+        self.emit(request.to_event()).await;
         let decision = (self.approve)(&request);
         self.approvals.lock().unwrap().push(request);
         decision

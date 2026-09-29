@@ -5,9 +5,8 @@ use crate::approval::{ApprovalDecision, ApprovalHandler, ApprovalRequest, Approv
 use crate::event::AgentEvent;
 use crate::host::LoopHost;
 use async_trait::async_trait;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};
@@ -18,8 +17,6 @@ pub(super) struct RunHost {
     approval: Arc<dyn ApprovalHandler>,
     /// 首次读取插队消息时跳过（这些消息已作为本次运行的提示消息注入）
     skip_initial_steering: AtomicBool,
-    /// 审批答复的接收端。发出请求事件前就登记，消费方收到事件后立即答复也不会丢失。
-    replies: Mutex<HashMap<String, oneshot::Receiver<ApprovalDecision>>>,
 }
 
 impl RunHost {
@@ -34,54 +31,30 @@ impl RunHost {
             events,
             approval,
             skip_initial_steering: AtomicBool::new(skip_initial_steering),
-            replies: Mutex::default(),
         }
-    }
-
-    fn register_approval(&self, approval_id: &str) {
-        let (sender, receiver) = oneshot::channel();
-        self.inner
-            .lock()
-            .approvals
-            .insert(approval_id.to_string(), sender);
-        self.replies_lock()
-            .insert(approval_id.to_string(), receiver);
-    }
-
-    fn replies_lock(
-        &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<String, oneshot::Receiver<ApprovalDecision>>> {
-        self.replies
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    /// 撤销为某个请求登记的审批通道（处理器已自动裁决、或等待已结束时调用）
-    fn unregister_approval(&self, approval_id: &str) {
-        self.replies_lock().remove(approval_id);
-        self.inner.lock().approvals.remove(approval_id);
     }
 
     /// 交互路径：等待 `Agent::respond_approval` 的答复
     ///
+    /// 先登记答复通道再发出请求事件，消费方收到事件后立即答复也不会丢失。
     /// 事件消费者（AgentRun）已丢弃时，审批请求注定无人应答：立即按拒绝处理，
     /// 避免运行永久悬挂、Agent 一直处于忙碌状态。超时同样按拒绝处理。
-    async fn ask(&self, approval_id: &str, timeout: Option<Duration>) -> ApprovalDecision {
-        if !self.replies_lock().contains_key(approval_id) {
-            self.register_approval(approval_id);
-        }
-        let receiver = self.replies_lock().remove(approval_id);
-        let decision = match receiver {
-            Some(receiver) => tokio::select! {
-                decision = receiver => decision.ok(),
-                _ = self.events.closed() => None,
-                _ = deadline(timeout) => Some(ApprovalDecision::deny(format!(
-                    "审批等待超时（{:?}）未得到答复", timeout.unwrap_or_default()
-                ))),
-            },
-            None => None,
+    async fn ask(&self, request: &ApprovalRequest, timeout: Option<Duration>) -> ApprovalDecision {
+        let (sender, receiver) = oneshot::channel();
+        self.inner
+            .lock()
+            .approvals
+            .insert(request.approval_id.clone(), sender);
+        self.emit(request.to_event()).await;
+
+        let decision = tokio::select! {
+            decision = receiver => decision.ok(),
+            _ = self.events.closed() => None,
+            _ = deadline(timeout) => Some(ApprovalDecision::deny(format!(
+                "审批等待超时（{:?}）未得到答复", timeout.unwrap_or_default()
+            ))),
         };
-        self.unregister_approval(approval_id);
+        self.inner.lock().approvals.remove(&request.approval_id);
         decision.unwrap_or_else(|| ApprovalDecision::deny("事件消费者已离开，审批无人应答"))
     }
 
@@ -127,9 +100,6 @@ impl RunHost {
 #[async_trait]
 impl LoopHost for RunHost {
     async fn emit(&self, event: AgentEvent) {
-        if let AgentEvent::ToolApprovalRequest { approval_id, .. } = &event {
-            self.register_approval(approval_id);
-        }
         self.inner.lock().observe(&event);
         // 消费方已丢弃 AgentRun 时静默丢弃事件，运行继续
         let _ = self.events.send(event).await;
@@ -152,11 +122,8 @@ impl LoopHost for RunHost {
 
     async fn wait_approval(&self, request: ApprovalRequest) -> ApprovalDecision {
         match self.approval.route(&request).await {
-            ApprovalRoute::Decided(decision) => {
-                self.unregister_approval(&request.approval_id);
-                decision
-            }
-            ApprovalRoute::Ask { timeout } => self.ask(&request.approval_id, timeout).await,
+            ApprovalRoute::Decided(decision) => decision,
+            ApprovalRoute::Ask { timeout } => self.ask(&request, timeout).await,
         }
     }
 }

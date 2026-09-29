@@ -129,6 +129,10 @@ async fn deny_all_handler_rejects_without_asking() {
 
     assert!(!executed.load(Ordering::SeqCst));
     assert_denied(&agent);
+    // 自动裁决不会向使用者呈现审批请求，只有裁决结果
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolApprovalRequest { .. })));
     assert!(events.iter().any(|e| matches!(
         e,
         AgentEvent::ToolApprovalResponse { approved: false, reason: Some(r), .. } if r.contains("审批策略")

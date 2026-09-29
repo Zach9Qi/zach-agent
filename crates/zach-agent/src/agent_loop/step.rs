@@ -1,6 +1,6 @@
 //! 单步模型调用：构造请求、消费流并透出事件、聚合结果，失败时按策略重试
 
-use super::tools::{approval_request_for, validate_call};
+use super::tools::validate_call;
 use crate::config::RetryPolicy;
 use crate::context::{AgentContext, RequestState};
 use crate::event::{map_stream_part, AgentEvent};
@@ -116,10 +116,6 @@ async fn stream_once(input: &StepInput<'_>) -> Result<StepOutcome, ModelError> {
                 )
                 .await
             }
-            Trigger::Approval(approval_id, tool_call_id) => {
-                emit_provider_approval(&approval_id, &tool_call_id, accumulator.content(), host)
-                    .await
-            }
             Trigger::None => {}
         }
     }
@@ -162,9 +158,10 @@ fn build_prompt(context: &AgentContext, messages: Vec<Message>) -> Prompt {
 }
 
 /// 聚合后需要结合上下文补发事件的分块
+///
+/// 厂商侧审批请求不在此处发出：由宿主在 `wait_approval` 中呈现（见 `tools::answer_provider_approvals`）。
 enum Trigger {
     ToolCall(String),
-    Approval(String, String),
     None,
 }
 
@@ -172,11 +169,6 @@ impl Trigger {
     fn of(part: &StreamPart) -> Self {
         match part {
             StreamPart::ToolCall { tool_call_id, .. } => Self::ToolCall(tool_call_id.clone()),
-            StreamPart::ToolApprovalRequest {
-                approval_id,
-                tool_call_id,
-                ..
-            } => Self::Approval(approval_id.clone(), tool_call_id.clone()),
             _ => Self::None,
         }
     }
@@ -244,26 +236,6 @@ async fn announce(
         }
     };
     host.emit(event).await;
-}
-
-async fn emit_provider_approval(
-    approval_id: &str,
-    tool_call_id: &str,
-    content: &[OutputContent],
-    host: &dyn LoopHost,
-) {
-    let request = approval_request_for(content, approval_id, tool_call_id);
-    host.emit(AgentEvent::ToolApprovalRequest {
-        approval_id: request.approval_id,
-        tool_call_id: request.tool_call_id,
-        tool_name: request.tool_name,
-        input: request.input,
-        approval_descriptor: None,
-        reason: None,
-        is_automatic: None,
-        signature: None,
-    })
-    .await;
 }
 
 /// 中止时保留已生成的内容，丢弃未完成的工具调用等需要配对的块

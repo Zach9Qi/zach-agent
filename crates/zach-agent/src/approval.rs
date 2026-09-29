@@ -12,6 +12,7 @@ mod builtin;
 
 pub use builtin::{ApproveAll, DenyAll, InteractiveApproval};
 
+use crate::event::AgentEvent;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::time::Duration;
@@ -33,6 +34,24 @@ pub struct ApprovalRequest {
     pub reason: Option<String>,
     /// 审批上下文描述（风险评级、差异预览等，来自钩子 `RequireApproval`）
     pub descriptor: Option<Value>,
+}
+
+impl ApprovalRequest {
+    /// 转为呈现给使用者的 `ToolApprovalRequest` 事件
+    ///
+    /// 宿主在把请求转交人工时应发出该事件（内置宿主已处理；自定义 [`crate::LoopHost`] 可直接使用）。
+    pub fn to_event(&self) -> AgentEvent {
+        AgentEvent::ToolApprovalRequest {
+            approval_id: self.approval_id.clone(),
+            tool_call_id: self.tool_call_id.clone(),
+            tool_name: self.tool_name.clone(),
+            input: self.input.clone(),
+            approval_descriptor: self.descriptor.clone(),
+            reason: self.reason.clone(),
+            is_automatic: None,
+            signature: None,
+        }
+    }
 }
 
 /// 审批答复

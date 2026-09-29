@@ -8,7 +8,7 @@ use zach_ai_core::{FileData, ProviderMetadata, SourceContent, StreamPart, ToolRe
 ///
 /// 以下分块返回 `None`，由循环结合上下文另行处理：
 /// - `ToolInputEnd` / `ToolCall`：入参就绪后需先校验再发出 `ToolInputAvailable` 或 `ToolInputError`；
-/// - `ToolApprovalRequest`：需要补齐工具名与入参；
+/// - `ToolApprovalRequest`：由宿主在裁决时结合工具名与入参呈现（见 `LoopHost::wait_approval`）；
 /// - `Finish`：结束信息汇总在 `StepFinish` / `RunFinish` 中；
 /// - 无警告的 `StreamStart`。
 pub fn map_stream_part(part: &StreamPart) -> Option<AgentEvent> {
