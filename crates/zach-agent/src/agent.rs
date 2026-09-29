@@ -15,8 +15,11 @@ pub use run::AgentRun;
 use crate::agent_loop::{continue_agent_loop, run_agent_loop};
 use crate::error::AgentError;
 use crate::host::ApprovalDecision;
+use crate::utils::panic_message;
+use futures::FutureExt;
 use host::RunHost;
 use state::{Inner, RunGuard};
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -160,9 +163,22 @@ impl Agent {
         let token = cancel.clone();
         let handle = tokio::spawn(async move {
             let _guard = guard;
-            match prompts {
-                Some(prompts) => run_agent_loop(prompts, context, config, &host, token).await,
-                None => continue_agent_loop(context, config, &host, token).await,
+            let run = async {
+                match prompts {
+                    Some(prompts) => run_agent_loop(prompts, context, config, &host, token).await,
+                    None => continue_agent_loop(context, config, &host, token).await,
+                }
+            };
+            // 兜底捕获钩子、宿主、流解析等任意来源的 panic：发出 RunError 并修复对话记录，
+            // 避免运行静默消失、历史末尾残留无结果的工具调用
+            match AssertUnwindSafe(run).catch_unwind().await {
+                Ok(result) => result,
+                Err(payload) => {
+                    let error_text = format!("运行任务 panic: {}", panic_message(payload.as_ref()));
+                    tracing::error!(%error_text, "运行任务异常退出");
+                    host.recover_from_panic(error_text.clone()).await;
+                    Err(AgentError::Internal(error_text))
+                }
             }
         });
         Ok(AgentRun::new(receiver, handle, cancel))

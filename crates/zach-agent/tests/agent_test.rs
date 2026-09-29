@@ -3,14 +3,16 @@
 #[path = "support/mock.rs"]
 mod mock;
 
+use async_trait::async_trait;
 use futures::StreamExt;
 use mock::{fn_tool, text, tool_calls, Script, ScriptedModel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zach_agent::{
-    Agent, AgentError, AgentEvent, ApprovalDecision, QueueMode, RetryPolicy, ToolOutcome,
+    Agent, AgentError, AgentEvent, AgentHooks, ApprovalDecision, QueueMode, RetryPolicy,
+    ToolCallDecision, ToolCallInfo, ToolOutcome,
 };
-use zach_ai_core::{Message, ModelError, UnifiedFinishReason};
+use zach_ai_core::{Message, ModelError, ToolPart, ToolResultOutput, UnifiedFinishReason};
 
 fn agent(model: Arc<ScriptedModel>) -> Agent {
     Agent::builder(model)
@@ -153,7 +155,10 @@ async fn approvals_are_answered_through_the_agent_handle() {
     while let Some(event) = run.next().await {
         match event {
             AgentEvent::ToolApprovalRequest { approval_id, .. } => {
-                assert_eq!(agent.pending_approvals(), std::slice::from_ref(&approval_id));
+                assert_eq!(
+                    agent.pending_approvals(),
+                    std::slice::from_ref(&approval_id)
+                );
                 agent
                     .respond_approval(&approval_id, ApprovalDecision::approve())
                     .unwrap();
@@ -196,4 +201,57 @@ async fn continue_run_retries_after_failure_and_drains_queues_after_replies() {
         agent.messages().last(),
         Some(&Message::assistant("追加的回复"))
     );
+}
+
+/// 执行前钩子直接 panic，模拟集成方代码缺陷
+struct PanickingHooks;
+
+#[async_trait]
+impl AgentHooks for PanickingHooks {
+    async fn before_tool_call(&self, _call: &ToolCallInfo<'_>) -> ToolCallDecision {
+        panic!("钩子崩了")
+    }
+}
+
+#[tokio::test]
+async fn panicking_hook_fails_run_cleanly_and_keeps_transcript_usable() {
+    let model = ScriptedModel::new(vec![
+        Script::Parts(tool_calls(
+            &[("c1", "echo", "{}")],
+            UnifiedFinishReason::ToolCalls,
+        )),
+        Script::Parts(text("恢复了")),
+    ]);
+    let agent = Agent::builder(model.clone())
+        .retry(RetryPolicy::none())
+        .hooks(PanickingHooks)
+        .tool(mock::echo_tool("echo"))
+        .build();
+
+    let (events, result) = agent.prompt_text("你好").unwrap().collect().await;
+
+    // 运行以 Internal 失败，且发出了 RunError、设置了 last_error
+    assert!(matches!(&result, Err(AgentError::Internal(text)) if text.contains("钩子崩了")));
+    assert!(events.iter().any(
+        |e| matches!(e, AgentEvent::RunError { error_text } if error_text.contains("钩子崩了"))
+    ));
+    assert!(agent.last_error().unwrap().contains("钩子崩了"));
+    assert!(!agent.is_running());
+    assert!(agent.pending_tool_calls().is_empty());
+
+    // 对话记录末尾的工具调用被补上了带实际原因的错误结果
+    let messages = agent.messages();
+    let Some(Message::Tool { content, .. }) = messages.last() else {
+        panic!("末尾应为补齐的工具消息: {messages:?}");
+    };
+    assert!(matches!(
+        &content[0],
+        ToolPart::ToolResult { tool_call_id, output: ToolResultOutput::ErrorText { value, .. }, .. }
+            if tool_call_id == "c1" && value.contains("运行异常中断") && value.contains("钩子崩了")
+    ));
+
+    // 同一段对话可以继续
+    agent.continue_run().unwrap().outcome().await.unwrap();
+    assert_eq!(agent.messages().last(), Some(&Message::assistant("恢复了")));
+    assert_eq!(model.call_count(), 2);
 }

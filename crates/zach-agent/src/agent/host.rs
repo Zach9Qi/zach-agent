@@ -1,4 +1,4 @@
-//! `Agent` 内置的循环宿主：事件转发、消息镜像、队列读取与审批等待
+//! `Agent` 内置的循环宿主：事件转发、消息镜像、队列读取、审批等待与 panic 善后
 
 use super::state::Inner;
 use crate::event::AgentEvent;
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
-use zach_ai_core::Message;
+use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};
 
 pub(super) struct RunHost {
     inner: Arc<Inner>,
@@ -49,6 +49,44 @@ impl RunHost {
         self.replies
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// 运行任务 panic 后的善后：发出 `RunError`，并为悬空的工具调用补齐带有实际错误原因的结果，
+    /// 保证对话记录仍能作为下一次请求的历史使用，模型也能知道调用为何没有结果
+    pub(super) async fn recover_from_panic(&self, error_text: String) {
+        let reason = format!("运行异常中断，工具未得出结果：{error_text}");
+        self.emit(AgentEvent::RunError { error_text }).await;
+        if let Some(repair) = self.dangling_tool_results(&reason) {
+            self.on_message(&repair).await;
+        }
+    }
+
+    /// 若对话记录末尾是带工具调用、但缺少对应结果的助手消息，则以 `reason` 为错误结果构造补齐用的工具消息
+    ///
+    /// panic 未必源自工具本身（也可能是钩子或宿主），因此措辞为"运行中断"而非"工具出错"。
+    fn dangling_tool_results(&self, reason: &str) -> Option<Message> {
+        let state = self.inner.lock();
+        let Some(Message::Assistant { content, .. }) = state.messages.last() else {
+            return None;
+        };
+        let parts: Vec<ToolPart> = content
+            .iter()
+            .filter_map(|part| match part {
+                AssistantPart::ToolCall {
+                    tool_call_id,
+                    tool_name,
+                    provider_executed: false,
+                    ..
+                } => Some(ToolPart::ToolResult {
+                    tool_call_id: tool_call_id.clone(),
+                    tool_name: tool_name.clone(),
+                    output: ToolResultOutput::error_text(reason),
+                    provider_options: None,
+                }),
+                _ => None,
+            })
+            .collect();
+        (!parts.is_empty()).then(|| Message::tool(parts))
     }
 }
 
