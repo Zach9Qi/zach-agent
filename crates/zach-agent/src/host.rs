@@ -3,52 +3,10 @@
 //! 循环通过宿主发出事件、同步写入的消息、读取排队消息并等待审批答复。
 //! [`crate::Agent`] 是内置宿主；直接使用低层循环时可自行实现。
 
+pub use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::event::AgentEvent;
 use async_trait::async_trait;
-use serde_json::Value;
 use zach_ai_core::Message;
-
-/// 待人工审批的工具调用
-#[derive(Debug, Clone, PartialEq)]
-pub struct ApprovalRequest {
-    /// 审批请求 ID
-    pub approval_id: String,
-    /// 关联的工具调用 ID
-    pub tool_call_id: String,
-    /// 工具名称
-    pub tool_name: String,
-    /// 工具入参
-    pub input: Value,
-    /// 是否为厂商侧执行的工具
-    pub provider_executed: bool,
-}
-
-/// 审批答复
-#[derive(Debug, Clone, PartialEq)]
-pub struct ApprovalDecision {
-    /// 是否批准
-    pub approved: bool,
-    /// 批注或拒绝原因
-    pub reason: Option<String>,
-}
-
-impl ApprovalDecision {
-    /// 批准
-    pub fn approve() -> Self {
-        Self {
-            approved: true,
-            reason: None,
-        }
-    }
-
-    /// 拒绝
-    pub fn deny(reason: impl Into<String>) -> Self {
-        Self {
-            approved: false,
-            reason: Some(reason.into()),
-        }
-    }
-}
 
 /// 循环宿主接口
 #[async_trait]

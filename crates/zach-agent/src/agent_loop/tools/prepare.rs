@@ -101,8 +101,8 @@ async fn request_approval(
             tool_call_id: call.tool_call_id.clone(),
             tool_name: call.tool_name.clone(),
             input: input.clone(),
-            approval_descriptor: descriptor,
-            reason,
+            approval_descriptor: descriptor.clone(),
+            reason: reason.clone(),
             is_automatic: None,
             signature: None,
         })
@@ -114,6 +114,8 @@ async fn request_approval(
         tool_name: call.tool_name.clone(),
         input: input.clone(),
         provider_executed: false,
+        reason,
+        descriptor,
     };
     let decision = cancellable(batch.cancel, batch.host.wait_approval(request)).await?;
     batch

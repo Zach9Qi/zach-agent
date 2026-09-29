@@ -110,6 +110,8 @@ pub(crate) fn approval_request_for(
         tool_name,
         input,
         provider_executed: true,
+        reason: None,
+        descriptor: None,
     }
 }
 

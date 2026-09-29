@@ -225,6 +225,11 @@ async fn approval_is_requested_and_honored() {
     assert!(host.events().iter().any(
         |e| matches!(e, AgentEvent::ToolApprovalRequest { reason: Some(r), .. } if r == "高风险")
     ));
+    // 钩子给出的原因同样会随审批请求交给宿主，供审批策略决策
+    assert_eq!(
+        host.approvals.lock().unwrap()[0].reason.as_deref(),
+        Some("高风险")
+    );
 }
 
 #[tokio::test]
