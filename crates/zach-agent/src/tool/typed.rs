@@ -4,7 +4,7 @@ use crate::tool::context::ToolContext;
 use crate::tool::error::ToolError;
 use crate::tool::types::{AgentTool, SharedTool, ToolExecutionMode, ToolOutcome};
 use async_trait::async_trait;
-use schemars::gen::SchemaSettings;
+use schemars::generate::SchemaSettings;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -106,9 +106,10 @@ fn parse<I: DeserializeOwned>(input: Value) -> Result<I, ToolError> {
 fn input_schema<I: JsonSchema>() -> Value {
     let mut settings = SchemaSettings::draft07();
     settings.inline_subschemas = true;
-    let root = settings.into_generator().into_root_schema_for::<I>();
-    let mut schema =
-        serde_json::to_value(root).unwrap_or_else(|_| Value::Object(Default::default()));
+    let mut schema = settings
+        .into_generator()
+        .into_root_schema_for::<I>()
+        .to_value();
     if let Value::Object(map) = &mut schema {
         map.remove("$schema");
     }
