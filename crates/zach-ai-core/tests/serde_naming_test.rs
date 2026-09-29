@@ -88,7 +88,7 @@ fn shared_concepts_serialize_as_snake_case() {
         json!("max")
     );
     assert_eq!(
-        type_tag(&serde_json::to_value(&ToolChoice::specific("bash")).unwrap()),
+        type_tag(&serde_json::to_value(ToolChoice::specific("bash")).unwrap()),
         "tool"
     );
 }
@@ -107,7 +107,8 @@ fn snake_case_tags_roundtrip_and_reject_kebab_case() {
     let decoded: StreamPart = serde_json::from_str(&encoded).unwrap();
     assert_eq!(decoded, stream_call);
 
-    let kebab_call = r#"{"type":"tool-call","tool_call_id":"call_1","tool_name":"bash","input":"{}"}"#;
+    let kebab_call =
+        r#"{"type":"tool-call","tool_call_id":"call_1","tool_name":"bash","input":"{}"}"#;
     assert!(serde_json::from_str::<StreamPart>(kebab_call).is_err());
     assert!(serde_json::from_str::<UnifiedFinishReason>(r#""tool-calls""#).is_err());
     assert!(serde_json::from_str::<ReasoningEffort>(r#""provider-default""#).is_err());

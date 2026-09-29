@@ -9,7 +9,9 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("sync-models") => sync_models::run(),
         _ => {
-            eprintln!("用法: cargo xtask <命令>\n\n命令:\n  sync-models  从 models.dev 同步内置模型档案");
+            eprintln!(
+                "用法: cargo xtask <命令>\n\n命令:\n  sync-models  从 models.dev 同步内置模型档案"
+            );
             return ExitCode::FAILURE;
         }
     };

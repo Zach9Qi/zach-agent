@@ -8,7 +8,11 @@ fn builtin_catalog_parses_and_is_consistent() {
     for profile in catalog.iter() {
         assert!(!profile.id.is_empty());
         assert!(profile.limits.context_window > 0, "{}", profile.id);
-        assert!(profile.tool_call, "{} 应只收录支持工具调用的模型", profile.id);
+        assert!(
+            profile.tool_call,
+            "{} 应只收录支持工具调用的模型",
+            profile.id
+        );
     }
 }
 

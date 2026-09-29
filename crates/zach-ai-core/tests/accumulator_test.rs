@@ -254,7 +254,10 @@ fn finish_metadata_is_merged_per_provider() {
         provider_metadata: None,
     });
 
-    let stored = accumulator.finish().provider_metadata.expect("响应级元数据");
+    let stored = accumulator
+        .finish()
+        .provider_metadata
+        .expect("响应级元数据");
     let openai = stored.get::<serde_json::Value>("openai").unwrap();
     assert_eq!(openai["service_tier"], "default");
     assert_eq!(openai["cached"], true);
@@ -363,7 +366,10 @@ fn stream_error_is_not_reported_as_stop() {
     let result = accumulator.finish();
     assert_eq!(result.text(), "部分");
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("overloaded_error"));
+    assert_eq!(
+        result.finish_reason.raw.as_deref(),
+        Some("overloaded_error")
+    );
     assert_eq!(result.usage.input_tokens.total, Some(3));
 }
 
@@ -378,7 +384,10 @@ fn stream_error_without_finish_is_reported_as_error() {
 
     let result = accumulator.finish();
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("overloaded_error"));
+    assert_eq!(
+        result.finish_reason.raw.as_deref(),
+        Some("overloaded_error")
+    );
 }
 
 #[test]

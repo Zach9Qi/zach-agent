@@ -23,7 +23,9 @@ pub(crate) fn to_profile(provider: &str, id: &str, model: &ModelsDevModel) -> Mo
         tool_call: model.tool_call,
         structured_output: model.structured_output,
         temperature: model.temperature.unwrap_or(true),
-        reasoning: model.reasoning.then(|| to_reasoning(&model.reasoning_options)),
+        reasoning: model
+            .reasoning
+            .then(|| to_reasoning(&model.reasoning_options)),
         limits: ModelLimits {
             context_window,
             max_output_tokens: model.limit.output.unwrap_or(FALLBACK_LIMIT),

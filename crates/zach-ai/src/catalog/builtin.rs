@@ -6,13 +6,19 @@ use super::ModelCatalog;
 
 /// 内嵌数据文件；与 `xtask/src/sync_models.rs` 中的 `PROVIDERS` 保持一致
 const SOURCES: &[(&str, &str)] = &[
-    ("anthropic", include_str!("../../data/models/anthropic.json")),
+    (
+        "anthropic",
+        include_str!("../../data/models/anthropic.json"),
+    ),
     ("openai", include_str!("../../data/models/openai.json")),
     ("google", include_str!("../../data/models/google.json")),
     ("deepseek", include_str!("../../data/models/deepseek.json")),
     ("xai", include_str!("../../data/models/xai.json")),
     ("mistral", include_str!("../../data/models/mistral.json")),
-    ("moonshotai", include_str!("../../data/models/moonshotai.json")),
+    (
+        "moonshotai",
+        include_str!("../../data/models/moonshotai.json"),
+    ),
     ("zhipuai", include_str!("../../data/models/zhipuai.json")),
     ("alibaba", include_str!("../../data/models/alibaba.json")),
     ("minimax", include_str!("../../data/models/minimax.json")),
