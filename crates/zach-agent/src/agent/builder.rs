@@ -2,6 +2,7 @@
 
 use super::state::{Inner, PendingQueue, State};
 use super::Agent;
+use crate::approval::{ApprovalHandler, InteractiveApproval};
 use crate::config::{QueueMode, RetryPolicy};
 use crate::hooks::{AgentHooks, NoopHooks};
 use crate::tool::{SharedTool, ToolExecutionMode};
@@ -14,6 +15,7 @@ pub struct AgentBuilder {
     model: Arc<dyn LanguageModel>,
     options: CallOptions,
     hooks: Arc<dyn AgentHooks>,
+    approval: Arc<dyn ApprovalHandler>,
     tool_execution: ToolExecutionMode,
     retry: RetryPolicy,
     system_prompt: Option<String>,
@@ -30,6 +32,7 @@ impl AgentBuilder {
             model,
             options: CallOptions::default(),
             hooks: Arc::new(NoopHooks),
+            approval: Arc::new(InteractiveApproval::new()),
             tool_execution: ToolExecutionMode::default(),
             retry: RetryPolicy::default(),
             system_prompt: None,
@@ -83,6 +86,12 @@ impl AgentBuilder {
         self
     }
 
+    /// 审批处理器（默认 [`InteractiveApproval`]：转交事件流由使用者答复）
+    pub fn approval(mut self, handler: impl ApprovalHandler + 'static) -> Self {
+        self.approval = Arc::new(handler);
+        self
+    }
+
     /// 工具批次执行方式
     pub fn tool_execution(mut self, mode: ToolExecutionMode) -> Self {
         self.tool_execution = mode;
@@ -119,6 +128,7 @@ impl AgentBuilder {
             model: self.model,
             options: self.options,
             hooks: self.hooks,
+            approval: self.approval,
             tool_execution: self.tool_execution,
             retry: self.retry,
             system_prompt: self.system_prompt,

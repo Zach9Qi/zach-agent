@@ -14,7 +14,10 @@ mod utils;
 
 pub use agent::{Agent, AgentBuilder, AgentRun};
 pub use agent_loop::{continue_agent_loop, run_agent_loop, RunOutput};
-pub use approval::{ApprovalDecision, ApprovalRequest};
+pub use approval::{
+    ApprovalDecision, ApprovalHandler, ApprovalRequest, ApprovalRoute, ApproveAll, DenyAll,
+    InteractiveApproval,
+};
 pub use config::{LoopConfig, QueueMode, RetryPolicy};
 pub use context::{AgentContext, RequestState};
 pub use error::AgentError;

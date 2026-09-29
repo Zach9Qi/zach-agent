@@ -1,18 +1,21 @@
 //! `Agent` 内置的循环宿主：事件转发、消息镜像、队列读取、审批等待与 panic 善后
 
 use super::state::Inner;
+use crate::approval::{ApprovalDecision, ApprovalHandler, ApprovalRequest, ApprovalRoute};
 use crate::event::AgentEvent;
-use crate::host::{ApprovalDecision, ApprovalRequest, LoopHost};
+use crate::host::LoopHost;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};
 
 pub(super) struct RunHost {
     inner: Arc<Inner>,
     events: mpsc::Sender<AgentEvent>,
+    approval: Arc<dyn ApprovalHandler>,
     /// 首次读取插队消息时跳过（这些消息已作为本次运行的提示消息注入）
     skip_initial_steering: AtomicBool,
     /// 审批答复的接收端。发出请求事件前就登记，消费方收到事件后立即答复也不会丢失。
@@ -23,11 +26,13 @@ impl RunHost {
     pub(super) fn new(
         inner: Arc<Inner>,
         events: mpsc::Sender<AgentEvent>,
+        approval: Arc<dyn ApprovalHandler>,
         skip_initial_steering: bool,
     ) -> Self {
         Self {
             inner,
             events,
+            approval,
             skip_initial_steering: AtomicBool::new(skip_initial_steering),
             replies: Mutex::default(),
         }
@@ -49,6 +54,35 @@ impl RunHost {
         self.replies
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// 撤销为某个请求登记的审批通道（处理器已自动裁决、或等待已结束时调用）
+    fn unregister_approval(&self, approval_id: &str) {
+        self.replies_lock().remove(approval_id);
+        self.inner.lock().approvals.remove(approval_id);
+    }
+
+    /// 交互路径：等待 `Agent::respond_approval` 的答复
+    ///
+    /// 事件消费者（AgentRun）已丢弃时，审批请求注定无人应答：立即按拒绝处理，
+    /// 避免运行永久悬挂、Agent 一直处于忙碌状态。超时同样按拒绝处理。
+    async fn ask(&self, approval_id: &str, timeout: Option<Duration>) -> ApprovalDecision {
+        if !self.replies_lock().contains_key(approval_id) {
+            self.register_approval(approval_id);
+        }
+        let receiver = self.replies_lock().remove(approval_id);
+        let decision = match receiver {
+            Some(receiver) => tokio::select! {
+                decision = receiver => decision.ok(),
+                _ = self.events.closed() => None,
+                _ = deadline(timeout) => Some(ApprovalDecision::deny(format!(
+                    "审批等待超时（{:?}）未得到答复", timeout.unwrap_or_default()
+                ))),
+            },
+            None => None,
+        };
+        self.unregister_approval(approval_id);
+        decision.unwrap_or_else(|| ApprovalDecision::deny("事件消费者已离开，审批无人应答"))
     }
 
     /// 运行任务 panic 后的善后：发出 `RunError`，并为悬空的工具调用补齐带有实际错误原因的结果，
@@ -117,20 +151,20 @@ impl LoopHost for RunHost {
     }
 
     async fn wait_approval(&self, request: ApprovalRequest) -> ApprovalDecision {
-        if !self.replies_lock().contains_key(&request.approval_id) {
-            self.register_approval(&request.approval_id);
+        match self.approval.route(&request).await {
+            ApprovalRoute::Decided(decision) => {
+                self.unregister_approval(&request.approval_id);
+                decision
+            }
+            ApprovalRoute::Ask { timeout } => self.ask(&request.approval_id, timeout).await,
         }
-        let receiver = self.replies_lock().remove(&request.approval_id);
-        let decision = match receiver {
-            // 事件消费者（AgentRun）已丢弃时，审批请求注定无人应答：立即按拒绝处理，
-            // 避免运行永久悬挂、Agent 一直处于忙碌状态
-            Some(receiver) => tokio::select! {
-                decision = receiver => decision.ok(),
-                _ = self.events.closed() => None,
-            },
-            None => None,
-        };
-        self.inner.lock().approvals.remove(&request.approval_id);
-        decision.unwrap_or_else(|| ApprovalDecision::deny("事件消费者已离开，审批无人应答"))
+    }
+}
+
+/// 审批超时：`None` 表示永不超时
+async fn deadline(timeout: Option<Duration>) {
+    match timeout {
+        Some(timeout) => tokio::time::sleep(timeout).await,
+        None => std::future::pending().await,
     }
 }

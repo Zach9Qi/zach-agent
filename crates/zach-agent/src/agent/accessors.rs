@@ -1,6 +1,7 @@
 //! `Agent` 状态读写。修改在下一次运行时生效，不影响进行中的运行。
 
 use super::Agent;
+use crate::approval::ApprovalHandler;
 use crate::config::{QueueMode, RetryPolicy};
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
@@ -71,6 +72,11 @@ impl Agent {
     /// 替换策略钩子
     pub fn set_hooks(&self, hooks: impl AgentHooks + 'static) {
         self.inner.lock().hooks = Arc::new(hooks);
+    }
+
+    /// 替换审批处理器
+    pub fn set_approval_handler(&self, handler: impl ApprovalHandler + 'static) {
+        self.inner.lock().approval = Arc::new(handler);
     }
 
     /// 设置工具批次执行方式

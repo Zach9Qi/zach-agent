@@ -1,17 +1,22 @@
-//! 有状态 Agent 的审批路径：事件消费者离开时不得悬挂
+//! 有状态 Agent 的审批路径：审批处理器路由、超时，以及事件消费者离开时不得悬挂
 
 #[path = "support/mock.rs"]
 mod mock;
 
 use futures::StreamExt;
 use mock::{fn_tool, text, tool_calls, Script, ScriptedModel};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
-use zach_agent::{Agent, AgentEvent, RetryPolicy, ToolOutcome};
+use zach_agent::{
+    Agent, AgentBuilder, AgentEvent, ApprovalDecision, ApprovalRoute, ApproveAll, DenyAll,
+    InteractiveApproval, RetryPolicy, ToolOutcome,
+};
 use zach_ai_core::{Message, ToolPart, ToolResultOutput, UnifiedFinishReason};
 
-/// 一次运行：模型先调用需要审批的 `rm`，得到结果后回复文本
-fn agent_with_approval_tool() -> Agent {
+/// 一次运行：模型先调用需要审批的 `rm`，得到结果后回复文本。返回构造器以便叠加审批处理器。
+fn builder_with_approval_tool() -> (AgentBuilder, Arc<AtomicBool>) {
     let model = ScriptedModel::new(vec![
         Script::Parts(tool_calls(
             &[("c1", "rm", "{}")],
@@ -19,11 +24,23 @@ fn agent_with_approval_tool() -> Agent {
         )),
         Script::Parts(text("处理完了")),
     ]);
-    let tool = fn_tool("rm", |_, _| async { Ok(ToolOutcome::text("已删除")) });
-    Agent::builder(model)
+    let executed = Arc::new(AtomicBool::new(false));
+    let flag = executed.clone();
+    let tool = fn_tool("rm", move |_, _| {
+        let flag = flag.clone();
+        async move {
+            flag.store(true, Ordering::SeqCst);
+            Ok(ToolOutcome::text("已删除"))
+        }
+    });
+    let builder = Agent::builder(model)
         .retry(RetryPolicy::none())
-        .tool(tool.needs_approval().shared())
-        .build()
+        .tool(tool.needs_approval().shared());
+    (builder, executed)
+}
+
+fn agent_with_approval_tool() -> Agent {
+    builder_with_approval_tool().0.build()
 }
 
 /// 断言对话记录里 `c1` 的结果是"被拒绝"
@@ -98,4 +115,130 @@ async fn consumer_leaving_after_receiving_request_denies_approval() {
         .expect("消费者离开后运行应能结束");
     assert_denied(&agent);
     assert!(agent.pending_approvals().is_empty());
+}
+
+#[tokio::test]
+async fn deny_all_handler_rejects_without_asking() {
+    let (builder, executed) = builder_with_approval_tool();
+    let agent = builder.approval(DenyAll).build();
+
+    let (events, output) = timeout(WAIT, agent.prompt_text("清理").unwrap().collect())
+        .await
+        .unwrap();
+    output.unwrap();
+
+    assert!(!executed.load(Ordering::SeqCst));
+    assert_denied(&agent);
+    assert!(events.iter().any(|e| matches!(
+        e,
+        AgentEvent::ToolApprovalResponse { approved: false, reason: Some(r), .. } if r.contains("审批策略")
+    )));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolOutputDenied { .. })));
+}
+
+#[tokio::test]
+async fn approve_all_handler_executes_without_asking() {
+    let (builder, executed) = builder_with_approval_tool();
+    let agent = builder.approval(ApproveAll).build();
+
+    // 不消费事件也能跑完：处理器自动裁决，不依赖事件消费者
+    timeout(WAIT, agent.prompt_text("清理").unwrap().outcome())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(executed.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn closure_handler_can_mix_auto_decision_and_asking() {
+    let (builder, executed) = builder_with_approval_tool();
+    // 白名单策略：只有 `ls` 自动放行，其余转人工
+    let agent = builder
+        .approval(|request: &zach_agent::ApprovalRequest| {
+            if request.tool_name == "ls" {
+                ApprovalRoute::approve()
+            } else {
+                ApprovalRoute::ask()
+            }
+        })
+        .build();
+
+    let mut run = agent.prompt_text("清理").unwrap();
+    let mut asked = false;
+    while let Some(event) = timeout(WAIT, run.next()).await.unwrap() {
+        if let AgentEvent::ToolApprovalRequest { approval_id, .. } = event {
+            asked = true;
+            agent
+                .respond_approval(&approval_id, ApprovalDecision::approve())
+                .unwrap();
+        }
+    }
+    assert!(asked);
+    assert!(executed.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn interactive_timeout_denies_unanswered_request() {
+    let (builder, executed) = builder_with_approval_tool();
+    let agent = builder
+        .approval(InteractiveApproval::with_timeout(Duration::from_millis(50)))
+        .build();
+
+    // 消费事件但从不答复
+    let (events, output) = timeout(WAIT, agent.prompt_text("清理").unwrap().collect())
+        .await
+        .expect("超时后应自动拒绝而不是悬挂");
+    output.unwrap();
+
+    assert!(!executed.load(Ordering::SeqCst));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        AgentEvent::ToolApprovalResponse { approved: false, reason: Some(r), .. } if r.contains("超时")
+    )));
+    assert!(agent.pending_approvals().is_empty());
+}
+
+#[tokio::test]
+async fn approval_handler_can_be_replaced_between_runs() {
+    let model = ScriptedModel::new(vec![
+        Script::Parts(tool_calls(
+            &[("c1", "rm", "{}")],
+            UnifiedFinishReason::ToolCalls,
+        )),
+        Script::Parts(text("第一次")),
+        Script::Parts(tool_calls(
+            &[("c2", "rm", "{}")],
+            UnifiedFinishReason::ToolCalls,
+        )),
+        Script::Parts(text("第二次")),
+    ]);
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = calls.clone();
+    let tool = fn_tool("rm", move |_, _| {
+        let counter = counter.clone();
+        async move {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolOutcome::text("已删除"))
+        }
+    });
+    let agent = Agent::builder(model)
+        .retry(RetryPolicy::none())
+        .tool(tool.needs_approval().shared())
+        .approval(DenyAll)
+        .build();
+
+    timeout(WAIT, agent.prompt_text("一").unwrap().outcome())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    agent.set_approval_handler(ApproveAll);
+    timeout(WAIT, agent.prompt_text("二").unwrap().outcome())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }

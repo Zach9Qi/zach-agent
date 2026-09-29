@@ -13,8 +13,8 @@ pub use builder::AgentBuilder;
 pub use run::AgentRun;
 
 use crate::agent_loop::{continue_agent_loop, run_agent_loop};
+use crate::approval::ApprovalDecision;
 use crate::error::AgentError;
-use crate::host::ApprovalDecision;
 use crate::utils::panic_message;
 use futures::FutureExt;
 use host::RunHost;
@@ -145,7 +145,7 @@ impl Agent {
         skip_initial_steering: bool,
     ) -> Result<AgentRun, AgentError> {
         let cancel = CancellationToken::new();
-        let (context, config) = {
+        let (context, config, approval) = {
             let mut state = self.inner.lock();
             if state.active.is_some() {
                 return Err(AgentError::Busy);
@@ -153,12 +153,16 @@ impl Agent {
             state.active = Some(cancel.clone());
             state.pending_tool_calls.clear();
             state.last_error = None;
-            (state.context_snapshot(), state.loop_config())
+            (
+                state.context_snapshot(),
+                state.loop_config(),
+                state.approval.clone(),
+            )
         };
         self.inner.idle.send_replace(false);
 
         let (sender, receiver) = mpsc::channel(EVENT_BUFFER);
-        let host = RunHost::new(self.inner.clone(), sender, skip_initial_steering);
+        let host = RunHost::new(self.inner.clone(), sender, approval, skip_initial_steering);
         let guard = RunGuard(self.inner.clone());
         let token = cancel.clone();
         let handle = tokio::spawn(async move {

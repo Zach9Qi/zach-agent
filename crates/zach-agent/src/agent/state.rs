@@ -1,10 +1,10 @@
 //! Agent 共享状态：对话记录、运行配置、排队消息与审批等待表
 
+use crate::approval::{ApprovalDecision, ApprovalHandler};
 use crate::config::{LoopConfig, QueueMode, RetryPolicy};
 use crate::context::AgentContext;
 use crate::event::AgentEvent;
 use crate::hooks::AgentHooks;
-use crate::host::ApprovalDecision;
 use crate::tool::{SharedTool, ToolExecutionMode};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -62,6 +62,7 @@ pub(super) struct State {
     pub(super) model: Arc<dyn LanguageModel>,
     pub(super) options: CallOptions,
     pub(super) hooks: Arc<dyn AgentHooks>,
+    pub(super) approval: Arc<dyn ApprovalHandler>,
     pub(super) tool_execution: ToolExecutionMode,
     pub(super) retry: RetryPolicy,
     pub(super) system_prompt: Option<String>,
