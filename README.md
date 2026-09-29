@@ -171,6 +171,12 @@ cargo test -p zach-agent
 cargo test -p zach-ai-core
 ```
 
+提交前运行统一门禁（格式检查 → Clippy → 测试，任一失败即停止），本地与 CI 共用同一入口：
+
+```bash
+cargo xtask check
+```
+
 ---
 
 ## 代码与提交规范

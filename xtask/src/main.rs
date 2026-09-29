@@ -1,5 +1,6 @@
 //! 项目开发任务入口，用法：`cargo xtask <命令>`
 
+mod check;
 mod sync_models;
 
 use std::process::ExitCode;
@@ -7,10 +8,13 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
+        Some("check") => check::run(),
         Some("sync-models") => sync_models::run(),
         _ => {
             eprintln!(
-                "用法: cargo xtask <命令>\n\n命令:\n  sync-models  从 models.dev 同步内置模型档案"
+                "用法: cargo xtask <命令>\n\n命令:\n  \
+                 check        依次执行格式检查、Clippy 与测试\n  \
+                 sync-models  从 models.dev 同步内置模型档案"
             );
             return ExitCode::FAILURE;
         }
