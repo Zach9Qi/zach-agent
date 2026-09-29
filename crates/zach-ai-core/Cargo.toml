@@ -13,6 +13,3 @@ async-trait.workspace = true
 futures-core.workspace = true
 bytes.workspace = true
 base64.workspace = true
-
-[dev-dependencies]
-tokio.workspace = true
