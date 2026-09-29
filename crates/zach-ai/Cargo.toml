@@ -9,7 +9,7 @@ license.workspace = true
 default = ["openai", "anthropic", "rustls-tls"]
 openai = []
 anthropic = []
-rustls-tls = ["reqwest/rustls-tls"]
+rustls-tls = ["reqwest/rustls"]
 native-tls = ["reqwest/native-tls"]
 
 [dependencies]
