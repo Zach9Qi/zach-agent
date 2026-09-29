@@ -21,7 +21,7 @@ jobs:
     name: 格式检查 / Clippy / 测试
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@stable
