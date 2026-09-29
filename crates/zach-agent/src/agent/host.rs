@@ -122,10 +122,15 @@ impl LoopHost for RunHost {
         }
         let receiver = self.replies_lock().remove(&request.approval_id);
         let decision = match receiver {
-            Some(receiver) => receiver.await.ok(),
+            // 事件消费者（AgentRun）已丢弃时，审批请求注定无人应答：立即按拒绝处理，
+            // 避免运行永久悬挂、Agent 一直处于忙碌状态
+            Some(receiver) => tokio::select! {
+                decision = receiver => decision.ok(),
+                _ = self.events.closed() => None,
+            },
             None => None,
         };
         self.inner.lock().approvals.remove(&request.approval_id);
-        decision.unwrap_or_else(|| ApprovalDecision::deny("审批通道已关闭"))
+        decision.unwrap_or_else(|| ApprovalDecision::deny("事件消费者已离开，审批无人应答"))
     }
 }
