@@ -1,5 +1,6 @@
 # zach-agent
 
+[![CI](https://github.com/Zach9Qi/zach-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Zach9Qi/zach-agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/rust-2021%20edition-orange.svg)](Cargo.toml)
 

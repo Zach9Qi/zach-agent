@@ -1,0 +1,35 @@
+# 持续集成：与本地 `cargo xtask check` 共用同一入口（格式检查 → Clippy → 测试）
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# 同一分支的新提交会取消仍在进行的旧任务
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # CI 中每次都是全新构建，关闭增量编译以减小缓存体积
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  check:
+    name: 格式检查 / Clippy / 测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 缓存依赖与构建产物
+        uses: Swatinem/rust-cache@v2
+
+      - name: 运行统一门禁
+        run: cargo xtask check
