@@ -69,8 +69,11 @@ fn executed_flag() -> (Arc<AtomicBool>, SharedTool) {
 
 #[tokio::test]
 async fn unknown_tools_and_malformed_input_report_input_errors() {
-    for (name, input, expected) in [("missing", "{}", "不存在"), ("echo", "{bad", "合法 JSON")]
-    {
+    for (name, input, expected) in [
+        ("missing", "{}", "不存在"),
+        ("echo", "{bad", "JSON 对象"),
+        ("echo", "[1,2]", "JSON 对象"),
+    ] {
         let model = one_call(name, input);
         let host = TestHost::default();
         let output = run_with(config(model.clone()), vec![echo_tool("echo")], &host).await;

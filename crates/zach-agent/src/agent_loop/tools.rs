@@ -14,7 +14,7 @@ use crate::utils::cancellable;
 use futures::future::join_all;
 use prepare::{Prepared, ABORTED};
 use tokio_util::sync::CancellationToken;
-use zach_ai_core::response::content::parse_tool_input;
+use zach_ai_core::tool::tool_input_for_display;
 use zach_ai_core::{Message, OutputContent, ToolPart};
 
 /// 需要本地执行的工具调用
@@ -100,7 +100,7 @@ pub(crate) fn approval_request_for(
             tool_name,
             input,
             ..
-        } if id == tool_call_id => Some((tool_name.clone(), parse_tool_input(input))),
+        } if id == tool_call_id => Some((tool_name.clone(), tool_input_for_display(input))),
         _ => None,
     });
     let (tool_name, input) = call.unwrap_or_default();

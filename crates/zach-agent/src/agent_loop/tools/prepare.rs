@@ -8,6 +8,7 @@ use crate::host::ApprovalRequest;
 use crate::tool::{SharedTool, ToolOutcome};
 use crate::utils::{cancellable, new_id};
 use serde_json::Value;
+use zach_ai_core::tool::parse_tool_input;
 use zach_ai_core::ToolResultOutput;
 
 pub(super) const ABORTED: &str = "操作已中止";
@@ -18,9 +19,7 @@ pub(super) enum Prepared<'a> {
     Ready { tool: &'a SharedTool, input: Value },
 }
 
-/// 查找工具并把原始入参解析、校验为结构化 JSON
-///
-/// 空白入参视为 `{}`（无参工具在流式场景下的常态）。
+/// 查找工具并把原始入参解析、校验为结构化 JSON Object
 pub(crate) fn validate_call<'a>(
     context: &'a AgentContext,
     tool_name: &str,
@@ -29,12 +28,7 @@ pub(crate) fn validate_call<'a>(
     let tool = context
         .find_tool(tool_name)
         .ok_or_else(|| format!("工具 {tool_name} 不存在"))?;
-    let trimmed = raw_input.trim();
-    let value = if trimmed.is_empty() {
-        Value::Object(Default::default())
-    } else {
-        serde_json::from_str(trimmed).map_err(|e| format!("工具入参不是合法 JSON: {e}"))?
-    };
+    let value = parse_tool_input(raw_input).map_err(|e| e.to_string())?;
     let value = tool.prepare_input(value).map_err(|e| e.to_string())?;
     Ok((tool, value))
 }

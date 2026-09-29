@@ -3,7 +3,7 @@
 use crate::file::FileData;
 use crate::options::ProviderMetadata;
 use crate::prompt::part::AssistantPart;
-use crate::tool::ToolResultOutput;
+use crate::tool::{tool_input_for_replay, ToolResultOutput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -48,7 +48,10 @@ pub enum OutputContent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_metadata: Option<ProviderMetadata>,
     },
-    /// 模型发出的工具调用请求（入参为原始 JSON 字符串）
+    /// 模型发出的工具调用请求
+    ///
+    /// `input` 是流式拼接得到的原始字符串，可能非法或被截断；
+    /// 回放到下一轮历史时会经 [`tool_input_for_replay`] 归一为 JSON Object。
     ToolCall {
         tool_call_id: String,
         tool_name: String,
@@ -169,7 +172,7 @@ impl OutputContent {
             } => Some(AssistantPart::ToolCall {
                 tool_call_id,
                 tool_name,
-                input: parse_tool_input(&input),
+                input: tool_input_for_replay(&input),
                 provider_executed,
                 provider_options: provider_metadata,
             }),
@@ -206,19 +209,6 @@ impl OutputContent {
             _ => None,
         }
     }
-}
-
-/// 将流式拼接得到的原始入参字符串解析为结构化 JSON。
-///
-/// - 空白串（无参工具在流式场景下的常态）视为空对象 `{}`；
-/// - 合法 JSON 原样解析；
-/// - 非法 JSON（截断、畸形）保留为字符串，交由上层决定如何处理。
-pub fn parse_tool_input(input: &str) -> Value {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return Value::Object(Default::default());
-    }
-    serde_json::from_str(trimmed).unwrap_or_else(|_| Value::String(input.to_string()))
 }
 
 fn tool_result_output(is_error: bool, result: Value) -> ToolResultOutput {

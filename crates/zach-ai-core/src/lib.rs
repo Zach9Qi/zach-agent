@@ -34,6 +34,6 @@ pub use response::{
 };
 pub use stream::{StreamAccumulator, StreamPart, StreamPartError};
 pub use tool::{
-    FunctionTool, ProviderTool, ToolChoice, ToolDefinition, ToolResultContentBlock,
+    FunctionTool, ProviderTool, ToolChoice, ToolDefinition, ToolInputError, ToolResultContentBlock,
     ToolResultOutput,
 };

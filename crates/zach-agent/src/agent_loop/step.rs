@@ -10,7 +10,7 @@ use crate::utils::cancellable;
 use futures::StreamExt;
 use std::collections::HashSet;
 use tokio_util::sync::CancellationToken;
-use zach_ai_core::response::content::parse_tool_input;
+use zach_ai_core::tool::tool_input_for_display;
 use zach_ai_core::{
     GenerateResult, Message, ModelError, OutputContent, Prompt, StreamAccumulator, StreamPart,
     UnifiedFinishReason,
@@ -203,7 +203,7 @@ async fn announce(
         AgentEvent::ToolInputAvailable {
             tool_call_id: tool_call_id.to_string(),
             tool_name: tool_name.clone(),
-            input: parse_tool_input(input),
+            input: tool_input_for_display(input),
             dynamic: *dynamic,
             provider_executed: true,
             title: None,
