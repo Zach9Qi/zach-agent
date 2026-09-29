@@ -95,6 +95,53 @@ async fn failing_tools_emit_output_errors() {
     assert_eq!(tool_output(&output), ToolResultOutput::error_text("炸了"));
 }
 
+#[tokio::test]
+async fn panicking_tools_become_error_results_without_killing_siblings() {
+    let panicking = fn_tool("panic", |_, _| async { panic!("工具内部崩溃") }).shared();
+    let model = ScriptedModel::new(vec![
+        Script::Parts(tool_calls(
+            &[("c1", "panic", "{}"), ("c2", "echo", r#"{"a":1}"#)],
+            UnifiedFinishReason::ToolCalls,
+        )),
+        Script::Parts(text("收到")),
+    ]);
+    let host = TestHost::default();
+    let output = run_with(
+        config(model.clone()),
+        vec![panicking, echo_tool("echo")],
+        &host,
+    )
+    .await;
+
+    let results: Vec<(String, ToolResultOutput)> = output
+        .messages
+        .iter()
+        .filter_map(|message| match message {
+            Message::Tool { content, .. } => Some(content),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|part| match part {
+            ToolPart::ToolResult {
+                tool_call_id,
+                output,
+                ..
+            } => Some((tool_call_id.clone(), output.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(results.len(), 2, "每个工具调用都应有对应结果");
+    assert!(
+        matches!(&results[0].1, ToolResultOutput::ErrorText { value, .. } if value.contains("panic") && value.contains("工具内部崩溃")),
+        "panic 应转为错误结果: {:?}",
+        results[0].1
+    );
+    assert_eq!(results[1].1, ToolResultOutput::json(json!({"a": 1})));
+    assert!(host.kinds().contains(&"tool-output-error".to_string()));
+    assert_eq!(host.kinds().last().map(String::as_str), Some("run-finish"));
+    assert_eq!(model.call_count(), 2);
+}
+
 struct Policy(ToolCallDecision);
 
 #[async_trait]

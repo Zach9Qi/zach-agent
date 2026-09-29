@@ -1,5 +1,6 @@
-//! 内部辅助：ID 生成、用量累加与可取消等待
+//! 内部辅助：ID 生成、用量累加、可取消等待与 panic 信息提取
 
+use std::any::Any;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -55,5 +56,16 @@ pub(crate) async fn cancellable<F: Future>(
         biased;
         _ = cancel.cancelled() => None,
         output = future => Some(output),
+    }
+}
+
+/// 从 `catch_unwind` 捕获的 panic 载荷中提取可读信息
+pub(crate) fn panic_message(payload: &(dyn Any + Send)) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        (*text).to_string()
+    } else if let Some(text) = payload.downcast_ref::<String>() {
+        text.clone()
+    } else {
+        "未知 panic".to_string()
     }
 }

@@ -1,12 +1,17 @@
 //! 已放行工具调用的执行与收尾
+//!
+//! 工具是外部代码，其 panic 会被捕获并转为错误结果回传给模型，
+//! 不会拖垮整个运行，也保证每个工具调用都有对应结果。
 
 use super::prepare::{settle, ABORTED};
 use super::{BatchInput, LocalCall};
 use crate::event::tool_output_event;
 use crate::hooks::ToolCallInfo;
 use crate::tool::{SharedTool, ToolContext, ToolOutcome};
-use crate::utils::cancellable;
+use crate::utils::{cancellable, panic_message};
+use futures::FutureExt;
 use serde_json::Value;
+use std::panic::AssertUnwindSafe;
 use tokio::sync::mpsc;
 use zach_ai_core::ToolResultOutput;
 
@@ -20,7 +25,7 @@ pub(super) async fn execute(
     let (sender, mut progress) = mpsc::unbounded_channel();
     let ctx =
         ToolContext::new(call.tool_call_id.clone(), batch.cancel.clone()).with_progress(sender);
-    let run = tool.execute(input.clone(), ctx);
+    let run = AssertUnwindSafe(tool.execute(input.clone(), ctx)).catch_unwind();
     tokio::pin!(run);
 
     let result = loop {
@@ -38,8 +43,13 @@ pub(super) async fn execute(
 
     let outcome = match result {
         None => return settle(call, ToolOutcome::error(ABORTED), batch).await,
-        Some(Ok(outcome)) => outcome,
-        Some(Err(error)) => ToolOutcome::error(error.to_string()),
+        Some(Ok(Ok(outcome))) => outcome,
+        Some(Ok(Err(error))) => ToolOutcome::error(error.to_string()),
+        Some(Err(payload)) => {
+            let message = panic_message(payload.as_ref());
+            tracing::error!(tool = %call.tool_name, %message, "工具执行时 panic");
+            ToolOutcome::error(format!("工具 {} 执行时 panic: {message}", call.tool_name))
+        }
     };
 
     let info = ToolCallInfo {
