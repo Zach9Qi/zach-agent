@@ -148,9 +148,11 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 - **轮次**：一轮 = 一次模型响应 + 执行其中的工具调用。有工具结果、插队消息或钩子要求继续时进入下一轮；本应结束时若有追加消息也会继续。
 - **工具**：默认先依次准备（校验入参、`before_tool_call`、审批），再并发执行，结果按模型给出的顺序写回；`ToolExecutionMode::Sequential` 或任一工具声明串行时整批串行。模型因长度上限截断时不执行工具。
 - **钩子**（`AgentHooks`）：`transform_context`、`prepare_request`、`before_tool_call`、`after_tool_call`、`finish_turn`、`prepare_next_turn`，可逐轮替换模型、调用参数与上下文。
+- **审批**（`ApprovalHandler`）：工具声明 `needs_approval` 或钩子返回 `RequireApproval` 时，请求先交给审批处理器选择路径——`ApprovalRoute::Decided` 直接放行/拒绝，`ApprovalRoute::Ask` 发出 `ToolApprovalRequest` 事件并等待 `respond_approval`（可带超时，`None` 表示永不超时）。默认 `InteractiveApproval` 一律转人工；无人值守场景用 `DenyAll` / `ApproveAll`，或以闭包实现白名单：`.approval(|req: &ApprovalRequest| if req.tool_name == "ls" { ApprovalRoute::approve() } else { ApprovalRoute::ask() })`。
+  - 未消费事件流（调用 `outcome()` 或丢弃 `AgentRun`）时，转人工的请求会被自动拒绝而不是让运行悬挂；批处理请显式配置处理器。
 - **失败与中止**：可重试的模型错误按 `RetryPolicy` 退避重试并发出 `StepRetry`；重试用尽发出 `RunError`，失败那一轮不写入对话记录，可直接 `continue_run()` 重试。中止发出 `RunAbort`，已生成的文本保留，未完成的工具调用补"已中止"结果。
 
-不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复。
+不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复（转人工时由宿主发出 `ApprovalRequest::to_event()`）。
 
 ---
 

@@ -1,6 +1,7 @@
 //! 有状态 Agent：持有对话记录与配置，驱动低层循环并提供运行中的控制接口
 //!
 //! `Agent` 是可廉价克隆的句柄，可在其他任务中调用 `steer`、`abort`、`respond_approval`。
+//! 工具审批由 [`crate::ApprovalHandler`] 路由：默认转交事件流由使用者答复，也可自动裁决。
 //! 发起运行需要处于 tokio 运行时中。
 
 mod accessors;

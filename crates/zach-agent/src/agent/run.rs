@@ -14,6 +14,9 @@ use tokio_util::sync::CancellationToken;
 ///
 /// 作为 `Stream<Item = AgentEvent>` 逐个产出事件；事件通道有界，不消费会阻塞运行。
 /// 丢弃句柄不会中止运行，只是不再接收事件；要中止请调用 [`Self::abort`]。
+///
+/// 丢弃句柄后运行中转人工的审批请求会被自动拒绝（无人可答复）；
+/// 无人值守场景请通过 [`crate::AgentBuilder::approval`] 配置审批处理器。
 pub struct AgentRun {
     events: mpsc::Receiver<AgentEvent>,
     handle: JoinHandle<Result<RunOutput, AgentError>>,
@@ -44,6 +47,8 @@ impl AgentRun {
     }
 
     /// 放弃剩余事件，等待运行结束并返回结果
+    ///
+    /// 之后产生的交互式审批请求将无人答复而被自动拒绝，见 [`crate::ApprovalHandler`]。
     pub async fn outcome(self) -> Result<RunOutput, AgentError> {
         let Self { events, handle, .. } = self;
         drop(events);
