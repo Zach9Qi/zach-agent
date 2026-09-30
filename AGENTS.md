@@ -40,3 +40,43 @@ zach-agent   (编排层: Agent运行时/状态机/工具调度)
 - **最小可见性**：优先使用 `pub(crate)` 或 `pub(super)`，非必要不暴露为 `pub`。
 - **公共抽象下沉**：跨 crate 共用的 Trait 和契约沉淀到 `*-core`，面向接口编程。
 - **门面模式（Façade）**：在 crate 的 `lib.rs` 中精选导出关键类型，为外部提供简洁统一的导入路径。
+
+## 8. 测试规范
+
+### 8.1 单元测试 vs 集成测试的判定
+- **集成测试（`tests/`）**：验证 crate 的**对外契约**，只能通过公开 API 访问；这是默认选择。
+- **内嵌单元测试（`#[cfg(test)]`）**：仅用于 `pub(crate)` / `pub(super)` 的内部逻辑与不变量（如内部状态机、槽位维护、队列语义、算术边界），这些行为在公开 API 层只能间接观察。
+- **严禁为了可测性扩大可见性**：不得把 `pub(crate)` 升为 `pub` 只为让 `tests/` 能访问；需要测私有逻辑就内嵌测。
+
+### 8.2 集成测试布局：单二进制
+每个 crate 的集成测试是**一个**测试目标 `tests/it/main.rs`，按被测主题拆分子模块，不允许在 `tests/` 根下平铺多个 `.rs`：
+```text
+tests/it/main.rs            ← 仅声明 mod，附一句 //! 说明
+tests/it/support.rs         ← 共享测试替身（ScriptedModel、TestHost 等）
+tests/it/agent.rs           ← 主题命名，不加 _test 后缀
+tests/it/agent_loop.rs      ← 子模块过大时按 2018 风格再拆：
+tests/it/agent_loop/tools.rs
+tests/it/agent_loop/tools/errors.rs
+```
+理由：每个 `tests/*.rs` 都是独立 crate，会重复编译夹具、需要 `#[path]` 与 `allow(dead_code)` 兜底、成倍增加链接时间。单二进制下夹具是普通模块，`cargo test -p <crate> agent_loop::` 可按模块过滤。
+- **禁止进程级全局状态**：所有用例共享一个进程并行执行，不得在测试里 `set_var`、安装全局 `tracing` subscriber 或依赖静态可变量。
+- 行数规范（第 5 节）同样适用于测试文件。
+
+### 8.3 内嵌单元测试的位置
+- 默认写在源文件尾部：`#[cfg(test)] mod tests { use super::*; … }`。
+- 若会使源文件超过 300 行，拆到同名目录下的 `tests.rs`，源文件中声明 `#[cfg(test)] mod tests;`（如 `agent/host.rs` + `agent/host/tests.rs`）。
+
+### 8.4 命名与文档
+- 用例名是**行为句式** snake_case，读起来是一条需求：`sealed_tool_ignores_later_deltas_and_flag_changes`；禁止 `test_xxx`、`case1` 之类。
+- 每个测试文件首行 `//!` 一句话说明覆盖范围；非显而易见的用例加 `///` 说明其防范的回归。
+
+### 8.5 确定性：虚拟时钟
+- 任何依赖 `sleep` / 超时 / 退避的用例必须用 `#[tokio::test(start_paused = true)]`（tokio `test-util` 作为 `dev-dependency`），禁止用真实等待推断调度顺序。
+- 库代码中的延时统一走 `tokio::time`（不得用 `std::thread::sleep` 或 `std::time::Instant` 计时），否则虚拟时钟无法推进。
+- `timeout(WAIT, …)` 仅作防悬挂守卫使用，不承担断言语义。
+- 测试替身（模型、宿主、工具）必须是纯 async 的（`futures::stream::pending` 等），不得起真实线程或做 IO。
+
+### 8.6 依赖与示例
+- 只在测试中使用的 crate 或 feature 一律放 `[dev-dependencies]`，不得混入 `[dependencies]`。
+- 面向用户的端到端用法放 `examples/`，示例必须可离线运行（自带最小模型实现），并由 `cargo clippy --all-targets` 门禁覆盖。
+- 提交前统一执行 `cargo run -p xtask -- check`（fmt + clippy + test），本地与 CI 同一入口。
