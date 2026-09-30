@@ -147,6 +147,7 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 运行流程要点：
 
 - **轮次**：一轮 = 一次模型响应 + 执行其中的工具调用。有工具结果、插队消息或钩子要求继续时进入下一轮；本应结束时若有追加消息也会继续。
+- **启动与排队消息**：`prompt()` 与 `continue_run()` 使用同一启动流程，校验、取初始消息与占用运行在一次持锁期间完成，返回 Busy 或校验失败不会取走队列消息。启动时按 `OneAtATime` / `All` 取插队消息，启动后新增的插队消息留到下一轮；追加消息仍在本轮结束后注入，仅从助手消息继续且无插队消息时提前取用。
 - **工具**：默认先依次准备（校验入参、`before_tool_call`、审批），再并发执行，结果按模型给出的顺序写回；`ToolExecutionMode::Sequential` 或任一工具声明串行时整批串行。模型因长度上限截断时不执行工具。
 - **钩子**（`AgentHooks`）：`transform_context`、`prepare_request`、`before_tool_call`、`after_tool_call`、`finish_turn`、`prepare_next_turn`，可逐轮替换模型、调用参数与上下文。
 - **审批**（`ApprovalHandler`）：工具声明 `needs_approval` 或钩子返回 `RequireApproval` 时，请求先交给审批处理器选择路径——`ApprovalRoute::Decided` 直接放行/拒绝，`ApprovalRoute::Ask` 发出 `ToolApprovalRequest` 事件并等待 `respond_approval`（可带超时，`None` 表示永不超时）。默认 `InteractiveApproval` 一律转人工；无人值守场景用 `DenyAll` / `ApproveAll`，或以闭包实现白名单：`.approval(|req: &ApprovalRequest| if req.tool_name == "ls" { ApprovalRoute::approve() } else { ApprovalRoute::ask() })`。

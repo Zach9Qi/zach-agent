@@ -40,14 +40,7 @@ fn host() -> (
     let (events, receiver) = mpsc::channel(1);
     let (terminal, terminal_receiver) = mpsc::channel(1);
     (
-        RunHost::new(
-            inner,
-            events,
-            terminal,
-            CancellationToken::new(),
-            approval,
-            false,
-        ),
+        RunHost::new(inner, events, terminal, CancellationToken::new(), approval),
         receiver,
         terminal_receiver,
     )

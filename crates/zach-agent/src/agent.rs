@@ -13,7 +13,7 @@ mod state;
 pub use builder::AgentBuilder;
 pub use run::AgentRun;
 
-use crate::agent_loop::{continue_agent_loop, run_agent_loop};
+use crate::agent_loop::run_agent_loop;
 use crate::approval::ApprovalDecision;
 use crate::error::AgentError;
 use crate::utils::panic_message;
@@ -52,42 +52,18 @@ impl Agent {
     }
 
     /// 以一批消息开始运行。已有运行时返回 [`AgentError::Busy`]，请改用 `steer` / `follow_up`。
+    ///
+    /// 启动时按队列模式取出的插队消息随提示一起注入；启动后新增的插队消息留到下一轮。
     pub fn prompt(&self, messages: Vec<Message>) -> Result<AgentRun, AgentError> {
-        self.start(Some(messages), false)
+        self.start(Some(messages))
     }
 
     /// 从当前对话记录继续
     ///
     /// 最后一条是助手消息时，依次尝试注入排队的插队消息、追加消息；都没有则报错。
+    /// 取初始消息与占用运行在同一次持锁期间完成，启动校验失败时队列保持不变。
     pub fn continue_run(&self) -> Result<AgentRun, AgentError> {
-        let queued = {
-            let mut state = self.inner.lock();
-            if state.active.is_some() {
-                return Err(AgentError::Busy);
-            }
-            match state.messages.last() {
-                None => return Err(AgentError::NoMessages),
-                Some(Message::Assistant { .. }) => {
-                    let steering = state.steering.drain();
-                    if !steering.is_empty() {
-                        Some((steering, true))
-                    } else {
-                        let follow_up = state.follow_up.drain();
-                        if follow_up.is_empty() {
-                            return Err(AgentError::CannotContinueFromAssistant);
-                        }
-                        Some((follow_up, false))
-                    }
-                }
-                Some(_) => None,
-            }
-        };
-        match queued {
-            Some((messages, skip_initial_steering)) => {
-                self.start(Some(messages), skip_initial_steering)
-            }
-            None => self.start(None, false),
-        }
+        self.start(None)
     }
 
     /// 排队一条插队消息：在当前轮次的工具执行完后、下一次请求前注入
@@ -140,21 +116,38 @@ impl Agent {
         Ok(())
     }
 
-    fn start(
-        &self,
-        prompts: Option<Vec<Message>>,
-        skip_initial_steering: bool,
-    ) -> Result<AgentRun, AgentError> {
+    fn start(&self, prompts: Option<Vec<Message>>) -> Result<AgentRun, AgentError> {
         let cancel = CancellationToken::new();
-        let (context, config, approval) = {
+        let (prompts, context, config, approval) = {
             let mut state = self.inner.lock();
             if state.active.is_some() {
                 return Err(AgentError::Busy);
             }
+            let continuing = prompts.is_none();
+            let assistant_tail = matches!(state.messages.last(), Some(Message::Assistant { .. }));
+            // 所有可能返回错误的校验先完成，失败时不取走任何队列消息。
+            if continuing {
+                if state.messages.is_empty() {
+                    return Err(AgentError::NoMessages);
+                }
+                if assistant_tail && state.steering.is_empty() && state.follow_up.is_empty() {
+                    return Err(AgentError::CannotContinueFromAssistant);
+                }
+            }
+
+            let mut prompts = prompts.unwrap_or_default();
+            let steering = state.steering.drain();
+            if continuing && assistant_tail && steering.is_empty() {
+                prompts.extend(state.follow_up.drain());
+            } else {
+                prompts.extend(steering);
+            }
+            // 取初始消息与占住运行在同一把锁内完成，竞争失败者不会动队列。
             state.active = Some(cancel.clone());
             state.pending_tool_calls.clear();
             state.last_error = None;
             (
+                prompts,
                 state.context_snapshot(),
                 state.loop_config(),
                 state.approval.clone(),
@@ -171,18 +164,12 @@ impl Agent {
             terminal_sender,
             cancel.clone(),
             approval,
-            skip_initial_steering,
         );
         let guard = RunGuard(self.inner.clone());
         let token = cancel.clone();
         let handle = tokio::spawn(async move {
             let _guard = guard;
-            let run = async {
-                match prompts {
-                    Some(prompts) => run_agent_loop(prompts, context, config, &host, token).await,
-                    None => continue_agent_loop(context, config, &host, token).await,
-                }
-            };
+            let run = run_agent_loop(prompts, context, config, &host, token);
             // 兜底捕获钩子、宿主、流解析等任意来源的 panic：发出 RunError 并修复对话记录，
             // 避免运行静默消失、历史末尾残留无结果的工具调用
             match AssertUnwindSafe(run).catch_unwind().await {

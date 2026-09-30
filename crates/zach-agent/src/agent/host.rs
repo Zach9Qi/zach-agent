@@ -32,7 +32,6 @@ impl RunHost {
         terminal: mpsc::Sender<AgentEvent>,
         cancel: CancellationToken,
         approval: Arc<dyn ApprovalHandler>,
-        skip_initial_steering: bool,
     ) -> Self {
         Self {
             inner,
@@ -40,7 +39,7 @@ impl RunHost {
             terminal,
             cancel,
             approval,
-            skip_initial_steering: AtomicBool::new(skip_initial_steering),
+            skip_initial_steering: AtomicBool::new(true),
         }
     }
 
