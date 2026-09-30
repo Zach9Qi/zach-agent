@@ -4,6 +4,9 @@ use crate::options::ProviderMetadata;
 use crate::response::OutputContent;
 use crate::stream::accumulator::StreamAccumulator;
 
+#[cfg(test)]
+mod tests;
+
 impl StreamAccumulator {
     pub(super) fn ensure_text(&mut self, id: &str, metadata: Option<ProviderMetadata>) -> usize {
         if let Some(&idx) = self.text_index.get(id) {

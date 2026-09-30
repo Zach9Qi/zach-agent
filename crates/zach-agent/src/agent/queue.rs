@@ -62,3 +62,64 @@ impl PendingQueue {
         self.messages.clear();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queue(mode: QueueMode, texts: &[&str]) -> PendingQueue {
+        let mut queue = PendingQueue::new(mode);
+        for text in texts {
+            queue.push(Message::user(*text));
+        }
+        queue
+    }
+
+    #[test]
+    fn one_at_a_time_takes_only_the_oldest_message() {
+        let mut queue = queue(QueueMode::OneAtATime, &["一", "二", "三"]);
+
+        assert_eq!(queue.peek(), vec![Message::user("一")]);
+        assert_eq!(queue.drain(), vec![Message::user("一")]);
+        assert_eq!(queue.drain(), vec![Message::user("二")]);
+        assert_eq!(queue.peek(), vec![Message::user("三")]);
+        assert!(!queue.is_empty());
+    }
+
+    #[test]
+    fn all_mode_takes_every_message_in_order() {
+        let mut queue = queue(QueueMode::All, &["一", "二"]);
+
+        assert_eq!(queue.peek(), vec![Message::user("一"), Message::user("二")]);
+        assert_eq!(
+            queue.drain(),
+            vec![Message::user("一"), Message::user("二")]
+        );
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn peek_does_not_consume_and_empty_queue_drains_nothing() {
+        let mut queue = queue(QueueMode::OneAtATime, &["一"]);
+        queue.peek();
+        queue.peek();
+        assert_eq!(queue.drain().len(), 1);
+
+        assert!(queue.drain().is_empty());
+        assert!(queue.peek().is_empty());
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn clear_drops_everything_but_keeps_mode() {
+        let mut queue = queue(QueueMode::All, &["一", "二"]);
+        queue.clear();
+        assert!(queue.is_empty());
+        assert_eq!(queue.mode, QueueMode::All);
+    }
+
+    #[test]
+    fn default_mode_is_one_at_a_time() {
+        assert_eq!(PendingQueue::default().mode, QueueMode::OneAtATime);
+    }
+}

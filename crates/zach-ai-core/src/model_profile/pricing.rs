@@ -114,3 +114,108 @@ impl ModelPricing {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! 补充公开 API 测试未覆盖的边界：阈值相等、Token 缺失/自相矛盾、缓存写入回退
+
+    use super::*;
+    use crate::response::{InputTokenUsage, OutputTokenUsage};
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "期望 {expected}，实际 {actual}"
+        );
+    }
+
+    fn tiered() -> ModelPricing {
+        ModelPricing {
+            base: PricingRates {
+                input: 1.0,
+                output: 2.0,
+                cache_read: None,
+                cache_write: None,
+            },
+            tiers: vec![PricingTier {
+                input_tokens_above: 1_000,
+                rates: PricingRates {
+                    input: 10.0,
+                    output: 20.0,
+                    cache_read: None,
+                    cache_write: None,
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn tier_applies_only_strictly_above_threshold() {
+        let pricing = tiered();
+        assert_eq!(
+            pricing.rates_for(1_000).input,
+            1.0,
+            "恰好等于阈值仍用基础价"
+        );
+        assert_eq!(pricing.rates_for(1_001).input, 10.0);
+    }
+
+    #[test]
+    fn tier_selection_counts_cached_tokens() {
+        let usage = Usage {
+            input_tokens: InputTokenUsage {
+                no_cache: Some(100),
+                cache_read: Some(1_000),
+                ..Default::default()
+            },
+            output_tokens: OutputTokenUsage::default(),
+            raw: None,
+        };
+        // 100 + 1000 > 1000 → 阶梯价；缓存读取无单价时回退到该档 input
+        let cost = tiered().cost(&usage);
+        assert_close(cost.input, 100.0 * 10.0 / TOKENS_PER_UNIT);
+        assert_close(cost.cache_read, 1_000.0 * 10.0 / TOKENS_PER_UNIT);
+    }
+
+    #[test]
+    fn empty_usage_costs_nothing() {
+        assert_eq!(
+            ModelPricing::new(3.0, 15.0).cost(&Usage::default()),
+            CostBreakdown::default()
+        );
+    }
+
+    #[test]
+    fn inconsistent_total_smaller_than_cache_does_not_underflow() {
+        let usage = Usage {
+            input_tokens: InputTokenUsage {
+                total: Some(10),
+                cache_read: Some(50),
+                ..Default::default()
+            },
+            output_tokens: OutputTokenUsage::default(),
+            raw: None,
+        };
+        let cost = ModelPricing::new(1.0, 1.0).cost(&usage);
+        assert_close(cost.input, 0.0);
+        assert_close(cost.cache_read, 50.0 / TOKENS_PER_UNIT);
+    }
+
+    #[test]
+    fn cache_write_uses_own_rate_or_falls_back_to_input() {
+        let usage = Usage {
+            input_tokens: InputTokenUsage {
+                no_cache: Some(0),
+                cache_write: Some(1_000_000),
+                ..Default::default()
+            },
+            output_tokens: OutputTokenUsage::default(),
+            raw: None,
+        };
+        assert_close(ModelPricing::new(3.0, 15.0).cost(&usage).cache_write, 3.0);
+
+        let mut explicit = ModelPricing::new(3.0, 15.0);
+        explicit.base.cache_write = Some(3.75);
+        assert_close(explicit.cost(&usage).cache_write, 3.75);
+    }
+}
