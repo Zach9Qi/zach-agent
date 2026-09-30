@@ -87,6 +87,58 @@ async fn dropping_the_run_handle_does_not_abort() {
 }
 
 #[tokio::test]
+async fn wait_for_idle_tracks_running_state_not_a_stale_flag() {
+    // 空闲时立即返回
+    let model = ScriptedModel::new(vec![
+        Script::Hang(text("一")[..2].to_vec()),
+        Script::Hang(text("二")[..2].to_vec()),
+    ]);
+    let agent = agent(model);
+    tokio::time::timeout(Duration::from_millis(100), agent.wait_for_idle())
+        .await
+        .expect("无运行时 wait_for_idle 应立即返回");
+
+    // 运行中不应返回
+    let first = agent.prompt_text("第一问").unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), agent.wait_for_idle())
+            .await
+            .is_err(),
+        "运行进行中 wait_for_idle 不应返回"
+    );
+
+    // 第一轮收尾与第二轮抢占启动交错：另一任务以 Busy 重试的方式在第一轮刚结束时立刻发起第二轮。
+    // 旧实现中第一轮迟到的“空闲”通知会覆盖第二轮的“忙碌”，导致第二轮期间 wait_for_idle 直接返回。
+    let retry_agent = agent.clone();
+    let restarter = tokio::spawn(async move {
+        loop {
+            match retry_agent.prompt_text("第二问") {
+                Ok(run) => return run,
+                Err(AgentError::Busy) => tokio::task::yield_now().await,
+                Err(error) => panic!("意外错误: {error:?}"),
+            }
+        }
+    });
+    first.abort();
+    let second = restarter.await.unwrap();
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    assert!(agent.is_running());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), agent.wait_for_idle())
+            .await
+            .is_err(),
+        "第二轮运行期间 wait_for_idle 不应因过期的空闲通知而返回"
+    );
+
+    second.abort();
+    tokio::time::timeout(Duration::from_secs(1), agent.wait_for_idle())
+        .await
+        .expect("第二轮中止后应回到空闲");
+    assert!(!agent.is_running());
+}
+
+#[tokio::test]
 async fn steering_from_a_running_tool_reaches_the_next_request() {
     let model = ScriptedModel::new(vec![
         Script::Parts(tool_calls(

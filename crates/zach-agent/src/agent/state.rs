@@ -122,15 +122,18 @@ impl State {
 /// `Agent` 各句柄共享的内部结构
 pub(super) struct Inner {
     state: Mutex<State>,
-    /// `true` 表示空闲
-    pub(super) idle: watch::Sender<bool>,
+    /// 运行收尾计数，仅作唤醒通知，不承载状态：每次运行结束后加一。
+    ///
+    /// 是否空闲以 `State::active` 为准；这里只负责叫醒 `wait_for_idle` 去重新检查，
+    /// 因此可以在锁外发送，避免同步锁内嵌套 watch 的锁与唤醒 waker。
+    pub(super) finished: watch::Sender<u64>,
 }
 
 impl Inner {
     pub(super) fn new(state: State) -> Self {
         Self {
             state: Mutex::new(state),
-            idle: watch::Sender::new(true),
+            finished: watch::Sender::new(0),
         }
     }
 
@@ -140,7 +143,7 @@ impl Inner {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// 运行结束（含异常退出）后清理运行态并标记空闲
+    /// 运行结束（含异常退出）后清理运行态，并在锁外通知等待者重新检查
     pub(super) fn finish_run(&self) {
         {
             let mut state = self.lock();
@@ -148,7 +151,7 @@ impl Inner {
             state.pending_tool_calls.clear();
             state.approvals.clear();
         }
-        self.idle.send_replace(true);
+        self.finished.send_modify(|generation| *generation += 1);
     }
 }
 

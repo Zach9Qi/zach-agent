@@ -83,10 +83,21 @@ impl Agent {
         }
     }
 
-    /// 等待当前运行结束
+    /// 等待当前运行结束；没有运行时立即返回
+    ///
+    /// 以 `active` 为唯一判据，收尾计数只用来唤醒。先记下当前计数再检查状态，
+    /// 收尾若落在检查之后，`changed()` 会因计数已前进而立即返回并重查，不会丢失唤醒。
     pub async fn wait_for_idle(&self) {
-        let mut idle = self.inner.idle.subscribe();
-        let _ = idle.wait_for(|idle| *idle).await;
+        let mut finished = self.inner.finished.subscribe();
+        loop {
+            finished.mark_unchanged();
+            if !self.is_running() {
+                return;
+            }
+            if finished.changed().await.is_err() {
+                return;
+            }
+        }
     }
 
     /// 答复一个待审批请求
@@ -153,7 +164,6 @@ impl Agent {
                 state.approval.clone(),
             )
         };
-        self.inner.idle.send_replace(false);
 
         let (sender, receiver) = mpsc::channel(EVENT_BUFFER);
         // 每轮只产生一个终止事件，独立保存，避免被普通事件的背压阻塞。
