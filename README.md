@@ -152,6 +152,7 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 - **审批**（`ApprovalHandler`）：工具声明 `needs_approval` 或钩子返回 `RequireApproval` 时，请求先交给审批处理器选择路径——`ApprovalRoute::Decided` 直接放行/拒绝，`ApprovalRoute::Ask` 发出 `ToolApprovalRequest` 事件并等待 `respond_approval`（可带超时，`None` 表示永不超时）。默认 `InteractiveApproval` 一律转人工；无人值守场景用 `DenyAll` / `ApproveAll`，或以闭包实现白名单：`.approval(|req: &ApprovalRequest| if req.tool_name == "ls" { ApprovalRoute::approve() } else { ApprovalRoute::ask() })`。
   - 未消费事件流（调用 `outcome()` 或丢弃 `AgentRun`）时，转人工的请求会被自动拒绝而不是让运行悬挂；批处理请显式配置处理器。
 - **失败与中止**：可重试的模型错误按 `RetryPolicy` 退避重试并发出 `StepRetry`；重试用尽发出 `RunError`，失败那一轮不写入对话记录，可直接 `continue_run()` 重试。中止发出 `RunAbort`，已生成的文本保留，未完成的工具调用补"已中止"结果。
+- **事件背压**：`AgentRun` 的普通事件队列有界，正常运行时需持续消费；中止会打断发送等待，即使保留句柄且不消费，也不会因满队列卡住收尾。中止后的普通事件仅尽力投递，队列满时可能丢弃；`RunAbort` / `RunError` / `RunFinish` 独立保存，恢复消费后在已排队的普通事件之后产出。
 
 不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复（转人工时由宿主发出 `ApprovalRequest::to_event()`）。
 
