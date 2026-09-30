@@ -1,11 +1,8 @@
 //! 有状态 Agent：状态同步、忙碌保护、中止、队列、审批与继续
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{fn_tool, text, tool_calls, Script, ScriptedModel};
 use async_trait::async_trait;
 use futures::StreamExt;
-use mock::{fn_tool, text, tool_calls, Script, ScriptedModel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zach_agent::{
@@ -277,7 +274,7 @@ async fn panicking_hook_fails_run_cleanly_and_keeps_transcript_usable() {
     let agent = Agent::builder(model.clone())
         .retry(RetryPolicy::none())
         .hooks(PanickingHooks)
-        .tool(mock::echo_tool("echo"))
+        .tool(crate::support::echo_tool("echo"))
         .build();
 
     let (events, result) = agent.prompt_text("你好").unwrap().collect().await;

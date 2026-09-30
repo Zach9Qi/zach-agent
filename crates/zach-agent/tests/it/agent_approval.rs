@@ -1,10 +1,7 @@
 //! 有状态 Agent 的审批路径：审批处理器路由、超时，以及事件消费者离开时不得悬挂
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{fn_tool, text, tool_calls, Script, ScriptedModel};
 use futures::StreamExt;
-use mock::{fn_tool, text, tool_calls, Script, ScriptedModel};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;

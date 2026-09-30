@@ -1,9 +1,6 @@
 //! 模型流内报错时，不提交失败响应，也不执行其中的工具调用
 
-#[path = "support/mock.rs"]
-mod mock;
-
-use mock::{fn_tool, text, tool_calls, Script, ScriptedModel, TestHost};
+use crate::support::{fn_tool, text, tool_calls, Script, ScriptedModel, TestHost};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

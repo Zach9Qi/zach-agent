@@ -1,10 +1,7 @@
 //! 低层循环：轮次调度、插队/追加、重试、中止与钩子
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{echo_tool, kinds, text, tool_calls, Script, ScriptedModel, TestHost};
 use async_trait::async_trait;
-use mock::{echo_tool, kinds, text, tool_calls, Script, ScriptedModel, TestHost};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

@@ -1,10 +1,7 @@
 //! 统一启动的原子性、初始队列快照与首轮注入边界。
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{text, Script, ScriptedModel};
 use futures::StreamExt;
-use mock::{text, Script, ScriptedModel};
 use std::sync::{Arc, Barrier};
 use zach_agent::{Agent, AgentError, AgentRun, QueueMode, RetryPolicy};
 use zach_ai_core::Message;

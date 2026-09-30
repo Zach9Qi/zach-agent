@@ -1,11 +1,8 @@
 //! 有界事件流背压：消费者保留句柄但停止消费时，取消仍须完成并保留唯一终止事件。
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{finish, fn_tool, tool_calls, Script, ScriptedModel};
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use mock::{finish, fn_tool, tool_calls, Script, ScriptedModel};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

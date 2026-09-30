@@ -1,10 +1,9 @@
 //! 低层循环：工具校验、拒绝、审批、截断、终止、并发、进度与中止
 
-#[path = "support/mock.rs"]
-mod mock;
-
+use crate::support::{
+    echo_tool, finish, fn_tool, text, tool_calls, Script, ScriptedModel, TestHost,
+};
 use async_trait::async_trait;
-use mock::{echo_tool, finish, fn_tool, text, tool_calls, Script, ScriptedModel, TestHost};
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

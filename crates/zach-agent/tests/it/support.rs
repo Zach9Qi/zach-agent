@@ -1,7 +1,5 @@
 //! 测试支撑：脚本化模型与记录型宿主
 
-#![allow(dead_code)]
-
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::StreamExt;
@@ -11,7 +9,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 use zach_agent::{
     AgentEvent, AgentTool, ApprovalDecision, ApprovalRequest, LoopHost, SharedTool, ToolContext,
-    ToolError, ToolExecutionMode, ToolOutcome,
+    ToolError, ToolOutcome,
 };
 use zach_ai_core::{
     CallOptions, FinishReason, FunctionTool, GenerateResult, LanguageModel, LanguageModelStream,
@@ -143,7 +141,6 @@ type ToolFn =
 pub struct FnTool {
     definition: FunctionTool,
     approval: bool,
-    mode: Option<ToolExecutionMode>,
     run: Box<ToolFn>,
 }
 
@@ -155,7 +152,6 @@ where
     FnTool {
         definition: FunctionTool::new(name, json!({ "type": "object" })),
         approval: false,
-        mode: None,
         run: Box::new(move |input, ctx| Box::pin(run(input, ctx))),
     }
 }
@@ -171,11 +167,6 @@ impl FnTool {
         self
     }
 
-    pub fn sequential(mut self) -> Self {
-        self.mode = Some(ToolExecutionMode::Sequential);
-        self
-    }
-
     pub fn shared(self) -> SharedTool {
         Arc::new(self)
     }
@@ -185,10 +176,6 @@ impl FnTool {
 impl AgentTool for FnTool {
     fn definition(&self) -> &FunctionTool {
         &self.definition
-    }
-
-    fn execution_mode(&self) -> Option<ToolExecutionMode> {
-        self.mode
     }
 
     fn needs_approval(&self, _input: &Value) -> bool {
