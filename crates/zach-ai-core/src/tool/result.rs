@@ -76,6 +76,21 @@ impl ToolResultOutput {
             provider_options: None,
         }
     }
+
+    /// 把厂商侧执行的工具结果（见 `StreamPart::ToolResult` 的 `result` / `is_error`）归一为结果载荷
+    ///
+    /// 字符串按纯文本处理，其余 JSON 值按结构化结果处理；`is_error` 决定落入成功还是错误变体。
+    pub fn from_provider_result(is_error: bool, result: Value) -> Self {
+        match (is_error, result) {
+            (false, Value::String(text)) => Self::text(text),
+            (false, value) => Self::json(value),
+            (true, Value::String(text)) => Self::error_text(text),
+            (true, value) => Self::ErrorJson {
+                value,
+                provider_options: None,
+            },
+        }
+    }
 }
 
 /// 复合工具结果的内容块

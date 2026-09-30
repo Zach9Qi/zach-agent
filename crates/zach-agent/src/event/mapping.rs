@@ -1,7 +1,7 @@
 //! 模型流分块与工具结果到运行时事件的映射
 
 use crate::event::types::AgentEvent;
-use serde_json::{json, Value};
+use serde_json::json;
 use zach_ai_core::{FileData, ProviderMetadata, SourceContent, StreamPart, ToolResultOutput};
 
 /// 把一个模型流分块映射为运行时事件
@@ -96,7 +96,7 @@ pub fn map_stream_part(part: &StreamPart) -> Option<AgentEvent> {
             ..
         } => tool_output_event(
             tool_call_id,
-            provider_result_output(is_error, result),
+            ToolResultOutput::from_provider_result(is_error, result),
             preliminary,
             true,
             provider_metadata,
@@ -230,18 +230,6 @@ fn tool_error(
         provider_executed,
         tool_metadata: None,
         provider_metadata,
-    }
-}
-
-fn provider_result_output(is_error: bool, result: Value) -> ToolResultOutput {
-    match (is_error, result) {
-        (false, Value::String(text)) => ToolResultOutput::text(text),
-        (false, value) => ToolResultOutput::json(value),
-        (true, Value::String(text)) => ToolResultOutput::error_text(text),
-        (true, value) => ToolResultOutput::ErrorJson {
-            value,
-            provider_options: None,
-        },
     }
 }
 
