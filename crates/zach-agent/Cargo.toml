@@ -16,3 +16,7 @@ tokio-util.workspace = true
 futures.workspace = true
 tracing.workspace = true
 schemars.workspace = true
+
+[dev-dependencies]
+# 测试使用虚拟时钟（`start_paused`），避免真实等待带来的抖动
+tokio = { workspace = true, features = ["test-util"] }

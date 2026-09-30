@@ -45,7 +45,7 @@ async fn batch_terminates_when_every_tool_asks_to() {
     assert_eq!(host.kinds().last().map(String::as_str), Some("run_finish"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn parallel_tools_run_concurrently_but_results_keep_source_order() {
     let barrier = Arc::new(Barrier::new(2));
     let rendezvous = |name: &'static str| {
@@ -93,7 +93,7 @@ async fn parallel_tools_run_concurrently_but_results_keep_source_order() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn sequential_mode_runs_tools_one_by_one() {
     let calls = [("a", "slow", "{}"), ("b", "fast", "{}")];
     let model = ScriptedModel::new(vec![Script::Parts(tool_calls(

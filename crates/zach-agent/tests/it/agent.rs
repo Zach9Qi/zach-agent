@@ -51,7 +51,7 @@ async fn transcript_accumulates_across_runs() {
     assert_eq!(model.call(1).prompt.messages.len(), 4);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn busy_agent_rejects_new_runs_until_aborted() {
     let model = ScriptedModel::new(vec![Script::Hang(text("半")[..2].to_vec())]);
     let agent = agent(model);
@@ -83,7 +83,7 @@ async fn dropping_the_run_handle_does_not_abort() {
     assert_eq!(agent.messages().last(), Some(&Message::assistant("完成")));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn wait_for_idle_tracks_running_state_not_a_stale_flag() {
     // 空闲时立即返回
     let model = ScriptedModel::new(vec![

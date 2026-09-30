@@ -180,7 +180,7 @@ async fn closure_handler_can_mix_auto_decision_and_asking() {
     assert!(executed.load(Ordering::SeqCst));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn interactive_timeout_denies_unanswered_request() {
     let (builder, executed) = builder_with_approval_tool();
     let agent = builder

@@ -159,7 +159,7 @@ async fn follow_up_messages_continue_a_finished_run() {
     assert_eq!(output.messages[2], Message::user("追加"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn retryable_failures_emit_step_retry_and_recover() {
     let model = ScriptedModel::new(vec![
         Script::Fail(ModelError::RateLimit("慢点".into())),
@@ -189,7 +189,7 @@ async fn retryable_failures_emit_step_retry_and_recover() {
     assert_eq!(output.messages.last(), Some(&Message::assistant("好")));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn truncated_stream_is_retried() {
     let unfinished = text("丢失")[..3].to_vec();
     let model = ScriptedModel::new(vec![Script::Parts(unfinished), Script::Parts(text("好"))]);
@@ -229,7 +229,7 @@ async fn fatal_failures_emit_run_error_without_committing_the_step() {
     assert_eq!(model.call_count(), 3);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn abort_mid_stream_keeps_generated_text() {
     let model = ScriptedModel::new(vec![Script::Hang(text("部分")[..2].to_vec())]);
     let host = TestHost::default();
