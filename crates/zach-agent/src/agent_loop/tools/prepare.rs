@@ -2,13 +2,11 @@
 
 use super::{BatchInput, LocalCall};
 use crate::approval::ApprovalRequest;
-use crate::context::AgentContext;
 use crate::event::{tool_output_event, AgentEvent};
 use crate::hooks::{ToolCallDecision, ToolCallInfo};
 use crate::tool::{SharedTool, ToolOutcome};
 use crate::utils::{cancellable, new_id};
 use serde_json::Value;
-use zach_ai_core::tool::parse_tool_input;
 use zach_ai_core::ToolResultOutput;
 
 pub(super) const ABORTED: &str = "操作已中止";
@@ -19,23 +17,12 @@ pub(super) enum Prepared<'a> {
     Ready { tool: &'a SharedTool, input: Value },
 }
 
-/// 查找工具并把原始入参解析、校验为结构化 JSON Object
-pub(crate) fn validate_call<'a>(
-    context: &'a AgentContext,
-    tool_name: &str,
-    raw_input: &str,
-) -> Result<(&'a SharedTool, Value), String> {
-    let tool = context
-        .find_tool(tool_name)
-        .ok_or_else(|| format!("工具 {tool_name} 不存在"))?;
-    let value = parse_tool_input(raw_input).map_err(|e| e.to_string())?;
-    let value = tool.prepare_input(value).map_err(|e| e.to_string())?;
-    Ok((tool, value))
-}
-
 /// 准备单个调用。拒绝与中止会在这里发出事件；入参无效已在流阶段发过 `ToolInputError`，不再重复。
 pub(super) async fn prepare<'a>(call: &LocalCall, batch: &BatchInput<'a>) -> Prepared<'a> {
-    let (tool, input) = match validate_call(batch.context, &call.tool_name, &call.raw_input) {
+    let (tool, input) = match batch
+        .context
+        .validate_call(&call.tool_name, &call.raw_input)
+    {
         Ok(ready) => ready,
         Err(message) => return Prepared::Done(ToolOutcome::error(message)),
     };

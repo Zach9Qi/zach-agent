@@ -3,8 +3,6 @@
 mod execute;
 mod prepare;
 
-pub(crate) use prepare::validate_call;
-
 use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::context::AgentContext;
 use crate::event::AgentEvent;

@@ -1,6 +1,5 @@
 //! 单步模型调用：构造请求、消费流并透出事件、聚合结果，失败时按策略重试
 
-use super::tools::validate_call;
 use crate::config::RetryPolicy;
 use crate::context::{AgentContext, RequestState};
 use crate::event::{map_stream_part, AgentEvent};
@@ -211,7 +210,7 @@ async fn announce(
             provider_metadata: provider_metadata.clone(),
         }
     } else {
-        match validate_call(context, tool_name, input) {
+        match context.validate_call(tool_name, input) {
             Ok((tool, value)) => AgentEvent::ToolInputAvailable {
                 tool_call_id: tool_call_id.to_string(),
                 tool_name: tool_name.clone(),

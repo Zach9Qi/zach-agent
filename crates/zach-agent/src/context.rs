@@ -1,8 +1,10 @@
 //! 循环上下文：对话记录、系统提示词与可用工具
 
 use crate::tool::SharedTool;
+use serde_json::Value;
 use std::fmt;
 use std::sync::Arc;
+use zach_ai_core::tool::parse_tool_input;
 use zach_ai_core::{CallOptions, LanguageModel, Message, ProviderTool, ToolDefinition};
 
 /// 一次运行可见的上下文快照
@@ -22,6 +24,20 @@ impl AgentContext {
     /// 按名称查找本地工具
     pub fn find_tool(&self, name: &str) -> Option<&SharedTool> {
         self.tools.iter().find(|tool| tool.name() == name)
+    }
+
+    /// 查找本地工具，并解析、校验工具调用入参
+    pub(crate) fn validate_call(
+        &self,
+        tool_name: &str,
+        raw_input: &str,
+    ) -> Result<(&SharedTool, Value), String> {
+        let tool = self
+            .find_tool(tool_name)
+            .ok_or_else(|| format!("工具 {tool_name} 不存在"))?;
+        let value = parse_tool_input(raw_input).map_err(|e| e.to_string())?;
+        let value = tool.prepare_input(value).map_err(|e| e.to_string())?;
+        Ok((tool, value))
     }
 
     /// 本次请求的工具声明；没有任何工具时返回 `None`
