@@ -5,10 +5,10 @@ mod prepare;
 
 pub(crate) use prepare::validate_call;
 
+use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::context::AgentContext;
 use crate::event::AgentEvent;
 use crate::hooks::AgentHooks;
-use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::host::LoopHost;
 use crate::tool::{ToolExecutionMode, ToolOutcome};
 use crate::utils::cancellable;
