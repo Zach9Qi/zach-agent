@@ -12,7 +12,7 @@ use crate::error::AgentError;
 use crate::event::AgentEvent;
 use crate::hooks::{AgentHooks, TurnDecision, TurnInfo};
 use crate::host::LoopHost;
-use crate::utils::{add_usage, cancellable, new_id};
+use crate::utils::{cancellable, new_id};
 use serde_json::json;
 use std::sync::Arc;
 use step::{partial_assistant, run_step, StepInput, StepOutcome};
@@ -178,7 +178,7 @@ impl<'a> Runner<'a> {
                     }
                 };
 
-                add_usage(&mut self.usage, &result.usage);
+                self.usage.add(&result.usage);
                 self.finish_reason = Some(result.finish_reason.clone());
                 self.steps += 1;
                 let finish_reason = result.finish_reason.clone();
