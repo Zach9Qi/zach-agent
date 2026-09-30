@@ -12,13 +12,13 @@ pub mod host;
 pub mod tool;
 mod utils;
 
-pub use agent::{Agent, AgentBuilder, AgentRun};
+pub use agent::{Agent, AgentBuilder, AgentRun, QueueMode};
 pub use agent_loop::{continue_agent_loop, run_agent_loop, RunOutput};
 pub use approval::{
     ApprovalDecision, ApprovalHandler, ApprovalRequest, ApprovalRoute, ApproveAll, DenyAll,
     InteractiveApproval,
 };
-pub use config::{LoopConfig, QueueMode, RetryPolicy};
+pub use config::{LoopConfig, RetryPolicy};
 pub use context::{AgentContext, RequestState};
 pub use error::AgentError;
 pub use event::AgentEvent;

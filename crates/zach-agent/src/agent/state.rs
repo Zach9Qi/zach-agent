@@ -1,61 +1,17 @@
 //! Agent 共享状态：对话记录、运行配置、排队消息与审批等待表
 
+use super::queue::PendingQueue;
 use crate::approval::{ApprovalDecision, ApprovalHandler};
-use crate::config::{LoopConfig, QueueMode, RetryPolicy};
+use crate::config::{LoopConfig, RetryPolicy};
 use crate::context::AgentContext;
 use crate::event::AgentEvent;
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use zach_ai_core::{CallOptions, LanguageModel, Message, ProviderTool};
-
-/// 排队消息
-#[derive(Debug, Default)]
-pub(super) struct PendingQueue {
-    messages: VecDeque<Message>,
-    pub(super) mode: QueueMode,
-}
-
-impl PendingQueue {
-    pub(super) fn new(mode: QueueMode) -> Self {
-        Self {
-            messages: VecDeque::new(),
-            mode,
-        }
-    }
-
-    pub(super) fn push(&mut self, message: Message) {
-        self.messages.push_back(message);
-    }
-
-    pub(super) fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    /// 按模式预览下一个注入点会取出的消息
-    pub(super) fn peek(&self) -> Vec<Message> {
-        match self.mode {
-            QueueMode::All => self.messages.iter().cloned().collect(),
-            QueueMode::OneAtATime => self.messages.front().cloned().into_iter().collect(),
-        }
-    }
-
-    /// 按模式取出消息
-    pub(super) fn drain(&mut self) -> Vec<Message> {
-        let count = match self.mode {
-            QueueMode::All => self.messages.len(),
-            QueueMode::OneAtATime => self.messages.len().min(1),
-        };
-        self.messages.drain(..count).collect()
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.messages.clear();
-    }
-}
 
 /// 受互斥锁保护的全部可变状态；锁从不跨越 `await`
 pub(super) struct State {

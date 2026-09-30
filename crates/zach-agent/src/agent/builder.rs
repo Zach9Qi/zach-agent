@@ -1,9 +1,10 @@
 //! `Agent` 构造器
 
-use super::state::{Inner, PendingQueue, State};
+use super::queue::{PendingQueue, QueueMode};
+use super::state::{Inner, State};
 use super::Agent;
 use crate::approval::{ApprovalHandler, InteractiveApproval};
-use crate::config::{QueueMode, RetryPolicy};
+use crate::config::RetryPolicy;
 use crate::hooks::{AgentHooks, NoopHooks};
 use crate::tool::{SharedTool, ToolExecutionMode};
 use std::collections::HashMap;

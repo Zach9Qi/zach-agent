@@ -7,10 +7,12 @@
 mod accessors;
 mod builder;
 mod host;
+mod queue;
 mod run;
 mod state;
 
 pub use builder::AgentBuilder;
+pub use queue::QueueMode;
 pub use run::AgentRun;
 
 use crate::agent_loop::run_agent_loop;

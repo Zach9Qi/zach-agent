@@ -1,8 +1,9 @@
 //! `Agent` 状态读写。修改在下一次运行时生效，不影响进行中的运行。
 
+use super::queue::QueueMode;
 use super::Agent;
 use crate::approval::ApprovalHandler;
-use crate::config::{QueueMode, RetryPolicy};
+use crate::config::RetryPolicy;
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
 use std::sync::Arc;

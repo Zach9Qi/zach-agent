@@ -1,22 +1,10 @@
-//! 循环配置、重试策略与消息队列模式
+//! 低层循环配置与模型请求重试策略
 
 use crate::hooks::{AgentHooks, NoopHooks};
 use crate::tool::ToolExecutionMode;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use zach_ai_core::{CallOptions, LanguageModel};
-
-/// 插队与追加消息在注入点的取用方式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QueueMode {
-    /// 一次取出全部排队消息
-    All,
-    /// 每个注入点只取最早的一条
-    #[default]
-    OneAtATime,
-}
 
 /// 模型请求失败时的重试策略（指数退避）
 ///
