@@ -17,38 +17,38 @@ use zach_ai_core::tool::tool_input_for_display;
 use zach_ai_core::{Message, OutputContent, ToolPart};
 
 /// 需要本地执行的工具调用
-pub(crate) struct LocalCall {
-    pub(crate) tool_call_id: String,
-    pub(crate) tool_name: String,
-    pub(crate) raw_input: String,
+pub(super) struct LocalCall {
+    pub(super) tool_call_id: String,
+    pub(super) tool_name: String,
+    pub(super) raw_input: String,
 }
 
 /// 批次执行所需的上下文
 #[derive(Clone, Copy)]
-pub(crate) struct BatchInput<'a> {
-    pub(crate) assistant: &'a Message,
-    pub(crate) content: &'a [OutputContent],
-    pub(crate) context: &'a AgentContext,
-    pub(crate) hooks: &'a dyn AgentHooks,
-    pub(crate) host: &'a dyn LoopHost,
-    pub(crate) mode: ToolExecutionMode,
-    pub(crate) cancel: &'a CancellationToken,
+pub(super) struct BatchInput<'a> {
+    pub(super) assistant: &'a Message,
+    pub(super) content: &'a [OutputContent],
+    pub(super) context: &'a AgentContext,
+    pub(super) hooks: &'a dyn AgentHooks,
+    pub(super) host: &'a dyn LoopHost,
+    pub(super) mode: ToolExecutionMode,
+    pub(super) cancel: &'a CancellationToken,
     /// 模型输出因长度上限被截断，工具入参可能残缺
-    pub(crate) truncated: bool,
+    pub(super) truncated: bool,
 }
 
 /// 批次执行结果
-pub(crate) struct ToolBatch {
+pub(super) struct ToolBatch {
     /// 待写入对话记录的工具消息
-    pub(crate) message: Option<Message>,
+    pub(super) message: Option<Message>,
     /// 本批是否包含需要回传给模型的调用
-    pub(crate) has_calls: bool,
+    pub(super) has_calls: bool,
     /// 所有本地工具都请求终止
-    pub(crate) terminate: bool,
+    pub(super) terminate: bool,
 }
 
 /// 执行整批工具调用
-pub(crate) async fn run_tool_batch(batch: BatchInput<'_>) -> ToolBatch {
+pub(super) async fn run_tool_batch(batch: BatchInput<'_>) -> ToolBatch {
     let calls = local_calls(batch.content);
     let approvals = provider_approvals(batch.content);
     if calls.is_empty() && approvals.is_empty() {
@@ -88,7 +88,7 @@ pub(crate) async fn run_tool_batch(batch: BatchInput<'_>) -> ToolBatch {
 }
 
 /// 为厂商侧审批请求补齐工具名与入参
-pub(crate) fn approval_request_for(
+fn approval_request_for(
     content: &[OutputContent],
     approval_id: &str,
     tool_call_id: &str,
