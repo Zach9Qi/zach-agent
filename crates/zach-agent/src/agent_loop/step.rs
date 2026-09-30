@@ -102,20 +102,22 @@ async fn stream_once(input: &StepInput<'_>) -> Result<StepOutcome, ModelError> {
         if let Some(event) = map_stream_part(&item) {
             host.emit(event).await;
         }
-        let trigger = Trigger::of(&item);
+        // 工具调用聚合完成后需结合上下文补发入参事件；厂商侧审批请求则留给宿主在
+        // `wait_approval` 中呈现（见 `tools::answer_provider_approvals`），此处不处理。
+        let tool_call_id = match &item {
+            StreamPart::ToolCall { tool_call_id, .. } => Some(tool_call_id.clone()),
+            _ => None,
+        };
         accumulator.process(item);
-        match trigger {
-            Trigger::ToolCall(id) => {
-                announce(
-                    &id,
-                    accumulator.content(),
-                    &state.context,
-                    &mut announced,
-                    host,
-                )
-                .await
-            }
-            Trigger::None => {}
+        if let Some(id) = tool_call_id {
+            announce(
+                &id,
+                accumulator.content(),
+                &state.context,
+                &mut announced,
+                host,
+            )
+            .await;
         }
     }
 
@@ -154,23 +156,6 @@ fn build_prompt(context: &AgentContext, messages: Vec<Message>) -> Prompt {
     }
     prompt.messages.extend(messages);
     prompt
-}
-
-/// 聚合后需要结合上下文补发事件的分块
-///
-/// 厂商侧审批请求不在此处发出：由宿主在 `wait_approval` 中呈现（见 `tools::answer_provider_approvals`）。
-enum Trigger {
-    ToolCall(String),
-    None,
-}
-
-impl Trigger {
-    fn of(part: &StreamPart) -> Self {
-        match part {
-            StreamPart::ToolCall { tool_call_id, .. } => Self::ToolCall(tool_call_id.clone()),
-            _ => Self::None,
-        }
-    }
 }
 
 /// 工具入参就绪：本地工具先校验，发出 `ToolInputAvailable` 或 `ToolInputError`；每个调用只发一次
