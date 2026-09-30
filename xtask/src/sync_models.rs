@@ -6,7 +6,7 @@ mod source;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use zach_ai_core::ModelProfile;
 
@@ -14,7 +14,10 @@ use source::ModelsDevCatalog;
 
 const MODELS_DEV_URL: &str = "https://models.dev/api.json";
 
-/// 需要内置的厂商（models.dev 中的 provider 标识）；新增厂商时同步更新 `zach-ai` 的 `catalog/builtin.rs`
+/// 需要内置的厂商（models.dev 中的 provider 标识）
+///
+/// 这是唯一的手工维护清单：`zach-ai` 的 `build.rs` 会自动嵌入 `data/models/` 下的全部文件，
+/// 因此增删厂商只需修改此处并重新运行 `cargo xtask sync-models`。
 pub(crate) const PROVIDERS: &[&str] = &[
     "anthropic",
     "openai",
@@ -57,6 +60,21 @@ pub(crate) fn run() -> Result<(), Box<dyn Error>> {
         json.push('\n');
         fs::write(&path, json)?;
         println!("  {provider}: {} 个模型", profiles.len());
+    }
+    remove_stale_files(&out_dir)?;
+    Ok(())
+}
+
+/// 删除不在 `PROVIDERS` 中的数据文件，保证目录内容与清单严格一致
+fn remove_stale_files(out_dir: &Path) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(out_dir)? {
+        let path = entry?.path();
+        let is_json = path.extension().is_some_and(|ext| ext == "json");
+        let provider = path.file_stem().and_then(|stem| stem.to_str());
+        if is_json && provider.is_some_and(|p| !PROVIDERS.contains(&p)) {
+            fs::remove_file(&path)?;
+            println!("  已删除陈旧文件 {}", path.display());
+        }
     }
     Ok(())
 }
