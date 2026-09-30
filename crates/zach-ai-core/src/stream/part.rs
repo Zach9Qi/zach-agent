@@ -234,6 +234,9 @@ pub enum StreamPart {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 厂商下发的错误事件或单个分块解析失败（不终止流，可多次出现）
+    ///
+    /// 任一错误都会使本轮生成的最终状态为 `Error`；后续内容仅保留作诊断，
+    /// 后续 `Finish` 仍可携带用量和元数据，但不能将本轮恢复为成功。
     Error {
         /// 格式化后的错误可读描述信息
         message: String,

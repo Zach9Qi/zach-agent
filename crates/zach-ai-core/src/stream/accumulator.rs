@@ -2,6 +2,7 @@
 //!
 //! 文本、推理和工具入参按**第一次出现**的位置占位，后续增量原地拼接。
 //! 因此未发送 End、或 End 晚于其他内容到达时，最终顺序仍与流的起始顺序一致。
+//! 流内出现任何错误后，最终结束原因固定为 `Error`，后续 `Finish` 不能恢复成功状态。
 
 mod slots;
 
@@ -83,6 +84,7 @@ impl StreamAccumulator {
     /// 流是否已收尾（收到 `Finish` 事件）
     ///
     /// `Error` 事件不终止流，之后仍可能到达内容或 `Finish`，因此不计入收尾。
+    /// 已收尾不代表成功：出现过错误时，最终结束原因仍为 [`UnifiedFinishReason::Error`]。
     /// 为 `false` 时调用 [`Self::finish`]：出过错会得到 [`UnifiedFinishReason::Error`]，
     /// 否则得到 [`UnifiedFinishReason::Unknown`]，提示调用方该结果可能是被静默截断的半截内容。
     pub fn is_complete(&self) -> bool {
@@ -90,6 +92,7 @@ impl StreamAccumulator {
     }
 
     /// 当前已解析的结束原因。仅在流已收尾（见 [`Self::is_complete`]）后有值。
+    /// 流内出现过错误时返回 `Error`，不受厂商结束原因影响。
     pub fn finish_reason(&self) -> Option<FinishReason> {
         self.is_complete().then(|| self.resolved_finish_reason())
     }
@@ -106,8 +109,8 @@ impl StreamAccumulator {
 
     /// 流内收到的全部错误，按到达顺序排列
     ///
-    /// 结束原因非 `Stop`（如 `ToolCalls`、`Length`）时错误不会体现在 [`Self::finish`] 的结果中，
-    /// 调用方需在收尾前自行检查，例如丢弃可能残缺的工具入参。
+    /// 任一错误都会使最终结束原因为 [`UnifiedFinishReason::Error`]，并以首个错误描述作为原因。
+    /// 此访问器用于在收尾前读取完整诊断信息，不是判定最终结果是否失败的必要步骤。
     pub fn errors(&self) -> &[StreamPartError] {
         &self.errors
     }
@@ -291,6 +294,9 @@ impl StreamAccumulator {
     }
 
     /// 结束聚合，生成最终的 [`GenerateResult`]
+    ///
+    /// 出现过错误时仍保留已聚合的内容、用量和元数据，供诊断使用；
+    /// 调用方不得将失败结果作为成功响应提交，或执行其中的工具调用。
     pub fn finish(mut self) -> GenerateResult {
         self.content.retain(keep_in_final_content);
         let finish_reason = self.resolved_finish_reason();
@@ -306,20 +312,14 @@ impl StreamAccumulator {
         }
     }
 
-    /// 出错时以第一个错误作为原始原因，它通常是根因
+    /// 错误优先于任何厂商结束原因；以第一个错误作为原始原因，它通常是根因
     fn resolved_finish_reason(&self) -> FinishReason {
         match (&self.explicit_finish, self.errors.first()) {
-            (Some(reason), Some(err)) if reason.unified == UnifiedFinishReason::Stop => {
-                FinishReason {
-                    unified: UnifiedFinishReason::Error,
-                    raw: Some(err.describe()),
-                }
-            }
-            (Some(reason), _) => reason.clone(),
-            (None, Some(err)) => FinishReason {
+            (_, Some(err)) => FinishReason {
                 unified: UnifiedFinishReason::Error,
                 raw: Some(err.describe()),
             },
+            (Some(reason), None) => reason.clone(),
             // 既无 Finish 也无 Error：流被静默截断，不能伪装成正常停止
             (None, None) => FinishReason {
                 unified: UnifiedFinishReason::Unknown,

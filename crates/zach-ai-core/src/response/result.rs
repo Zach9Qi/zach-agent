@@ -23,7 +23,7 @@ pub enum UnifiedFinishReason {
     ContentFilter,
     /// 模型决定调用一个或多个工具
     ToolCalls,
-    /// 生成过程中发生错误中断
+    /// 生成或响应解析过程中发生错误，本轮结果不可作为成功响应使用
     Error,
     /// 厂商特有的其他未知原因
     Other,

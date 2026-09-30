@@ -13,7 +13,8 @@ use std::pin::Pin;
 ///
 /// 错误分三层：
 /// - `do_stream` 返回 `Err`：流建立前失败，尚无输出，可安全重试；
-/// - `Ok(StreamPart::Error)`：厂商错误事件或单个分块解析失败，不终止流，可多次出现；
+/// - `Ok(StreamPart::Error)`：厂商错误事件或单个分块解析失败，本轮生成失败；
+///   不强制终止流，可继续收集诊断信息、用量和元数据，但后续 `Finish` 不能恢复成功状态；
 /// - `Err(ModelError)`：传输中断等不可恢复错误，产出后流必须立即结束。
 pub type LanguageModelStream =
     Pin<Box<dyn Stream<Item = Result<StreamPart, ModelError>> + Send + 'static>>;

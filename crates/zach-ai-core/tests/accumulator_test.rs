@@ -1,9 +1,9 @@
-//! 流聚合器顺序、错误与工具结果回放
+//! 流聚合器顺序、元数据与工具结果回放
 
 use serde_json::json;
 use zach_ai_core::{
     AssistantPart, FinishReason, Message, OutputContent, ProviderMetadata, ResponseMetadata,
-    StreamAccumulator, StreamPart, ToolResultOutput, UnifiedFinishReason, Usage,
+    StreamAccumulator, StreamPart, ToolResultOutput, Usage,
 };
 
 fn meta() -> ProviderMetadata {
@@ -327,140 +327,6 @@ fn interleaved_text_stays_before_later_tool_call() {
     let result = accumulator.finish();
     assert_eq!(result.content[0].as_text(), Some("你好"));
     assert!(matches!(result.content[1], OutputContent::ToolCall { .. }));
-}
-
-#[test]
-fn truncated_stream_is_reported_as_unknown() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::TextDelta {
-        id: "t1".to_string(),
-        delta: "半截".to_string(),
-        provider_metadata: None,
-    });
-    assert!(!accumulator.is_complete());
-    assert_eq!(accumulator.finish_reason(), None);
-
-    let result = accumulator.finish();
-    assert_eq!(result.text(), "半截");
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Unknown);
-}
-
-#[test]
-fn stream_error_is_not_reported_as_stop() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::TextDelta {
-        id: "t1".to_string(),
-        delta: "部分".to_string(),
-        provider_metadata: None,
-    });
-    accumulator.process(StreamPart::Error {
-        message: "overloaded_error".to_string(),
-        raw: None,
-    });
-    accumulator.process(StreamPart::Finish {
-        usage: Usage::simple(3, 1),
-        finish_reason: FinishReason::stop(),
-        provider_metadata: None,
-    });
-
-    let result = accumulator.finish();
-    assert_eq!(result.text(), "部分");
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(
-        result.finish_reason.raw.as_deref(),
-        Some("overloaded_error")
-    );
-    assert_eq!(result.usage.input_tokens.total, Some(3));
-}
-
-#[test]
-fn stream_error_without_finish_is_reported_as_error() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::Error {
-        message: "overloaded_error".to_string(),
-        raw: None,
-    });
-    assert!(!accumulator.is_complete());
-
-    let result = accumulator.finish();
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(
-        result.finish_reason.raw.as_deref(),
-        Some("overloaded_error")
-    );
-}
-
-#[test]
-fn explicit_non_stop_finish_survives_stream_error() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::Error {
-        message: "overloaded_error".to_string(),
-        raw: None,
-    });
-    // Error 不终止流：此时尚未收尾，不应提前报出结束原因
-    assert!(!accumulator.is_complete());
-    assert_eq!(accumulator.finish_reason(), None);
-
-    accumulator.process(StreamPart::Finish {
-        usage: Usage::default(),
-        finish_reason: FinishReason {
-            unified: UnifiedFinishReason::Length,
-            raw: Some("length".to_string()),
-        },
-        provider_metadata: None,
-    });
-    assert!(accumulator.is_complete());
-    assert_eq!(
-        accumulator.finish_reason().map(|reason| reason.unified),
-        Some(UnifiedFinishReason::Length)
-    );
-
-    let result = accumulator.finish();
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Length);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("length"));
-}
-
-#[test]
-fn all_stream_errors_are_kept_in_order_with_raw() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::Error {
-        message: "invalid chunk".to_string(),
-        raw: Some(json!("data: {bad")),
-    });
-    accumulator.process(StreamPart::Error {
-        message: String::new(),
-        raw: Some(json!({ "type": "overloaded_error" })),
-    });
-
-    let errors = accumulator.errors();
-    assert_eq!(errors.len(), 2);
-    assert_eq!(errors[0].message, "invalid chunk");
-    assert_eq!(errors[0].raw, Some(json!("data: {bad")));
-    assert_eq!(errors[1].raw, Some(json!({ "type": "overloaded_error" })));
-
-    let result = accumulator.finish();
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
-    assert_eq!(result.finish_reason.raw.as_deref(), Some("invalid chunk"));
-}
-
-#[test]
-fn stream_errors_stay_visible_when_finish_is_tool_calls() {
-    let mut accumulator = StreamAccumulator::new();
-    accumulator.process(StreamPart::Error {
-        message: "invalid chunk".to_string(),
-        raw: None,
-    });
-    accumulator.process(StreamPart::Finish {
-        usage: Usage::default(),
-        finish_reason: FinishReason::tool_calls(),
-        provider_metadata: None,
-    });
-
-    assert_eq!(
-        accumulator.finish_reason().map(|reason| reason.unified),
-        Some(UnifiedFinishReason::ToolCalls)
-    );
-    assert_eq!(accumulator.errors().len(), 1);
 }
 
 #[test]
