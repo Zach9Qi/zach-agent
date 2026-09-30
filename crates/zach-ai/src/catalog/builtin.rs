@@ -4,25 +4,8 @@ use std::sync::OnceLock;
 
 use super::ModelCatalog;
 
-/// 内嵌数据文件；与 `xtask/src/sync_models.rs` 中的 `PROVIDERS` 保持一致
-const SOURCES: &[(&str, &str)] = &[
-    (
-        "anthropic",
-        include_str!("../../data/models/anthropic.json"),
-    ),
-    ("openai", include_str!("../../data/models/openai.json")),
-    ("google", include_str!("../../data/models/google.json")),
-    ("deepseek", include_str!("../../data/models/deepseek.json")),
-    ("xai", include_str!("../../data/models/xai.json")),
-    ("mistral", include_str!("../../data/models/mistral.json")),
-    (
-        "moonshotai",
-        include_str!("../../data/models/moonshotai.json"),
-    ),
-    ("zhipuai", include_str!("../../data/models/zhipuai.json")),
-    ("alibaba", include_str!("../../data/models/alibaba.json")),
-    ("minimax", include_str!("../../data/models/minimax.json")),
-];
+/// 内嵌数据文件 `(provider, json)` 清单，由 `build.rs` 扫描 `data/models/*.json` 生成
+const SOURCES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/builtin_sources.rs"));
 
 pub(super) fn catalog() -> &'static ModelCatalog {
     static CATALOG: OnceLock<ModelCatalog> = OnceLock::new();

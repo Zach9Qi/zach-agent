@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::Path;
+
 use zach_ai::ModelCatalog;
 use zach_ai_core::{ModelPricing, ModelProfile};
 
@@ -25,6 +28,31 @@ fn builtin_catalog_covers_main_providers() {
             "缺少厂商 {provider}"
         );
     }
+}
+
+/// 每个数据文件的文件名即厂商标识，文件内所有档案的 `provider` 必须与之一致
+#[test]
+fn builtin_data_files_match_provider_names() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/models");
+    let mut checked = 0;
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+        let provider = path.file_stem().unwrap().to_str().unwrap();
+        let file = ModelCatalog::from_json(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(!file.is_empty(), "{provider}.json 不应为空");
+        for profile in file.iter() {
+            assert_eq!(
+                profile.provider, provider,
+                "{} 不应出现在 {provider}.json 中",
+                profile.id
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "data/models 下没有任何数据文件");
 }
 
 #[test]
