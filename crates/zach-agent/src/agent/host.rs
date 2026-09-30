@@ -9,11 +9,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};
+
+#[cfg(test)]
+mod tests;
 
 pub(super) struct RunHost {
     inner: Arc<Inner>,
     events: mpsc::Sender<AgentEvent>,
+    terminal: mpsc::Sender<AgentEvent>,
+    cancel: CancellationToken,
     approval: Arc<dyn ApprovalHandler>,
     /// 首次读取插队消息时跳过（这些消息已作为本次运行的提示消息注入）
     skip_initial_steering: AtomicBool,
@@ -23,12 +29,16 @@ impl RunHost {
     pub(super) fn new(
         inner: Arc<Inner>,
         events: mpsc::Sender<AgentEvent>,
+        terminal: mpsc::Sender<AgentEvent>,
+        cancel: CancellationToken,
         approval: Arc<dyn ApprovalHandler>,
         skip_initial_steering: bool,
     ) -> Self {
         Self {
             inner,
             events,
+            terminal,
+            cancel,
             approval,
             skip_initial_steering: AtomicBool::new(skip_initial_steering),
         }
@@ -48,6 +58,8 @@ impl RunHost {
         self.emit(request.to_event()).await;
 
         let decision = tokio::select! {
+            biased;
+            _ = self.cancel.cancelled() => Some(ApprovalDecision::deny("运行已中止")),
             decision = receiver => decision.ok(),
             _ = self.events.closed() => None,
             _ = deadline(timeout) => Some(ApprovalDecision::deny(format!(
@@ -100,9 +112,32 @@ impl RunHost {
 #[async_trait]
 impl LoopHost for RunHost {
     async fn emit(&self, event: AgentEvent) {
+        // 即使取消后丢弃某个普通事件，也必须更新内部状态，保证收尾清理完整。
         self.inner.lock().observe(&event);
-        // 消费方已丢弃 AgentRun 时静默丢弃事件，运行继续
-        let _ = self.events.send(event).await;
+        if matches!(
+            &event,
+            AgentEvent::RunAbort { .. }
+                | AgentEvent::RunError { .. }
+                | AgentEvent::RunFinish { .. }
+        ) {
+            // 每轮只有一个终止事件，不等待普通队列腾出空间。
+            let _ = self.terminal.try_send(event);
+            return;
+        }
+
+        tokio::select! {
+            biased;
+            _ = self.cancel.cancelled() => {
+                // 取消后尽力保留收尾事件，但不允许收尾再次被背压堵住。
+                let _ = self.events.try_send(event);
+            }
+            permit = self.events.reserve() => {
+                // 消费方已丢弃 AgentRun 时静默丢弃事件，运行继续。
+                if let Ok(permit) = permit {
+                    permit.send(event);
+                }
+            }
+        }
     }
 
     async fn on_message(&self, message: &Message) {

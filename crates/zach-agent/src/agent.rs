@@ -163,7 +163,16 @@ impl Agent {
         self.inner.idle.send_replace(false);
 
         let (sender, receiver) = mpsc::channel(EVENT_BUFFER);
-        let host = RunHost::new(self.inner.clone(), sender, approval, skip_initial_steering);
+        // 每轮只产生一个终止事件，独立保存，避免被普通事件的背压阻塞。
+        let (terminal_sender, terminal_receiver) = mpsc::channel(1);
+        let host = RunHost::new(
+            self.inner.clone(),
+            sender,
+            terminal_sender,
+            cancel.clone(),
+            approval,
+            skip_initial_steering,
+        );
         let guard = RunGuard(self.inner.clone());
         let token = cancel.clone();
         let handle = tokio::spawn(async move {
@@ -186,6 +195,6 @@ impl Agent {
                 }
             }
         });
-        Ok(AgentRun::new(receiver, handle, cancel))
+        Ok(AgentRun::new(receiver, terminal_receiver, handle, cancel))
     }
 }

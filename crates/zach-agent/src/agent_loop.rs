@@ -221,7 +221,7 @@ impl<'a> Runner<'a> {
                 last_turn = Some(turn);
 
                 if decision == TurnDecision::End {
-                    return Ok(self.finish().await);
+                    return self.finish().await;
                 }
                 explicit_continue = decision == TurnDecision::Continue;
                 pending = self.host.poll_steering().await;
@@ -242,7 +242,7 @@ impl<'a> Runner<'a> {
             }
             break;
         }
-        Ok(self.finish().await)
+        self.finish().await
     }
 
     async fn commit(&mut self, message: Message) {
@@ -264,14 +264,18 @@ impl<'a> Runner<'a> {
         Ok(self.into_output(true))
     }
 
-    async fn finish(self) -> RunOutput {
+    async fn finish(self) -> Result<RunOutput, AgentError> {
+        // 最后一个 StepFinish 的发送也可能因取消而恢复，不能随后误报成功。
+        if self.cancel.is_cancelled() {
+            return self.abort(false).await;
+        }
         self.host
             .emit(AgentEvent::RunFinish {
                 finish_reason: self.finish_reason.clone(),
                 message_metadata: Some(json!({ "usage": self.usage })),
             })
             .await;
-        self.into_output(false)
+        Ok(self.into_output(false))
     }
 
     fn into_output(self, aborted: bool) -> RunOutput {
