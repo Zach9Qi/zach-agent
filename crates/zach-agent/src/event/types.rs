@@ -1,7 +1,10 @@
 //! Agent 运行时语义化事件枚举定义
 //!
-//! 提供在 Agent 运行周期、工具调度、文本流式生成与人机交互过程中完整的语义化事件流。
-//! 能够对齐并完整覆盖前端流式规范（包括 Vercel AI SDK 的 `UIMessageChunk` 等）。
+//! 提供在 Agent 运行周期、工具调度、文本流式生成与人机交互过程中完整的语义化事件流，
+//! 语义上覆盖前端流式规范（如 Vercel AI SDK 的 `UIMessageChunk`）。
+//!
+//! JSON 约定与 `zach-ai-core` 一致：判别值 `type` 与字段名统一为 `snake_case`
+//! （如 `tool_input_available` / `tool_call_id`）。
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,13 +12,12 @@ use zach_ai_core::{FileData, FinishReason, ProviderMetadata, ToolResultOutput};
 
 /// Agent 运行过程中的核心语义化事件
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentEvent {
     // -----------------------------------------------------------------------
     // 1. 运行级生命周期（Run Lifecycle）
     // -----------------------------------------------------------------------
     /// 整个 Agent 运行启动
-    #[serde(rename_all = "camelCase")]
     RunStart {
         /// 本次运行的全局唯一标识
         run_id: String,
@@ -27,7 +29,6 @@ pub enum AgentEvent {
         message_metadata: Option<Value>,
     },
     /// 整个 Agent 运行正常结束
-    #[serde(rename_all = "camelCase")]
     RunFinish {
         /// 运行结束原因（如正常停止 stop、工具调用 tool_calls 等）
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,14 +38,12 @@ pub enum AgentEvent {
         message_metadata: Option<Value>,
     },
     /// 运行被主动中断或取消
-    #[serde(rename_all = "camelCase")]
     RunAbort {
         /// 中断的具体原因说明
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// 发生不可恢复的致命运行时错误
-    #[serde(rename_all = "camelCase")]
     RunError {
         /// 错误详情描述文本
         error_text: String,
@@ -54,19 +53,16 @@ pub enum AgentEvent {
     // 2. 步骤级生命周期（Step Lifecycle）
     // -----------------------------------------------------------------------
     /// 单轮 Step（一次思考或模型调用）开始
-    #[serde(rename_all = "camelCase")]
     StepStart {
         /// 当前执行的步骤轮次索引（从 0 开始）
         step_index: usize,
     },
     /// 当前 Step 执行结束
-    #[serde(rename_all = "camelCase")]
     StepFinish {
         /// 刚刚结束的步骤轮次索引
         step_index: usize,
     },
     /// 重置或重试当前 Step（语义等价于 reset-step，通知客户端丢弃当前步骤未完成的内容）
-    #[serde(rename_all = "camelCase")]
     StepRetry {
         /// 触发重置/重试的步骤轮次索引
         step_index: usize,
@@ -79,7 +75,6 @@ pub enum AgentEvent {
     // 3. 文本生成（Text Streaming）
     // -----------------------------------------------------------------------
     /// 新文本段落开始生成
-    #[serde(rename_all = "camelCase")]
     TextStart {
         /// 文本块的全局唯一标识 ID
         id: String,
@@ -88,7 +83,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 模型生成的正文文本增量片段
-    #[serde(rename_all = "camelCase")]
     TextDelta {
         /// 文本块的全局唯一标识 ID
         id: String,
@@ -99,7 +93,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 当前文本段落生成结束
-    #[serde(rename_all = "camelCase")]
     TextFinish {
         /// 文本块的全局唯一标识 ID
         id: String,
@@ -112,7 +105,6 @@ pub enum AgentEvent {
     // 4. 推理/思考链（Reasoning / Thinking）
     // -----------------------------------------------------------------------
     /// 思考链生成开始
-    #[serde(rename_all = "camelCase")]
     ReasoningStart {
         /// 思考链块的全局唯一标识 ID
         id: String,
@@ -121,7 +113,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 思考链文字内容增量
-    #[serde(rename_all = "camelCase")]
     ReasoningDelta {
         /// 思考链块的全局唯一标识 ID
         id: String,
@@ -132,7 +123,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 思考链生成结束
-    #[serde(rename_all = "camelCase")]
     ReasoningFinish {
         /// 思考链块的全局唯一标识 ID
         id: String,
@@ -141,7 +131,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 思考过程中由模型生成的文件附件
-    #[serde(rename_all = "camelCase")]
     ReasoningFile {
         /// 文件的媒体类型（MIME Type，如 image/png）
         media_type: String,
@@ -160,7 +149,6 @@ pub enum AgentEvent {
     // 5. 工具调用（入参）
     // -----------------------------------------------------------------------
     /// 工具调用开始流式接收入参
-    #[serde(rename_all = "camelCase")]
     ToolInputStart {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -183,7 +171,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 工具参数 JSON 字符串增量片段
-    #[serde(rename_all = "camelCase")]
     ToolInputDelta {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -191,7 +178,6 @@ pub enum AgentEvent {
         input_text_delta: String,
     },
     /// 工具入参完整解析/校验通过并可用
-    #[serde(rename_all = "camelCase")]
     ToolInputAvailable {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -216,7 +202,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 工具入参解析或校验出错
-    #[serde(rename_all = "camelCase")]
     ToolInputError {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -247,7 +232,6 @@ pub enum AgentEvent {
     // 6. 工具执行（结果）
     // -----------------------------------------------------------------------
     /// 工具执行完成并返回结果（支持流式中间结果）
-    #[serde(rename_all = "camelCase")]
     ToolOutputAvailable {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -270,7 +254,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 工具执行过程中抛出异常或失败
-    #[serde(rename_all = "camelCase")]
     ToolOutputError {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -290,7 +273,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 工具执行被安全策略或人工审批拒绝
-    #[serde(rename_all = "camelCase")]
     ToolOutputDenied {
         /// 该工具调用的唯一标识 ID
         tool_call_id: String,
@@ -303,7 +285,6 @@ pub enum AgentEvent {
     // 7. 人机交互/审批（Human-in-the-loop）
     // -----------------------------------------------------------------------
     /// 请求用户或客户端对特定工具调用进行人工审批
-    #[serde(rename_all = "camelCase")]
     ToolApprovalRequest {
         /// 审批请求的唯一跟踪 ID
         approval_id: String,
@@ -327,7 +308,6 @@ pub enum AgentEvent {
         signature: Option<String>,
     },
     /// 工具审批响应结果通知
-    #[serde(rename_all = "camelCase")]
     ToolApprovalResponse {
         /// 对应的审批请求唯一 ID
         approval_id: String,
@@ -348,7 +328,6 @@ pub enum AgentEvent {
     // 8. 知识引用与文件（Sources & Files）
     // -----------------------------------------------------------------------
     /// 模型引用或检索到的外部网页来源
-    #[serde(rename_all = "camelCase")]
     SourceUrl {
         /// 来源引用的唯一标识 ID
         source_id: String,
@@ -362,7 +341,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 模型引用的文档切片或知识库资料
-    #[serde(rename_all = "camelCase")]
     SourceDocument {
         /// 来源引用的唯一标识 ID
         source_id: String,
@@ -378,7 +356,6 @@ pub enum AgentEvent {
         provider_metadata: Option<ProviderMetadata>,
     },
     /// 模型产出的通用文件附件（图片、文档等）
-    #[serde(rename_all = "camelCase")]
     FileAttachment {
         /// 文件的媒体类型（MIME Type）
         media_type: String,
@@ -397,13 +374,11 @@ pub enum AgentEvent {
     // 9. 自定义扩展与元数据（Custom & Metadata）
     // -----------------------------------------------------------------------
     /// 针对整条消息的元数据增量更新
-    #[serde(rename_all = "camelCase")]
     MessageMetadata {
         /// 待合并到当前消息的元数据对象
         message_metadata: Value,
     },
     /// 业务自定义数据通道（持久或瞬态）
-    #[serde(rename_all = "camelCase")]
     CustomData {
         /// 业务通道名称（对应 AI SDK `data-${NAME}` 中的 NAME）
         channel: String,
@@ -417,7 +392,6 @@ pub enum AgentEvent {
         transient: bool,
     },
     /// Provider 或特定协议的扩展事件
-    #[serde(rename_all = "camelCase")]
     Custom {
         /// 扩展事件类型标识（如 "namespace.event"）
         kind: String,

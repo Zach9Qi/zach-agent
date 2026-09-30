@@ -51,13 +51,13 @@ async fn text_reply_emits_full_lifecycle() {
     assert_eq!(
         host.kinds(),
         [
-            "run-start",
-            "step-start",
-            "text-start",
-            "text-delta",
-            "text-finish",
-            "step-finish",
-            "run-finish"
+            "run_start",
+            "step_start",
+            "text_start",
+            "text_delta",
+            "text_finish",
+            "step_finish",
+            "run_finish"
         ]
     );
     assert_eq!(
@@ -115,11 +115,11 @@ async fn tool_results_feed_the_next_turn() {
     let kinds = kinds(&events);
     let available = kinds
         .iter()
-        .position(|k| k == "tool-input-available")
+        .position(|k| k == "tool_input_available")
         .unwrap();
     let output_at = kinds
         .iter()
-        .position(|k| k == "tool-output-available")
+        .position(|k| k == "tool_output_available")
         .unwrap();
     assert!(available < output_at);
 }
@@ -184,7 +184,7 @@ async fn retryable_failures_emit_step_retry_and_recover() {
 
     assert_eq!(model.call_count(), 3);
     assert_eq!(
-        host.kinds().iter().filter(|k| *k == "step-retry").count(),
+        host.kinds().iter().filter(|k| *k == "step_retry").count(),
         2
     );
     assert_eq!(output.messages.last(), Some(&Message::assistant("好")));
@@ -215,7 +215,7 @@ async fn fatal_failures_emit_run_error_without_committing_the_step() {
         error,
         AgentError::Model(ModelError::Authentication(_))
     ));
-    assert_eq!(host.kinds().last().map(String::as_str), Some("run-error"));
+    assert_eq!(host.kinds().last().map(String::as_str), Some("run_error"));
     assert_eq!(*host.messages.lock().unwrap(), vec![Message::user("你好")]);
 
     let model = ScriptedModel::new(
@@ -249,7 +249,7 @@ async fn abort_mid_stream_keeps_generated_text() {
     assert_eq!(output.messages.last(), Some(&Message::assistant("部分")));
     assert_eq!(
         host.kinds()[host.kinds().len() - 2..],
-        ["step-finish", "run-abort"]
+        ["step_finish", "run_abort"]
     );
 }
 

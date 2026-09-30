@@ -54,8 +54,8 @@ async fn stream_errors_prevent_tool_execution_and_response_commit() {
             assert_eq!(*host.messages.lock().unwrap(), vec![prompt]);
             assert!(host.approvals.lock().unwrap().is_empty());
             let kinds = host.kinds();
-            assert_eq!(kinds.last().map(String::as_str), Some("run-error"));
-            assert!(!kinds.iter().any(|kind| kind == "run-finish"));
+            assert_eq!(kinds.last().map(String::as_str), Some("run_error"));
+            assert!(!kinds.iter().any(|kind| kind == "run_finish"));
         }
     }
 }
@@ -86,5 +86,5 @@ async fn stream_errors_prevent_text_response_commit() {
         matches!(result, Err(AgentError::Model(ModelError::Other(message))) if message == "文本分块解析失败")
     );
     assert_eq!(*host.messages.lock().unwrap(), vec![prompt]);
-    assert_eq!(host.kinds().last().map(String::as_str), Some("run-error"));
+    assert_eq!(host.kinds().last().map(String::as_str), Some("run_error"));
 }

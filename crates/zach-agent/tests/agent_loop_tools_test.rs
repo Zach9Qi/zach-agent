@@ -80,8 +80,8 @@ async fn unknown_tools_and_malformed_input_report_input_errors() {
         let host = TestHost::default();
         let output = run_with(config(model.clone()), vec![echo_tool("echo")], &host).await;
 
-        assert!(host.kinds().contains(&"tool-input-error".to_string()));
-        assert!(!host.kinds().contains(&"tool-output-error".to_string()));
+        assert!(host.kinds().contains(&"tool_input_error".to_string()));
+        assert!(!host.kinds().contains(&"tool_output_error".to_string()));
         assert!(
             matches!(tool_output(&output), ToolResultOutput::ErrorText { value, .. } if value.contains(expected))
         );
@@ -142,8 +142,8 @@ async fn panicking_tools_become_error_results_without_killing_siblings() {
         results[0].1
     );
     assert_eq!(results[1].1, ToolResultOutput::json(json!({"a": 1})));
-    assert!(host.kinds().contains(&"tool-output-error".to_string()));
-    assert_eq!(host.kinds().last().map(String::as_str), Some("run-finish"));
+    assert!(host.kinds().contains(&"tool_output_error".to_string()));
+    assert_eq!(host.kinds().last().map(String::as_str), Some("run_finish"));
     assert_eq!(model.call_count(), 2);
 }
 
@@ -200,15 +200,15 @@ async fn approval_is_requested_and_honored() {
     let kinds = host.kinds();
     let request = kinds
         .iter()
-        .position(|k| k == "tool-approval-request")
+        .position(|k| k == "tool_approval_request")
         .unwrap();
     let response = kinds
         .iter()
-        .position(|k| k == "tool-approval-response")
+        .position(|k| k == "tool_approval_response")
         .unwrap();
     let output = kinds
         .iter()
-        .position(|k| k == "tool-output-available")
+        .position(|k| k == "tool_output_available")
         .unwrap();
     assert!(request < response && response < output);
     assert_eq!(host.approvals.lock().unwrap()[0].input, json!({ "p": 1 }));
@@ -325,7 +325,7 @@ async fn batch_terminates_when_every_tool_asks_to() {
     let host = TestHost::default();
     run_with(config(model.clone()), vec![stop], &host).await;
     assert_eq!(model.call_count(), 1);
-    assert_eq!(host.kinds().last().map(String::as_str), Some("run-finish"));
+    assert_eq!(host.kinds().last().map(String::as_str), Some("run_finish"));
 }
 
 fn timed(name: &'static str, delay_ms: u64) -> SharedTool {
@@ -458,7 +458,7 @@ async fn abort_during_tool_execution_pairs_every_call_with_a_result() {
     );
     assert_eq!(
         host.kinds()[host.kinds().len() - 2..],
-        ["step-finish", "run-abort"]
+        ["step_finish", "run_abort"]
     );
 }
 
