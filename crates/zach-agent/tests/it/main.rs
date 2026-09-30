@@ -8,7 +8,6 @@ mod agent;
 mod agent_approval;
 mod agent_backpressure;
 mod agent_loop;
-mod agent_loop_tools;
 mod agent_start;
 mod agent_stream_error;
 mod config;
