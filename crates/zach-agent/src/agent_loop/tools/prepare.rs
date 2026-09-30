@@ -4,7 +4,7 @@ use super::{BatchInput, LocalCall};
 use crate::context::AgentContext;
 use crate::event::{tool_output_event, AgentEvent};
 use crate::hooks::{ToolCallDecision, ToolCallInfo};
-use crate::host::ApprovalRequest;
+use crate::approval::ApprovalRequest;
 use crate::tool::{SharedTool, ToolOutcome};
 use crate::utils::{cancellable, new_id};
 use serde_json::Value;

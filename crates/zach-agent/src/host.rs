@@ -3,7 +3,7 @@
 //! 循环通过宿主发出事件、同步写入的消息、读取排队消息并等待审批答复。
 //! [`crate::Agent`] 是内置宿主；直接使用低层循环时可自行实现。
 
-pub use crate::approval::{ApprovalDecision, ApprovalRequest};
+use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::event::AgentEvent;
 use async_trait::async_trait;
 use zach_ai_core::Message;
