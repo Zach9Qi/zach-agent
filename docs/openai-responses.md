@@ -4,6 +4,9 @@
 请求发送到 `{base_url}/responses`，默认根地址为 `https://api.openai.com/v1`。
 此适配器使用 Responses 协议；仅提供 Chat Completions 的兼容端点不能使用它。
 
+仓库内的真实联调入口为 `cargo xtask probe --protocol openai-responses --mode stream`。
+凭据配置、普通请求及 Agent 工具调用的验证方法见 [真实 API 联调说明](probe.md)。
+
 ## 安装与调用
 
 默认 feature 已包含 `openai` 和 `rustls-tls`。只启用 Responses 时可以写：

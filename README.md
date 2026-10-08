@@ -168,6 +168,19 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 
 ## 开发与测试
 
+真实 API 联调使用统一入口：
+
+```powershell
+cargo xtask probe --help
+cargo xtask probe --protocol openai-responses --mode generate
+cargo xtask probe --protocol openai-responses --mode stream
+cargo xtask probe --protocol openai-responses --mode agent
+```
+
+在仓库根目录的 `.env.local` 中填写模型 ID 和凭据（可复制 `.env.local.example`，本地文件已被 Git 忽略）；
+配置、诊断输出与协议扩展方式见 [真实 API 联调说明](docs/probe.md)。
+真实调用由开发者手动执行，日常检查和测试不访问厂商 API。
+
 运行完整的单元测试与集成测试：
 
 ```bash
