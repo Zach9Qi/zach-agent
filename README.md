@@ -172,13 +172,19 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 
 ```powershell
 cargo xtask probe --help
-cargo xtask probe --protocol openai-responses --mode generate
-cargo xtask probe --protocol openai-responses --mode stream
-cargo xtask probe --protocol openai-responses --mode agent
+cargo xtask probe --mode generate --scenario scenarios/probe/mixed.json
+cargo xtask probe --mode stream --scenario scenarios/probe/mixed.json
+cargo xtask probe --mode agent --scenario scenarios/probe/mixed-tools.json
 ```
 
 在仓库根目录的 `.env.local` 中填写模型 ID 和凭据（可复制 `.env.local.example`，本地文件已被 Git 忽略）；
-配置、诊断输出与协议扩展方式见 [真实 API 联调说明](docs/probe.md)。
+使用 `PROBE_*` 连接配置。`--mode` 选择执行方式，默认 `stream`，同一场景可重复用于
+`generate/stream/agent`，无需为执行方式复制输入文件。
+场景中的 `request` 沿用标准 `CallOptions`，可组合文本、多图片、多文件与推理配置；
+本地附件直接在消息文件块中填写 `path`，加载器自动补齐标准 `data`。
+`expect` 验证内容、事件、工具执行及跨轮回传。配置与断言说明见 [真实 API 联调说明](docs/probe.md)。
+输出 Schema 可从 Rust 类型通过 `cargo xtask probe-schemas` 自动生成，多个场景通过
+`schema_file` 复用，无需手写或重复粘贴结构定义。
 真实调用由开发者手动执行，日常检查和测试不访问厂商 API。
 
 运行完整的单元测试与集成测试：
