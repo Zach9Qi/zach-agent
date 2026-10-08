@@ -1,6 +1,11 @@
 //! 使用真实 Agent 循环验证本地工具执行和下一轮结果回传。
 
-use super::{config::Config, output::Reporter, runner::require_stop, ProbeResult};
+use super::{
+    output::Reporter,
+    scenario::{AgentSettings, Scenario},
+    trace::Outcome,
+    ProbeResult,
+};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -11,33 +16,30 @@ use zach_agent::{
     run_agent_loop, typed_tool, AgentContext, AgentEvent, AgentHooks, LoopConfig, LoopHost,
     RequestState, RetryPolicy, ToolContext, ToolError, ToolOutcome, TurnInfo, TypedTool,
 };
-use zach_ai_core::{LanguageModel, Message, ToolChoice, ToolPart, ToolResultOutput};
+use zach_ai_core::{AssistantPart, LanguageModel, Message, ToolChoice};
 
 pub(super) async fn run(
-    config: &Config,
+    scenario: &Scenario,
     model: Arc<dyn LanguageModel>,
     reporter: Arc<Reporter>,
-) -> ProbeResult<()> {
+) -> ProbeResult<Outcome> {
     let cancel = CancellationToken::new();
     let host = Host {
         reporter: reporter.clone(),
         cancel: cancel.clone(),
     };
-    let mut options = config.options.clone();
-    options.tool_choice = Some(ToolChoice::specific("add"));
+    let defaults = AgentSettings::default();
+    let settings = scenario.agent.as_ref().unwrap_or(&defaults);
     let context = AgentContext {
-        system_prompt: Some(
-            "你是联调助手。先调用 add 工具，得到工具结果后给出简短文本答案。".into(),
-        ),
-        tools: vec![typed_tool(Add)],
+        tools: settings.tools.iter().map(|_| typed_tool(Add)).collect(),
         ..Default::default()
     };
     let loop_config = LoopConfig::new(model)
-        .with_options(options)
-        .with_hooks(Arc::new(AfterTool))
+        .with_options(scenario.request.clone())
+        .with_hooks(Arc::new(AfterTool(settings.next_tool_choice.clone())))
         .with_retry(RetryPolicy::none());
     let output = run_agent_loop(
-        vec![Message::user(&config.prompt)],
+        scenario.request.prompt.messages.clone(),
         context,
         loop_config,
         &host,
@@ -53,24 +55,26 @@ pub(super) async fn run(
         return Err("Agent 联调被中止".into());
     }
     let finish = output.finish_reason.ok_or("Agent 没有返回结束原因")?;
-    require_stop(finish.unified)?;
-    let succeeded = output.messages.iter().any(|message| {
-        let Message::Tool { content, .. } = message else {
-            return false;
-        };
-        content.iter().any(|part| {
-            matches!(part, ToolPart::ToolResult {
-            tool_name, output: ToolResultOutput::Json { value, .. }, ..
-        } if tool_name == "add" && value["sum"].as_i64().is_some())
-        })
-    });
-    let answered = matches!(output.messages.last(),
-        Some(Message::Assistant { content, .. }) if content.iter().any(|part|
-            matches!(part, zach_ai_core::AssistantPart::Text { text, .. } if !text.trim().is_empty())));
-    if !succeeded || !answered || output.steps < 2 {
-        return Err("尚未验证完整工具链路：需要成功执行 add，并在下一轮收到模型文本回复".into());
-    }
-    Ok(())
+    let text = match output.messages.last() {
+        Some(Message::Assistant { content, .. }) => content
+            .iter()
+            .filter_map(|part| match part {
+                AssistantPart::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => String::new(),
+    };
+    Ok(Outcome {
+        text,
+        finish_reason: finish.unified,
+        steps: output.steps,
+        messages: output
+            .messages
+            .into_iter()
+            .skip(scenario.request.prompt.len())
+            .collect(),
+    })
 }
 
 struct Host {
@@ -88,13 +92,14 @@ impl LoopHost for Host {
     }
 }
 
-struct AfterTool;
+struct AfterTool(Option<ToolChoice>);
 
 #[async_trait]
 impl AgentHooks for AfterTool {
     async fn prepare_next_turn(&self, _: &TurnInfo, request: &mut RequestState) -> Vec<Message> {
-        // 首轮强制 add；后续只要求回答，防止一直强制工具导致循环。
-        request.options.tool_choice = Some(ToolChoice::None);
+        if let Some(choice) = &self.0 {
+            request.options.tool_choice = Some(choice.clone());
+        }
         vec![]
     }
 }

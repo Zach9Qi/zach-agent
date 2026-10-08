@@ -3,11 +3,14 @@
 mod agent;
 mod args;
 mod config;
+mod expect;
 mod factory;
 mod local_env;
 mod observe;
 mod output;
 mod runner;
+mod scenario;
+mod trace;
 
 #[cfg(test)]
 mod tests;
@@ -16,29 +19,27 @@ use args::Args;
 use config::Config;
 use local_env::LocalEnv;
 use output::Reporter;
+use scenario::Scenario;
 use std::{error::Error, sync::Arc};
 
 type ProbeResult<T> = Result<T, String>;
 
 const HELP: &str = "\
-用法: cargo xtask probe [选项]
+用法: cargo xtask probe --scenario <场景.json> [--mode <模式>] [连接选项]
 
+  --scenario <文件>      场景文件：标准 request、schema_file、expect
+  --mode <模式>          generate、stream（默认）、agent；同一场景可切换执行方式
   --protocol <协议>       当前支持 openai-responses（默认）
-  --mode <模式>           generate | stream | agent，默认 stream
-  --model <模型 ID>       覆盖 PROBE_MODEL；Responses 兼容 OPENAI_MODEL
-  --base-url <根地址>     覆盖 PROBE_BASE_URL；Responses 兼容 OPENAI_BASE_URL
-  --api-key-env <变量名>  指定存放密钥的环境变量；默认 PROBE_API_KEY，
-                         未设置时 Responses 回退到 OPENAI_API_KEY
-  --prompt <文本>        覆盖内置联调提示
-  --timeout-secs <秒>    整次联调超时，默认 120，范围 1..=3600
-  --max-steps <轮数>     Agent 最大模型调用次数，默认 4，范围 2..=100
-  --max-output-tokens <数> 每次请求的输出上限，默认 4096
-  --raw                  在流式和 Agent 模式额外输出原始协议事件
+  --model <模型 ID>       覆盖 PROBE_MODEL
+  --base-url <根地址>     覆盖 PROBE_BASE_URL
+  --api-key-env <变量名>  指定存放密钥的环境变量；默认 PROBE_API_KEY
   --help, -h             显示帮助，不读取凭据或访问网络
 
 输出为逐行 JSON：配置、通用请求、事件、结果与耗时。凭据会脱敏。
 自动读取仓库根目录 .env.local；同名变量优先使用进程环境，不修改进程环境。
-Agent 模式注册 add 工具，验证“调用工具 → 回传结果 → 最终回复”。
+输入、推理、原始事件、超时、Agent 工具和预期由场景配置，执行模式由 --mode 选择。
+本地附件直接在消息的文件块中填写 path，加载后转换为标准 data。
+内置场景见 scenarios/probe，格式见 docs/probe.md。
 真实请求可能产生 API 费用；只有显式运行本命令才会发起调用。";
 
 pub(crate) fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
@@ -60,14 +61,18 @@ pub(crate) fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
 }
 
 fn execute(config: Config, reporter: Arc<Reporter>) -> ProbeResult<()> {
+    let scenario = Scenario::load(config.mode, &config.scenario_path)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("创建异步运行时失败: {e}"))?;
     runtime.block_on(async {
-        let model = factory::create(&config)?;
+        let model = factory::create(
+            &config,
+            std::time::Duration::from_secs(scenario.timeout_secs),
+        )?;
         tokio::select! {
-            result = runner::run(&config, model, reporter) => result,
+            result = runner::run(&config, &scenario, model, reporter) => result,
             signal = tokio::signal::ctrl_c() => {
                 signal.map_err(|e| format!("监听 Ctrl+C 失败: {e}"))?;
                 Err("联调已取消".into())

@@ -46,6 +46,8 @@ mod tests {
     use crate::probe::{args::Args, config::Config};
 
     fn args(values: &[&str]) -> Args {
+        let mut values = values.to_vec();
+        values.extend(["--scenario", "test.json"]);
         Args::parse(
             &values
                 .iter()
@@ -106,18 +108,17 @@ mod tests {
     }
 
     #[test]
-    fn custom_key_variables_and_provider_aliases_work_from_the_file() {
+    fn custom_key_variables_work_from_the_file_without_provider_fallbacks() {
         let local = LocalEnv::parse(
-            "OPENAI_MODEL=alias-model\nOPENAI_API_KEY=alias-key\nTEAM_KEY=team-key\n",
+            "PROBE_MODEL=local-model\nOPENAI_API_KEY=unused-key\nTEAM_KEY=team-key\n",
         )
         .unwrap();
-        let config = Config::resolve(args(&[]), |name| local.get(name, |_| None)).unwrap();
-        assert_eq!(config.api_key, "alias-key");
+        assert!(Config::resolve(args(&[]), |name| local.get(name, |_| None)).is_err());
         let config = Config::resolve(args(&["--api-key-env", "TEAM_KEY"]), |name| {
             local.get(name, |_| None)
         })
         .unwrap();
-        assert_eq!(config.model, "alias-model");
+        assert_eq!(config.model, "local-model");
         assert_eq!(config.api_key, "team-key");
     }
 

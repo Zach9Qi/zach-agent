@@ -1,0 +1,155 @@
+{
+  "schema_file": "schemas/attachment-summary.json",
+  "timeout_secs": 240,
+  "request": {
+    "prompt": {
+      "messages": [
+        {
+          "role": "system",
+          "content": "遵循用户要求，准确读取附件；要求 JSON 时只输出 JSON 对象，不要使用 Markdown 围栏。"
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "文本校验码：青竹。读取全部附件，分别返回 image_a、image_b、report_a、report_b 四个数字，以及它们的总和 total；text_code 为文本校验码。只输出这六个字段组成的 JSON 对象。先读取附件，再调用 add 工具：参数 a 必须是两张图片的数值之和，参数 b 必须是两份报告的数值之和。根据工具结果填写 total。"
+            },
+            {
+              "type": "file",
+              "media_type": "image/png",
+              "filename": "image-a.png",
+              "path": "fixtures/image-a.png"
+            },
+            {
+              "type": "file",
+              "media_type": "application/pdf",
+              "filename": "report-a.pdf",
+              "path": "fixtures/report-a.pdf"
+            },
+            {
+              "type": "text",
+              "text": "下面是第二组附件，请全部纳入汇总。"
+            },
+            {
+              "type": "file",
+              "media_type": "image/png",
+              "filename": "image-b.png",
+              "path": "fixtures/image-b.png"
+            },
+            {
+              "type": "file",
+              "media_type": "application/pdf",
+              "filename": "report-b.pdf",
+              "path": "fixtures/report-b.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    "max_output_tokens": 8192,
+    "reasoning": "high",
+    "tool_choice": {
+      "type": "tool",
+      "tool_name": "add"
+    },
+    "provider_options": {
+      "openai": {
+        "reasoning": {
+          "summary": "auto"
+        }
+      }
+    }
+  },
+  "agent": {
+    "tools": [
+      "add"
+    ],
+    "max_steps": 4,
+    "next_tool_choice": {
+      "type": "none"
+    }
+  },
+  "expect": [
+    {
+      "type": "finish_reason",
+      "value": "stop"
+    },
+    {
+      "type": "json_type",
+      "pointer": "",
+      "kind": "object"
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/image_a",
+      "value": 137
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/image_b",
+      "value": 263
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/report_a",
+      "value": 421
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/report_b",
+      "value": 89
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/total",
+      "value": 910
+    },
+    {
+      "type": "json_equals",
+      "pointer": "/text_code",
+      "value": "青竹"
+    },
+    {
+      "type": "reasoning",
+      "evidence": "summary"
+    },
+    {
+      "type": "event",
+      "event": "reasoning_delta",
+      "min": 1
+    },
+    {
+      "type": "tool_call",
+      "name": "add",
+      "input": {
+        "a": 400,
+        "b": 510
+      }
+    },
+    {
+      "type": "tool_result",
+      "name": "add",
+      "value": {
+        "sum": 910
+      }
+    },
+    {
+      "type": "steps",
+      "min": 2,
+      "max": 2
+    },
+    {
+      "type": "replay",
+      "content": "input"
+    },
+    {
+      "type": "replay",
+      "content": "reasoning"
+    },
+    {
+      "type": "replay",
+      "content": "tool_results"
+    }
+  ]
+}

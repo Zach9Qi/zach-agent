@@ -3,18 +3,22 @@
 use super::{
     agent,
     config::{Config, Mode},
+    expect,
     observe::ObservedModel,
     output::Reporter,
+    scenario::Scenario,
+    trace::{Outcome, SharedTrace},
     ProbeResult,
 };
 use futures::StreamExt;
 use serde_json::json;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::time::{timeout, Instant};
-use zach_ai_core::{LanguageModel, Message, StreamAccumulator, UnifiedFinishReason};
+use zach_ai_core::{LanguageModel, StreamAccumulator, UnifiedFinishReason};
 
 pub(super) async fn run(
     config: &Config,
+    scenario: &Scenario,
     model: Arc<dyn LanguageModel>,
     reporter: Arc<Reporter>,
 ) -> ProbeResult<()> {
@@ -23,29 +27,37 @@ pub(super) async fn run(
         &json!({
             "protocol": config.protocol, "mode": config.mode,
             "model": config.model, "base_url": config.base_url,
-            "timeout_secs": config.timeout.as_secs(),
+            "scenario": config.scenario_path, "timeout_secs": scenario.timeout_secs,
         }),
     );
     reporter.check()?;
-    let limit = if config.mode == Mode::Agent {
-        config.max_steps
-    } else {
-        1
-    };
-    let model = Arc::new(ObservedModel::new(model, reporter.clone(), limit));
+    let trace = SharedTrace::default();
+    let model = Arc::new(ObservedModel::new(
+        model,
+        reporter.clone(),
+        scenario.max_steps(config.mode),
+        trace.clone(),
+    ));
     let start = Instant::now();
-    let result = timeout(config.timeout, async {
-        if config.mode == Mode::Agent {
-            agent::run(config, model, reporter.clone()).await
+    let result = timeout(Duration::from_secs(scenario.timeout_secs), async {
+        let outcome = if config.mode == Mode::Agent {
+            agent::run(scenario, model, reporter.clone()).await?
         } else {
-            single(config, model, &reporter).await
+            single(config.mode, scenario, model, &reporter).await?
+        };
+        let trace = trace.lock().expect("观察记录锁中毒");
+        // 任何一轮错误或缺少结束事件都不能被宽松的内容断言掩盖。
+        for call in &trace.calls {
+            let result = call.result.as_ref().ok_or("模型响应没有完整收尾")?;
+            require_complete(result.finish_reason.unified)?;
         }
+        expect::verify(&scenario.expect, &outcome, &trace, &reporter)
     })
     .await
     .unwrap_or_else(|_| {
         Err(format!(
             "联调超过 {} 秒，已停止本地调用",
-            config.timeout.as_secs()
+            scenario.timeout_secs
         ))
     });
     reporter.emit(
@@ -59,13 +71,13 @@ pub(super) async fn run(
 }
 
 async fn single(
-    config: &Config,
+    mode: Mode,
+    scenario: &Scenario,
     model: Arc<dyn LanguageModel>,
     reporter: &Reporter,
-) -> ProbeResult<()> {
-    let mut options = config.options.clone();
-    options.prompt = vec![Message::user(&config.prompt)].into();
-    let result = match config.mode {
+) -> ProbeResult<Outcome> {
+    let options = scenario.request.clone();
+    let result = match mode {
         Mode::Generate => model
             .do_generate(options)
             .await
@@ -83,25 +95,27 @@ async fn single(
                 }
                 reporter.check()?;
             }
-            let result = accumulator.finish();
-            reporter.emit("model_result", &result);
-            result
+            accumulator.finish()
         }
         Mode::Agent => unreachable!("Agent 由独立流程处理"),
     };
-    require_stop(result.finish_reason.unified)?;
-    if result.text().trim().is_empty() {
-        return Err("模型正常收尾但没有文本输出，请检查事件和模型配置".into());
-    }
-    Ok(())
+    Ok(Outcome {
+        text: result.text(),
+        finish_reason: result.finish_reason.unified,
+        messages: vec![result.into_assistant_message()],
+        steps: 1,
+    })
 }
 
-pub(super) fn require_stop(reason: UnifiedFinishReason) -> ProbeResult<()> {
-    if reason == UnifiedFinishReason::Stop {
-        Ok(())
-    } else {
+fn require_complete(reason: UnifiedFinishReason) -> ProbeResult<()> {
+    if matches!(
+        reason,
+        UnifiedFinishReason::Error | UnifiedFinishReason::Unknown
+    ) {
         Err(format!(
             "联调未正常完成，结束原因: {reason:?}；请检查前面的事件和用量"
         ))
+    } else {
+        Ok(())
     }
 }

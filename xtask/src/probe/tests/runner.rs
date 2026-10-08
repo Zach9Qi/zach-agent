@@ -9,17 +9,33 @@ use zach_ai_core::{
 };
 
 #[tokio::test]
-async fn generate_and_stream_share_the_same_model_contract_and_finish_report() {
-    for mode in ["generate", "stream"] {
-        let config = config(&["--mode", mode, "--prompt", "请求"]);
+async fn one_scenario_uses_the_cli_selected_execution_mode_and_reports_it() {
+    let scenario = scenario("stream");
+    for mode in ["generate", "stream", "agent"] {
+        let config = config(&["--mode", mode]);
         let model = Model::new(vec![Script::Reply(text_reply("回复"))]);
         let (output, buffer) = output();
-        run(&config, model.clone(), output).await.unwrap();
+        run(&config, &scenario, model.clone(), output)
+            .await
+            .unwrap();
         let requests = model.requests.lock().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].prompt.messages, vec![Message::user("请求")]);
         assert_eq!(requests[0].max_output_tokens, Some(4096));
         let logs = buffer.lines();
+        assert_eq!(logs[0]["data"]["mode"], mode);
+        assert_eq!(
+            *model.methods.lock().unwrap(),
+            [if mode == "generate" {
+                "generate"
+            } else {
+                "stream"
+            }]
+        );
+        assert_eq!(
+            logs.iter().any(|v| v["type"] == "agent_result"),
+            mode == "agent"
+        );
         assert_eq!(logs.last().unwrap()["type"], "probe_finish");
         assert_eq!(logs.last().unwrap()["data"]["success"], true);
         assert_eq!(
@@ -36,12 +52,15 @@ async fn generate_and_stream_share_the_same_model_contract_and_finish_report() {
 #[tokio::test]
 async fn agent_executes_add_and_returns_the_result_in_the_next_request() {
     let config = config(&["--mode", "agent"]);
+    let scenario = scenario("agent");
     let model = Model::new(vec![
         Script::Reply(tool_reply("call_1")),
         Script::Reply(text_reply("42")),
     ]);
     let (output, buffer) = output();
-    run(&config, model.clone(), output).await.unwrap();
+    run(&config, &scenario, model.clone(), output)
+        .await
+        .unwrap();
     let requests = model.requests.lock().unwrap();
     assert_eq!(requests.len(), 2);
     assert_eq!(requests[0].tool_choice, Some(ToolChoice::specific("add")));
@@ -64,24 +83,29 @@ async fn agent_executes_add_and_returns_the_result_in_the_next_request() {
 #[tokio::test]
 async fn agent_without_a_successful_tool_roundtrip_fails_the_probe() {
     let config = config(&["--mode", "agent"]);
+    let scenario = scenario("agent");
     let model = Model::new(vec![Script::Reply(text_reply("42"))]);
     let (output, buffer) = output();
-    assert!(run(&config, model, output)
+    assert!(run(&config, &scenario, model, output)
         .await
         .unwrap_err()
-        .contains("完整工具链路"));
+        .contains("断言失败"));
     assert_eq!(buffer.lines().last().unwrap()["data"]["success"], false);
 }
 
 #[tokio::test]
 async fn agent_stops_requesting_after_the_configured_call_limit() {
-    let config = config(&["--mode", "agent", "--max-steps", "2"]);
+    let config = config(&["--mode", "agent"]);
+    let mut scenario = scenario("agent");
+    scenario.agent.as_mut().unwrap().max_steps = 2;
     let model = Model::new(vec![
         Script::Reply(tool_reply("call_1")),
         Script::Reply(tool_reply("call_2")),
     ]);
     let (output, _) = output();
-    let error = run(&config, model.clone(), output).await.unwrap_err();
+    let error = run(&config, &scenario, model.clone(), output)
+        .await
+        .unwrap_err();
     assert!(error.contains("调用上限"));
     assert_eq!(model.requests.lock().unwrap().len(), 2);
 }
@@ -89,12 +113,19 @@ async fn agent_stops_requesting_after_the_configured_call_limit() {
 #[tokio::test(start_paused = true)]
 async fn every_mode_obeys_the_whole_probe_deadline() {
     for mode in ["generate", "stream", "agent"] {
-        let config = config(&["--mode", mode, "--timeout-secs", "1"]);
+        let config = config(&["--mode", mode]);
+        let mut scenario = scenario(mode);
+        scenario.timeout_secs = 1;
         let (output, buffer) = output();
         let start = tokio::time::Instant::now();
-        let error = run(&config, Model::new(vec![Script::Pending]), output)
-            .await
-            .unwrap_err();
+        let error = run(
+            &config,
+            &scenario,
+            Model::new(vec![Script::Pending]),
+            output,
+        )
+        .await
+        .unwrap_err();
         assert!(error.contains("超过 1 秒"));
         assert_eq!(start.elapsed(), std::time::Duration::from_secs(1));
         assert_eq!(buffer.lines().last().unwrap()["data"]["success"], false);
@@ -103,7 +134,8 @@ async fn every_mode_obeys_the_whole_probe_deadline() {
 
 #[tokio::test]
 async fn semantic_errors_truncation_and_empty_answers_never_report_success() {
-    let config = config(&["--mode", "stream"]);
+    let config = config(&[]);
+    let scenario = scenario("stream");
     let mut truncated = text_reply("半截");
     if let StreamPart::Finish { finish_reason, .. } = &mut truncated[1] {
         finish_reason.unified = UnifiedFinishReason::Length;
@@ -115,19 +147,27 @@ async fn semantic_errors_truncation_and_empty_answers_never_report_success() {
     failed.extend(text_reply("诊断"));
     for parts in [truncated, failed, text_reply(""), vec![]] {
         let (output, buffer) = output();
-        assert!(run(&config, Model::new(vec![Script::Reply(parts)]), output)
-            .await
-            .is_err());
+        assert!(run(
+            &config,
+            &scenario,
+            Model::new(vec![Script::Reply(parts)]),
+            output
+        )
+        .await
+        .is_err());
         assert_eq!(buffer.lines().last().unwrap()["data"]["success"], false);
     }
 }
 
 #[tokio::test]
 async fn transport_failure_keeps_partial_output_and_is_not_retried() {
-    let config = config(&["--mode", "stream"]);
+    let config = config(&[]);
+    let scenario = scenario("stream");
     let model = Model::new(vec![Script::TransportFailure]);
     let (output, buffer) = output();
-    assert!(run(&config, model.clone(), output).await.is_err());
+    assert!(run(&config, &scenario, model.clone(), output)
+        .await
+        .is_err());
     assert_eq!(model.requests.lock().unwrap().len(), 1);
     assert!(buffer.lines().iter().any(|v| v["type"] == "partial_result"));
 }
@@ -135,8 +175,11 @@ async fn transport_failure_keeps_partial_output_and_is_not_retried() {
 #[tokio::test]
 async fn closed_output_prevents_a_network_call_from_starting() {
     let config = config(&[]);
+    let scenario = scenario("stream");
     let model = Model::new(vec![]);
     let output = Arc::new(Reporter::new(BrokenWriter, String::new()));
-    assert!(run(&config, model.clone(), output).await.is_err());
+    assert!(run(&config, &scenario, model.clone(), output)
+        .await
+        .is_err());
     assert!(model.requests.lock().unwrap().is_empty());
 }

@@ -1,6 +1,6 @@
 //! 纯内存诊断输出和脚本模型，不读取进程环境或访问网络。
 
-use super::super::{args::Args, config::Config, output::Reporter};
+use super::super::{args::Args, config::Config, output::Reporter, scenario::Scenario};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::{
@@ -45,9 +45,38 @@ pub(super) fn output() -> (Arc<Reporter>, Buffer) {
 }
 
 pub(super) fn args(values: &[&str]) -> Args {
-    Args::parse(&values.iter().map(|s| (*s).into()).collect::<Vec<_>>())
-        .unwrap()
-        .unwrap()
+    let mut values: Vec<String> = values.iter().map(|s| (*s).into()).collect();
+    if !values.iter().any(|s| s.starts_with("--scenario")) {
+        values.extend(["--scenario".into(), "test.json".into()]);
+    }
+    Args::parse(&values).unwrap().unwrap()
+}
+
+pub(super) fn scenario(mode: &str) -> Scenario {
+    let mut value = json!({
+        "request": {"prompt": {"messages": [{"role":"user", "content":[{"type":"text", "text":"请求"}]}]}, "max_output_tokens":4096},
+        "expect": [{"type":"finish_reason", "value":"stop"}, {"type":"text_nonempty"}]
+    });
+    if mode == "agent" {
+        value["agent"] = json!({"tools":["add"], "next_tool_choice":{"type":"none"}});
+        value["request"]["tool_choice"] = json!({"type":"tool","tool_name":"add"});
+        value["expect"].as_array_mut().unwrap().extend([
+            json!({"type":"tool_result", "name":"add", "value":{"sum":42}}),
+            json!({"type":"replay", "content":"tool_results"}),
+            json!({"type":"steps", "min":2,"max":4}),
+        ]);
+    }
+    parse_scenario(mode, value)
+}
+
+pub(super) fn parse_scenario(mode: &str, value: Value) -> Scenario {
+    Scenario::parse(
+        config(&["--mode", mode]).mode,
+        &value.to_string(),
+        std::path::Path::new("scenarios/test.json"),
+        |_| panic!("该场景不应读取文件"),
+    )
+    .unwrap()
 }
 
 pub(super) fn config(values: &[&str]) -> Config {
@@ -68,6 +97,7 @@ pub(super) enum Script {
 pub(super) struct Model {
     scripts: Mutex<VecDeque<Script>>,
     pub(super) requests: Mutex<Vec<CallOptions>>,
+    pub(super) methods: Mutex<Vec<&'static str>>,
 }
 
 impl Model {
@@ -75,6 +105,7 @@ impl Model {
         Arc::new(Self {
             scripts: Mutex::new(scripts.into()),
             requests: Mutex::new(vec![]),
+            methods: Mutex::new(vec![]),
         })
     }
 
@@ -98,6 +129,7 @@ impl LanguageModel for Model {
     }
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
+        self.methods.lock().unwrap().push("generate");
         match self.next(options) {
             Script::Reply(parts) => {
                 let mut accumulator = StreamAccumulator::new();
@@ -115,6 +147,7 @@ impl LanguageModel for Model {
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
+        self.methods.lock().unwrap().push("stream");
         Ok(match self.next(options) {
             Script::Reply(parts) => Box::pin(futures::stream::iter(parts.into_iter().map(Ok))),
             Script::Pending => Box::pin(futures::stream::pending()),

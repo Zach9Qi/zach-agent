@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "image_a": {
+      "type": "integer",
+      "format": "int64",
+      "description": "第一张图片中的数值。"
+    },
+    "image_b": {
+      "type": "integer",
+      "format": "int64",
+      "description": "第二张图片中的数值。"
+    },
+    "report_a": {
+      "type": "integer",
+      "format": "int64",
+      "description": "第一份报告中的数值。"
+    },
+    "report_b": {
+      "type": "integer",
+      "format": "int64",
+      "description": "第二份报告中的数值。"
+    },
+    "total": {
+      "type": "integer",
+      "format": "int64",
+      "description": "全部附件数值之和。"
+    },
+    "text_code": {
+      "type": "string",
+      "description": "用户正文提供的校验码。"
+    }
+  },
+  "required": [
+    "image_a",
+    "image_b",
+    "report_a",
+    "report_b",
+    "total",
+    "text_code"
+  ],
+  "description": "混合附件的逐项读取结果及汇总。",
+  "title": "AttachmentSummary",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

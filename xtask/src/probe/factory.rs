@@ -4,13 +4,13 @@ use super::{
     config::{Config, Protocol},
     ProbeResult,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use zach_ai::OpenAiResponsesModel;
 use zach_ai_core::LanguageModel;
 
-pub(super) fn create(config: &Config) -> ProbeResult<Arc<dyn LanguageModel>> {
+pub(super) fn create(config: &Config, timeout: Duration) -> ProbeResult<Arc<dyn LanguageModel>> {
     let client = reqwest::Client::builder()
-        .timeout(config.timeout)
+        .timeout(timeout)
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
     match config.protocol {

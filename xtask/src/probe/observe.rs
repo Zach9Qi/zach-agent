@@ -1,6 +1,6 @@
 //! 包装统一模型接口，记录实际调用参数并限制联调调用次数。
 
-use super::output::Reporter;
+use super::{output::Reporter, trace::SharedTrace};
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::json;
@@ -10,6 +10,7 @@ use std::sync::{
 };
 use zach_ai_core::{
     CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
+    StreamAccumulator,
 };
 
 pub(super) struct ObservedModel {
@@ -17,6 +18,7 @@ pub(super) struct ObservedModel {
     reporter: Arc<Reporter>,
     calls: AtomicUsize,
     limit: usize,
+    trace: SharedTrace,
 }
 
 impl ObservedModel {
@@ -24,16 +26,18 @@ impl ObservedModel {
         inner: Arc<dyn LanguageModel>,
         reporter: Arc<Reporter>,
         limit: usize,
+        trace: SharedTrace,
     ) -> Self {
         Self {
             inner,
             reporter,
             calls: AtomicUsize::new(0),
             limit,
+            trace,
         }
     }
 
-    fn request(&self, options: &CallOptions, mode: &str) -> Result<(), ModelError> {
+    fn request(&self, options: &CallOptions, mode: &str) -> Result<usize, ModelError> {
         let call = self.calls.fetch_add(1, Ordering::Relaxed);
         if call >= self.limit {
             return Err(ModelError::InvalidRequest(format!(
@@ -48,11 +52,8 @@ impl ObservedModel {
                 "provider": self.provider(), "options": options,
             }),
         );
-        self.reporter.check().map_err(ModelError::Other)
-    }
-
-    fn error(&self, error: &ModelError) {
-        report_error(&self.reporter, error);
+        self.reporter.check().map_err(ModelError::Other)?;
+        Ok(self.trace.lock().expect("观察记录锁中毒").request(options))
     }
 }
 
@@ -72,33 +73,52 @@ impl LanguageModel for ObservedModel {
     }
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
-        self.request(&options, "generate")?;
+        let call = self.request(&options, "generate")?;
         match self.inner.do_generate(options).await {
             Ok(result) => {
                 self.reporter.emit("model_result", &result);
+                self.trace.lock().expect("观察记录锁中毒").calls[call].result =
+                    Some(result.clone());
                 Ok(result)
             }
             Err(error) => {
-                self.error(&error);
+                report_error(&self.reporter, &error);
                 Err(error)
             }
         }
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
-        self.request(&options, "stream")?;
+        let call = self.request(&options, "stream")?;
         let stream = match self.inner.do_stream(options).await {
             Ok(stream) => stream,
             Err(error) => {
-                self.error(&error);
+                report_error(&self.reporter, &error);
                 return Err(error);
             }
         };
         let reporter = self.reporter.clone();
-        Ok(Box::pin(stream.inspect(move |part| match part {
-            Ok(part) => reporter.emit("stream_part", part),
-            Err(error) => report_error(&reporter, error),
-        })))
+        let trace = self.trace.clone();
+        Ok(Box::pin(futures::stream::unfold(
+            (stream, StreamAccumulator::new(), reporter, trace),
+            move |(mut stream, mut accumulator, reporter, trace)| async move {
+                let Some(part) = stream.next().await else {
+                    let result = accumulator.finish();
+                    reporter.emit("model_result", &result);
+                    trace.lock().expect("观察记录锁中毒").calls[call].result = Some(result);
+                    return None;
+                };
+                match &part {
+                    Ok(part) => {
+                        reporter.emit("stream_part", part);
+                        trace.lock().expect("观察记录锁中毒").event(call, part);
+                        accumulator.process(part.clone());
+                    }
+                    Err(error) => report_error(&reporter, error),
+                }
+                Some((part, (stream, accumulator, reporter, trace)))
+            },
+        )))
     }
 }
 

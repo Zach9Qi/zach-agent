@@ -1,12 +1,11 @@
 //! 联调命令参数解析，不读取环境变量，也不创建网络客户端。
 
 use super::ProbeResult;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub(super) struct Args {
-    pub(super) values: HashMap<String, String>,
-    pub(super) raw: bool,
+    values: HashMap<String, String>,
 }
 
 impl Args {
@@ -15,7 +14,6 @@ impl Args {
             return Ok(None);
         }
         let mut parsed = Self::default();
-        let mut seen = HashSet::new();
         let mut args = args.iter();
         while let Some(arg) = args.next() {
             let (name, inline) = arg
@@ -23,38 +21,21 @@ impl Args {
                 .map_or((arg.as_str(), None), |(k, v)| (k, Some(v)));
             if !matches!(
                 name,
-                "--protocol"
-                    | "--mode"
-                    | "--model"
-                    | "--base-url"
-                    | "--api-key-env"
-                    | "--prompt"
-                    | "--timeout-secs"
-                    | "--max-steps"
-                    | "--max-output-tokens"
-                    | "--raw"
+                "--protocol" | "--mode" | "--scenario" | "--model" | "--base-url" | "--api-key-env"
             ) {
                 return Err(
                     "存在未知参数，请运行 cargo xtask probe --help；密钥应通过环境变量提供".into(),
                 );
             }
-            if !seen.insert(name.to_owned()) {
+            let key = name.trim_start_matches("--");
+            if parsed.values.contains_key(key) {
                 return Err(format!("参数 {name} 重复指定"));
-            }
-            if name == "--raw" {
-                if inline.is_some() {
-                    return Err("--raw 不接受参数值".into());
-                }
-                parsed.raw = true;
-                continue;
             }
             let value = inline
                 .or_else(|| args.next().map(String::as_str))
                 .filter(|v| !v.trim().is_empty() && !v.starts_with("--"))
                 .ok_or_else(|| format!("{name} 缺少参数值"))?;
-            parsed
-                .values
-                .insert(name.trim_start_matches("--").into(), value.into());
+            parsed.values.insert(key.into(), value.into());
         }
         Ok(Some(parsed))
     }
