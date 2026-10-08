@@ -3,3 +3,6 @@
 //! 只通过 crate 公开 API 验证对外契约。
 
 mod catalog;
+
+#[cfg(feature = "openai-responses")]
+mod responses;

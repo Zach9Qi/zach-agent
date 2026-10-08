@@ -3,3 +3,8 @@
 pub mod catalog;
 
 pub use catalog::ModelCatalog;
+
+#[cfg(feature = "openai-responses")]
+pub mod responses;
+#[cfg(feature = "openai-responses")]
+pub use responses::OpenAiResponsesModel;
