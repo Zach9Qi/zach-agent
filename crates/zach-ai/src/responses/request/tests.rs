@@ -122,9 +122,13 @@ fn tools_and_json_modes_use_responses_shapes() {
         json!({"type": "function", "name": "add"})
     );
     assert_eq!(body["text"]["format"]["type"], "json_object");
-    options.response_format = Some(ResponseFormat::json_schema(json!({"type": "object"})));
+    let schema = json!({"type":"object", "properties":{"value":{"type":"integer"}},
+        "required":["value"], "additionalProperties":false});
+    options.response_format = Some(ResponseFormat::json_schema(schema.clone()));
     let body = build_request("model", &options, false).unwrap();
     assert_eq!(body["text"]["format"]["type"], "json_schema");
+    assert_eq!(body["text"]["format"]["schema"], schema);
+    assert_eq!(body["text"]["format"]["strict"], true);
     assert!(body["text"]["format"].get("description").is_none());
 }
 
