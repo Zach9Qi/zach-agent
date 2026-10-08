@@ -7,7 +7,18 @@ license.workspace = true
 publish = false
 
 [dependencies]
+dotenvy = "0.15.7"
 zach-ai-core.workspace = true
+zach-ai.workspace = true
+zach-agent.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+schemars.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 reqwest = { workspace = true, features = ["blocking", "json", "rustls"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
