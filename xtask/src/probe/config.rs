@@ -10,6 +10,8 @@ pub(super) enum Protocol {
     OpenAiResponses,
     #[serde(rename = "openai-chat")]
     OpenAiChat,
+    #[serde(rename = "anthropic-messages")]
+    AnthropicMessages,
 }
 
 impl Protocol {
@@ -17,10 +19,10 @@ impl Protocol {
         match value {
             "openai-responses" => Ok(Self::OpenAiResponses),
             "openai-chat" => Ok(Self::OpenAiChat),
-            "anthropic-messages" => {
-                Err("该协议尚未实现；当前可用协议为 openai-responses、openai-chat".into())
-            }
-            _ => Err("未知协议；当前可用协议为 openai-responses、openai-chat".into()),
+            "anthropic-messages" => Ok(Self::AnthropicMessages),
+            _ => Err(
+                "未知协议；当前可用协议为 openai-responses、openai-chat、anthropic-messages".into(),
+            ),
         }
     }
 
@@ -28,6 +30,16 @@ impl Protocol {
         match self {
             Self::OpenAiResponses => "https://api.openai.com/v1",
             Self::OpenAiChat => "https://api.openai.com/v1",
+            Self::AnthropicMessages => "https://api.anthropic.com",
+        }
+    }
+
+    /// 适配器自动追加的端点后缀；根地址不应再包含它。
+    fn endpoint_suffix(self) -> &'static str {
+        match self {
+            Self::OpenAiResponses => "/responses",
+            Self::OpenAiChat => "/chat/completions",
+            Self::AnthropicMessages => "/messages",
         }
     }
 }
@@ -87,9 +99,7 @@ impl Config {
             return Err("根地址须为 HTTP(S) URL，不能包含用户名、密码、查询或片段".into());
         }
         let base_url = base_url.trim_end_matches('/').to_owned();
-        if (protocol == Protocol::OpenAiResponses && base_url.ends_with("/responses"))
-            || (protocol == Protocol::OpenAiChat && base_url.ends_with("/chat/completions"))
-        {
+        if base_url.ends_with(protocol.endpoint_suffix()) {
             return Err("根地址不应包含协议端点后缀，适配器会自动追加".into());
         }
         let api_key = env(args.get("api-key-env").unwrap_or("PROBE_API_KEY"))

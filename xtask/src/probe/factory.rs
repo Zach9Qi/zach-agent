@@ -5,7 +5,7 @@ use super::{
     ProbeResult,
 };
 use std::{sync::Arc, time::Duration};
-use zach_ai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
+use zach_ai::{AnthropicMessagesModel, OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use zach_ai_core::LanguageModel;
 
 pub(super) fn create(config: &Config, timeout: Duration) -> ProbeResult<Arc<dyn LanguageModel>> {
@@ -20,6 +20,10 @@ pub(super) fn create(config: &Config, timeout: Duration) -> ProbeResult<Arc<dyn 
         )),
         Protocol::OpenAiChat => Ok(Arc::new(
             OpenAiChatCompletionsModel::with_client(client, &config.api_key, &config.model)
+                .with_base_url(&config.base_url),
+        )),
+        Protocol::AnthropicMessages => Ok(Arc::new(
+            AnthropicMessagesModel::with_client(client, &config.api_key, &config.model)
                 .with_base_url(&config.base_url),
         )),
     }

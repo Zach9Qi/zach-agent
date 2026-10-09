@@ -15,6 +15,18 @@ fn help_and_chat_protocol_are_accepted_before_credentials_validation() {
     )
     .unwrap();
     assert_eq!(result.protocol, Protocol::OpenAiChat);
+    let result = Config::resolve(
+        args(&["--protocol", "anthropic-messages", "--model", "claude"]),
+        |name| (name == "PROBE_API_KEY").then(|| "secret".into()),
+    )
+    .unwrap();
+    assert_eq!(result.protocol, Protocol::AnthropicMessages);
+    assert_eq!(result.base_url, "https://api.anthropic.com");
+    assert!(Config::resolve(
+        args(&["--protocol", "unknown", "--model", "m"]),
+        |_| panic!("未知协议不能读取凭据")
+    )
+    .is_err());
 }
 
 #[test]
@@ -128,6 +140,16 @@ fn invalid_flags_ranges_and_sensitive_urls_fail_before_running() {
     ] {
         assert!(Config::resolve(args(&values), |_| Some("placeholder".into())).is_err());
     }
+    assert!(Config::resolve(
+        args(&[
+            "--protocol",
+            "anthropic-messages",
+            "--base-url",
+            "https://example.com/v1/messages"
+        ]),
+        |_| Some("placeholder".into())
+    )
+    .is_err());
     assert!(Config::resolve(args(&[]), |_| None).is_err());
 }
 

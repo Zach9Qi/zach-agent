@@ -6,10 +6,14 @@ use std::path::Path;
 #[test]
 fn every_bundled_scenario_loads_with_its_committed_files() {
     let all = [Mode::Generate, Mode::Stream, Mode::Agent];
-    let sources: [(&str, &[Mode]); 2] = [
+    let sources: [(&str, &[Mode]); 3] = [
         (include_str!("../../../../scenarios/probe/mixed.json"), &all),
         (
             include_str!("../../../../scenarios/probe/mixed-tools.json"),
+            &[Mode::Agent],
+        ),
+        (
+            include_str!("../../../../scenarios/probe/anthropic-tools.json"),
             &[Mode::Agent],
         ),
     ];

@@ -1,7 +1,8 @@
 # 真实 API 场景联调
 
 `cargo xtask probe --mode <模式> --scenario <场景.json>` 加载完整输入和预期，通过统一的
-`LanguageModel` / `run_agent_loop` 访问真实端点。当前支持 `openai-responses` 和 `openai-chat`。
+`LanguageModel` / `run_agent_loop` 访问真实端点。当前支持 `openai-responses`、`openai-chat`
+和 `anthropic-messages`。
 新增输入组合通常只需写 JSON；新增断言或可执行工具时才需扩展联调代码。
 
 ## 快速开始
@@ -240,8 +241,9 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 | --- | --- | --- |
 | `mixed.json` | 全部 | 文本＋两张图片＋两份 PDF，共享 Schema、逐项校验及求和 |
 | `mixed-tools.json` | `agent` | 共享 Schema＋混合附件＋按能力校验推理证据＋工具执行＋输入、推理、工具结果回传 |
+| `anthropic-tools.json` | `agent` | `mixed-tools.json` 的 Anthropic 变体：`tool_choice: auto`、不带 Schema，其余断言相同 |
 
-日常真实联调只维护这两份混合场景。需要定位某类输入的问题时，可以临时删减混合
+日常真实联调只维护这几份混合场景。需要定位某类输入的问题时，可以临时删减混合
 场景中的内容块和对应断言，无需长期维护文本、单图、单文件和单工具的重复案例。
 配置冲突、错误响应、超时等边界继续由确定性的离线测试覆盖。
 
@@ -251,6 +253,11 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 `mixed-tools.json` 对可见推理摘要、`reasoning_delta` 事件和推理历史回放使用
 `requires` 声明能力：Responses 适配器声明支持时会严格校验，Chat Completions 未声明时
 明确标记为跳过；输入和工具结果仍需在下一轮请求中完整回传。
+
+`anthropic-tools.json` 专用于 `--protocol anthropic-messages`：Anthropic 在强制 `tool_choice`
+的那一轮不会思考，且 JSON Schema 输出与工具调用叠加时模型常常跳过工具，因此该变体改用
+`tool_choice: auto` 并去掉 Schema（Schema 输出已由 `mixed.json` 在 Anthropic 上覆盖），
+使第一轮能同时产生思考块与工具调用，从而验证签名回放。
 
 测试附件已随仓库提供，无需 Python 即可联调。
 若需重新生成，可安装 Pillow 和 reportlab，执行
@@ -265,16 +272,17 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 
 | 配置 | 优先级 |
 | --- | --- |
-| 协议 | `--protocol`，可选 `openai-responses`、`openai-chat`，默认 `openai-responses` |
+| 协议 | `--protocol`，可选 `openai-responses`、`openai-chat`、`anthropic-messages`，默认 `openai-responses` |
 | 执行模式 | `--mode`，默认 `stream` |
 | 模型 | `--model` → `PROBE_MODEL`，无内置默认值 |
-| 根地址 | `--base-url` → `PROBE_BASE_URL` → `https://api.openai.com/v1` |
+| 根地址 | `--base-url` → `PROBE_BASE_URL` → 协议默认值（OpenAI `https://api.openai.com/v1`，Anthropic `https://api.anthropic.com`） |
 | 密钥 | 指定 `--api-key-env` 时只读指定变量；否则只读 `PROBE_API_KEY` |
 
 已移除 `OPENAI_MODEL`、`OPENAI_BASE_URL` 和 `OPENAI_API_KEY` 的自动回退。
 已有本地配置请改用 `PROBE_*`；`--api-key-env` 仍可显式选择任意密钥变量。
 
-根地址包含版本路径，但不能包含 `/responses`、认证信息、查询或片段。
+OpenAI 根地址包含版本路径，Anthropic 根地址不含 `/v1`；两者都不能包含 `/responses`、
+`/chat/completions`、`/messages` 等端点后缀、认证信息、查询或片段。
 显式空配置会报错，不会切换到另一组凭据。密钥不通过命令行参数或场景文件配置。
 `.env.local` 固定从仓库根目录读取；同名进程变量覆盖文件值，随后按上表选择变量。
 文件支持 dotenv 引号、注释、变量引用、重复声明（最后一次为准）、UTF-8 BOM 和 CRLF，
