@@ -178,15 +178,16 @@ Responses 适配器将带 Schema 的标准格式映射为 `text.format.type: jso
 | `text_equals` | `value`：回答去掉首尾空白后与给定文本相等 |
 | `json_equals` | `pointer`、`value`：将最后一轮回答整体解析为 JSON，指定节点精确相等 |
 | `json_type` | `pointer`、`kind`：节点类型为 `object/array/string/number/boolean/null` |
-| `reasoning` | `evidence`：`any/summary/tokens/metadata`，检查本次任一轮实际响应；可用 `requires` 声明所需能力 |
-| `event` | `event`、`min`：统一 `StreamPart` 事件名称及最少次数，仅用于流式或 Agent；可用 `requires` 声明所需能力 |
+| `reasoning` | `evidence`：`any/summary/tokens/metadata`，检查本次任一轮实际响应 |
+| `event` | `event`、`min`：统一 `StreamPart` 事件名称及最少次数，仅用于流式或 Agent |
 | `tool_call` | `name`、可选 `input`：本次模型实际调用指定工具，指定 input 时精确匹配 JSON |
 | `tool_result` | `name`、`value`：本次 Agent 新增的成功 JSON 工具结果精确匹配 |
 | `steps` | `min`、`max`：模型完成的轮数范围，包含边界 |
-| `replay` | `content`：`input/reasoning/tool_results`，检查 Agent 实际后续请求；可用 `requires` 声明所需能力 |
+| `replay` | `content`：`input/reasoning/tool_results`，检查 Agent 实际后续请求 |
 
-`requires` 可取 `reasoning_tokens`、`reasoning_summary`、`reasoning_stream` 或 `reasoning_replay`。适配器未声明所需能力时，输出会标记 `applicable: false`、`success: null` 和 `skipped_reason: unsupported_capability`。
-`requires` 只能用于对应的推理证据、`reasoning_delta` 事件或推理回放断言，不能用来跳过正文、JSON、工具或结束原因等基础断言。
+断言没有条件执行：写进 `expect` 的每一条都会评估并计入成败。协议不提供某类内容
+（例如 Chat Completions 没有可见推理摘要）时，不要在断言上加条件，而是为该协议单独维护
+一份场景文件、去掉对应断言（见内置案例）。旧的 `requires` 字段已删除，继续使用会报未知字段错误。
 
 `json_equals` 区分缺失字段、`null`、字符串和数字；根节点的 Pointer 使用空字符串。
 JSON 回答不能带 Markdown 围栏；可用 `request.response_format` 请求 JSON 输出。
@@ -196,13 +197,11 @@ JSON 回答不能带 Markdown 围栏；可用 `request.response_format` 请求 J
 `metadata` 要求推理内容块携带非空厂商元数据；`any` 满足其中任一项即可。
 模型可能没有可见摘要，但仍返回推理用量或加密推理项。
 `event` 使用 `reasoning_delta` 等统一名称，不使用厂商 SSE 名称。
-断言带 `requires` 时，只有适配器声明该能力才执行；能力支持后缺少事件仍会失败。
 
-执行方式由命令行决定；只有断言声明的能力未被适配器支持时才会跳过。`generate` 模式使用 `event`，
+执行方式由命令行决定。`generate` 模式使用 `event`，
 或非 `agent` 模式使用 `tool_result/replay`，都会在读取附件和调用模型前报错。
 
-`replay` 至少需要两次实际调用，且不能在没有对应内容时空判成功。
-若协议不提供该内容，可在断言上设置 `requires`，由适配器能力声明决定是否执行：
+`replay` 至少需要两次实际调用，且不能在没有对应内容时空判成功：
 
 - `input`：所有后续请求保留首轮完整消息前缀，包括附件字节、顺序及元数据。
 - `reasoning`：每轮输出的推理块在紧接着的请求中保留文本及完整厂商元数据。

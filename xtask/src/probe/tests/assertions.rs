@@ -2,7 +2,7 @@
 
 use super::{super::runner::run, support::*};
 use serde_json::{json, Value};
-use zach_ai_core::{ModelCapabilities, ReasoningCapabilities, StreamPart, Usage};
+use zach_ai_core::{StreamPart, Usage};
 
 async fn check(mode: &str, expect: Value, parts: Vec<StreamPart>) -> (bool, Buffer) {
     let scenario = parse_scenario(
@@ -119,87 +119,6 @@ async fn reasoning_tokens_metadata_and_visible_summary_are_distinct_evidence() {
             .0
         );
     }
-}
-
-#[tokio::test]
-async fn required_capabilities_skip_only_when_adapter_does_not_declare_them() {
-    let expect = json!([{"type":"reasoning","evidence":"summary","requires":"reasoning_summary"}]);
-    let token_only = {
-        let mut parts = text_reply("答案");
-        if let StreamPart::Finish { usage, .. } = &mut parts[1] {
-            usage.output_tokens.reasoning = Some(8);
-        }
-        parts
-    };
-    let (skipped_success, skipped_output) =
-        check("stream", expect.clone(), token_only.clone()).await;
-    assert!(skipped_success);
-    let skipped = skipped_output
-        .lines()
-        .into_iter()
-        .find(|line| line["type"] == "assertion_result")
-        .unwrap();
-    assert_eq!(skipped["data"]["applicable"], false);
-    assert_eq!(skipped["data"]["success"], Value::Null);
-    assert_eq!(skipped["data"]["skipped_reason"], "unsupported_capability");
-
-    let strict_scenario = parse_scenario(
-        "stream",
-        json!({
-            "request":{"prompt":{"messages":[{"role":"user","content":[{"type":"text","text":"问题"}]}]}},
-            "expect":expect.clone()
-        }),
-    );
-    let strict_model = Model::with_capabilities(
-        vec![Script::Reply(token_only)],
-        ModelCapabilities {
-            reasoning: ReasoningCapabilities {
-                summary: true,
-                ..ReasoningCapabilities::default()
-            },
-        },
-    );
-    let (reporter, _) = output();
-    assert!(!run(
-        &config(&["--mode", "stream"]),
-        &strict_scenario,
-        strict_model,
-        reporter,
-    )
-    .await
-    .is_ok());
-
-    let mut visible = text_reply("答案");
-    visible.insert(
-        0,
-        StreamPart::ReasoningDelta {
-            id: "r".into(),
-            delta: "摘要".into(),
-            provider_metadata: None,
-        },
-    );
-    let scenario = parse_scenario(
-        "stream",
-        json!({
-            "request":{"prompt":{"messages":[{"role":"user","content":[{"type":"text","text":"问题"}]}]}},
-            "expect":expect
-        }),
-    );
-    let (reporter, _) = output();
-    let model = Model::with_capabilities(
-        vec![Script::Reply(visible)],
-        ModelCapabilities {
-            reasoning: ReasoningCapabilities {
-                summary: true,
-                ..ReasoningCapabilities::default()
-            },
-        },
-    );
-    assert!(
-        run(&config(&["--mode", "stream"]), &scenario, model, reporter)
-            .await
-            .is_ok()
-    );
 }
 
 #[tokio::test]

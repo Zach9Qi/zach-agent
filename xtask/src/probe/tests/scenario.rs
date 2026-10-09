@@ -209,15 +209,7 @@ fn invalid_configuration_and_assertions_are_rejected_without_io() {
         ),
         (
             "/expect",
-            json!([{"type":"text_equals","value":"答案","requires":"reasoning_summary"}]),
-        ),
-        (
-            "/expect",
-            json!([{"type":"event","event":"text_delta","min":1,"requires":"reasoning_stream"}]),
-        ),
-        (
-            "/expect",
-            json!([{"type":"replay","content":"input","requires":"reasoning_replay"}]),
+            json!([{"type":"reasoning","evidence":"summary","requires":"reasoning_summary"}]),
         ),
         ("/expect", json!([{"type":"replay","content":"input"}])),
         ("/expect", json!([{"type":"text_nonempty","typo":true}])),

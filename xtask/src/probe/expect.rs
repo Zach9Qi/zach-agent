@@ -1,4 +1,4 @@
-//! 可组合的声明式断言，每条断言独立输出结果，任一适用断言失败则联调失败。
+//! 可组合的声明式断言，每条断言独立输出结果，任一断言失败则联调失败。
 
 mod replay;
 
@@ -10,22 +10,11 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use zach_ai_core::{
-    Message, ModelCapabilities, OutputContent, ToolPart, ToolResultOutput, UnifiedFinishReason,
-};
-
-#[derive(Deserialize, Serialize)]
-pub(super) struct Expectation {
-    #[serde(flatten)]
-    rule: Rule,
-    /// 仅在适配器声明该能力时执行；能力支持时断言仍然严格匹配。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    requires: Option<CapabilityRequirement>,
-}
+use zach_ai_core::{Message, OutputContent, ToolPart, ToolResultOutput, UnifiedFinishReason};
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-enum Rule {
+pub(super) enum Expectation {
     FinishReason {
         value: UnifiedFinishReason,
     },
@@ -71,31 +60,6 @@ enum Rule {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum CapabilityRequirement {
-    #[serde(rename = "reasoning_tokens")]
-    Tokens,
-    #[serde(rename = "reasoning_summary")]
-    Summary,
-    #[serde(rename = "reasoning_stream")]
-    Stream,
-    #[serde(rename = "reasoning_replay")]
-    Replay,
-}
-
-impl CapabilityRequirement {
-    fn supported_by(&self, capabilities: ModelCapabilities) -> bool {
-        let reasoning = capabilities.reasoning;
-        match self {
-            Self::Tokens => reasoning.tokens,
-            Self::Summary => reasoning.summary,
-            Self::Stream => reasoning.stream,
-            Self::Replay => reasoning.replay,
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub(super) enum ReasoningEvidence {
     Any,
     Summary,
@@ -116,55 +80,28 @@ pub(super) enum JsonKind {
 
 impl Expectation {
     pub(super) fn validate(&self, mode: Mode) -> ProbeResult<()> {
-        if let Some(required) = &self.requires {
-            let valid = match (&self.rule, required) {
-                (
-                    Rule::Reasoning { .. },
-                    CapabilityRequirement::Tokens | CapabilityRequirement::Summary,
-                ) => true,
-                (Rule::Event { event, .. }, CapabilityRequirement::Stream) => {
-                    event == "reasoning_delta"
-                }
-                (Rule::Replay { content }, CapabilityRequirement::Replay) => {
-                    matches!(content, replay::Content::Reasoning)
-                }
-                _ => false,
-            };
-            if !valid {
-                return Err(
-                    "requires 只能用于与能力对应的 reasoning、reasoning_delta event 或 reasoning replay 断言"
-                        .into(),
-                );
-            }
-        }
-        match &self.rule {
-            Rule::TextContains { value } if value.is_empty() => {
+        match self {
+            Self::TextContains { value } if value.is_empty() => {
                 Err("text_contains 不能匹配空字符串".into())
             }
-            Rule::JsonEquals { pointer, .. } | Rule::JsonType { pointer, .. }
+            Self::JsonEquals { pointer, .. } | Self::JsonType { pointer, .. }
                 if !valid_pointer(pointer) =>
             {
                 Err("JSON 断言必须使用有效 JSON Pointer，根节点使用空字符串".into())
             }
-            Rule::Steps { min, max } if *min == 0 || min > max => {
+            Self::Steps { min, max } if *min == 0 || min > max => {
                 Err("steps 必须满足 1 <= min <= max".into())
             }
-            Rule::Event { event, min }
+            Self::Event { event, min }
                 if mode == Mode::Generate || *min == 0 || event.is_empty() =>
             {
                 Err("event 断言仅用于 stream/agent，且事件名称非空、min 大于零".into())
             }
-            Rule::ToolResult { .. } | Rule::Replay { .. } if mode != Mode::Agent => {
+            Self::ToolResult { .. } | Self::Replay { .. } if mode != Mode::Agent => {
                 Err("tool_result/replay 断言仅适用于 agent 模式".into())
             }
             _ => Ok(()),
         }
-    }
-
-    fn applicable(&self, capabilities: ModelCapabilities) -> bool {
-        self.requires
-            .as_ref()
-            .is_none_or(|required| required.supported_by(capabilities))
     }
 
     fn matches(&self, outcome: &Outcome, trace: &Trace) -> bool {
@@ -174,15 +111,15 @@ impl Expectation {
             .filter_map(|c| c.result.as_ref())
             .collect();
         let parts: Vec<_> = results.iter().flat_map(|r| &r.content).collect();
-        match &self.rule {
-            Rule::FinishReason { value } => outcome.finish_reason == *value,
-            Rule::TextNonempty {} => !outcome.text.trim().is_empty(),
-            Rule::TextContains { value } => outcome.text.contains(value),
-            Rule::TextEquals { value } => outcome.text.trim() == value,
-            Rule::JsonEquals { pointer, value } => serde_json::from_str::<Value>(&outcome.text)
+        match self {
+            Self::FinishReason { value } => outcome.finish_reason == *value,
+            Self::TextNonempty {} => !outcome.text.trim().is_empty(),
+            Self::TextContains { value } => outcome.text.contains(value),
+            Self::TextEquals { value } => outcome.text.trim() == value,
+            Self::JsonEquals { pointer, value } => serde_json::from_str::<Value>(&outcome.text)
                 .ok()
                 .is_some_and(|json| json.pointer(pointer) == Some(value)),
-            Rule::JsonType { pointer, kind } => serde_json::from_str::<Value>(&outcome.text)
+            Self::JsonType { pointer, kind } => serde_json::from_str::<Value>(&outcome.text)
                 .ok()
                 .and_then(|json| json.pointer(pointer).cloned())
                 .is_some_and(|json| match kind {
@@ -193,7 +130,7 @@ impl Expectation {
                     JsonKind::Boolean => json.is_boolean(),
                     JsonKind::Null => json.is_null(),
                 }),
-            Rule::Reasoning { evidence } => {
+            Self::Reasoning { evidence } => {
                 let summary = parts.iter().any(|p| {
                     matches!(p, OutputContent::Reasoning { text, .. } if !text.trim().is_empty())
                 });
@@ -210,13 +147,13 @@ impl Expectation {
                     ReasoningEvidence::Metadata => metadata,
                 }
             }
-            Rule::Event { event, min } => trace
+            Self::Event { event, min } => trace
                 .calls
                 .iter()
                 .map(|c| c.events.get(event).copied().unwrap_or(0))
                 .sum::<usize>()
                 >= *min,
-            Rule::ToolCall { name, input } => parts.iter().any(|part| match part {
+            Self::ToolCall { name, input } => parts.iter().any(|part| match part {
                 OutputContent::ToolCall {
                     tool_name,
                     input: actual,
@@ -226,40 +163,32 @@ impl Expectation {
                 }),
                 _ => false,
             }),
-            Rule::ToolResult { name, value } => outcome.messages.iter().any(|message| {
+            Self::ToolResult { name, value } => outcome.messages.iter().any(|message| {
                 matches!(message, Message::Tool { content, .. } if content.iter().any(|p| matches!(
                     p, ToolPart::ToolResult { tool_name, output: ToolResultOutput::Json { value: actual, .. }, .. }
                     if tool_name == name && actual == value
                 )))
             }),
-            Rule::Steps { min, max } => (*min..=*max).contains(&outcome.steps),
-            Rule::Replay { content } => replay::matches(content, outcome, trace),
+            Self::Steps { min, max } => (*min..=*max).contains(&outcome.steps),
+            Self::Replay { content } => replay::matches(content, outcome, trace),
         }
     }
 }
 
 pub(super) fn verify(
     expect: &[Expectation],
-    capabilities: ModelCapabilities,
     outcome: &Outcome,
     trace: &Trace,
     reporter: &Reporter,
 ) -> ProbeResult<()> {
     let mut failed = Vec::new();
     for (index, assertion) in expect.iter().enumerate() {
-        let applicable = assertion.applicable(capabilities);
-        let success = applicable.then(|| assertion.matches(outcome, trace));
+        let success = assertion.matches(outcome, trace);
         reporter.emit(
             "assertion_result",
-            &serde_json::json!({
-                "index": index,
-                "expect": assertion,
-                "applicable": applicable,
-                "success": success,
-                "skipped_reason": (!applicable).then_some("unsupported_capability"),
-            }),
+            &serde_json::json!({"index": index, "expect": assertion, "success": success}),
         );
-        if success == Some(false) {
+        if !success {
             failed.push(index.to_string());
         }
     }
