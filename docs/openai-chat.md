@@ -29,12 +29,12 @@ while let Some(part) = stream.next().await {
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
 
-联调工具可以通过 `--protocol openai-chat` 选择该协议，根地址仍然不包含
+联调工具通过位置参数 `chat`（或 `--protocol openai-chat`）选择该协议，根地址仍然不包含
 `/chat/completions` 后缀。
 
 ```powershell
-cargo xtask probe --protocol openai-chat --mode stream --scenario scenarios/probe/mixed.json
-cargo xtask probe --protocol openai-chat --mode agent --scenario scenarios/probe/chat-tools.json
+cargo xtask probe chat            # 全套：generate、stream 用 mixed.json，agent 用 chat-tools.json
+cargo xtask probe chat agent      # 只跑 Agent 场景
 ```
 
 `chat-tools.json` 与 `responses-tools.json` 是同一任务：附件、函数调用、工具结果、两轮历史

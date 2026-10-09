@@ -58,6 +58,10 @@ mod tests {
         .unwrap()
     }
 
+    fn resolve(values: &[&str], env: impl Fn(&str) -> Option<String>) -> ProbeResult<Config> {
+        Config::resolve(args(values), env).map(|mut configs| configs.remove(0))
+    }
+
     #[test]
     fn dotenv_handles_bom_crlf_export_quotes_and_comments() {
         let source = "\u{feff}# 本地配置\r\n\
@@ -82,7 +86,7 @@ mod tests {
     #[test]
     fn file_only_configuration_can_create_a_probe_config() {
         let local = LocalEnv::parse("PROBE_MODEL=local-model\nPROBE_API_KEY=local-key\n").unwrap();
-        let config = Config::resolve(args(&[]), |name| local.get(name, |_| None)).unwrap();
+        let config = resolve(&[], |name| local.get(name, |_| None)).unwrap();
         assert_eq!(config.model, "local-model");
         assert_eq!(config.api_key, "local-key");
         assert_eq!(config.base_url, "https://api.openai.com/v1");
@@ -96,14 +100,13 @@ mod tests {
             "PROBE_API_KEY" => Some("env-key".into()),
             _ => None,
         };
-        let config = Config::resolve(args(&[]), |name| local.get(name, env)).unwrap();
+        let config = resolve(&[], |name| local.get(name, env)).unwrap();
         assert_eq!(config.model, "env-model");
         assert_eq!(config.api_key, "env-key");
-        let config =
-            Config::resolve(args(&["--model", "cli-model"]), |name| local.get(name, env)).unwrap();
+        let config = resolve(&["--model", "cli-model"], |name| local.get(name, env)).unwrap();
         assert_eq!(config.model, "cli-model");
         // 显式留空不能悄悄使用文件里的另一组凭据。
-        let empty = Config::resolve(args(&[]), |name| local.get(name, |_| Some(String::new())));
+        let empty = resolve(&[], |name| local.get(name, |_| Some(String::new())));
         assert!(empty.is_err());
     }
 
@@ -113,8 +116,8 @@ mod tests {
             "PROBE_MODEL=local-model\nOPENAI_API_KEY=unused-key\nTEAM_KEY=team-key\n",
         )
         .unwrap();
-        assert!(Config::resolve(args(&[]), |name| local.get(name, |_| None)).is_err());
-        let config = Config::resolve(args(&["--api-key-env", "TEAM_KEY"]), |name| {
+        assert!(resolve(&[], |name| local.get(name, |_| None)).is_err());
+        let config = resolve(&["--api-key-env", "TEAM_KEY"], |name| {
             local.get(name, |_| None)
         })
         .unwrap();

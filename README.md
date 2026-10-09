@@ -175,13 +175,14 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 
 ```powershell
 cargo xtask probe --help
-cargo xtask probe --mode generate --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode stream --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json
+cargo xtask probe anthropic                   # 全套：generate、stream、agent
+cargo xtask probe chat agent                  # 单个模式
+cargo xtask probe responses stream --scenario path/to/my.json
 ```
 
-在仓库根目录的 `.env.local` 中填写模型 ID 和凭据（可复制 `.env.local.example`，本地文件已被 Git 忽略）；
-使用 `PROBE_*` 连接配置。`--mode` 选择执行方式，默认 `stream`，同一场景可重复用于
+在仓库根目录的 `.env.local` 中按厂商填写模型 ID 和凭据（可复制 `.env.local.example`，本地文件已被 Git 忽略）：
+`responses/chat` 读取 `PROBE_OPENAI_*`，`anthropic` 读取 `PROBE_ANTHROPIC_*`，缺失时回退 `PROBE_*`。
+协议与模式是位置参数；省略模式时依次运行内置套件，同一场景可重复用于
 `generate/stream/agent`，无需为执行方式复制输入文件。
 场景中的 `request` 沿用标准 `CallOptions`，可组合文本、多图片、多文件与推理配置；
 本地附件直接在消息文件块中填写 `path`，加载器自动补齐标准 `data`。

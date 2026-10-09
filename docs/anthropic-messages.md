@@ -98,15 +98,13 @@ Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推�
 ## 联调
 
 ```powershell
-cargo xtask probe --protocol anthropic-messages --mode stream --scenario scenarios/probe/mixed.json
+cargo xtask probe anthropic           # 全套：generate、stream 用 mixed.json，agent 用 anthropic-tools.json
+cargo xtask probe anthropic stream    # 只跑流式混合场景
 ```
 
-根地址默认 `https://api.anthropic.com`，不应包含 `/v1/messages` 后缀。内置混合场景的
-`mixed.json` 可直接复用。Agent 场景请使用 Anthropic 专用的 `anthropic-tools.json`：
-
-```powershell
-cargo xtask probe --protocol anthropic-messages --mode agent --scenario scenarios/probe/anthropic-tools.json
-```
+连接配置读取 `PROBE_ANTHROPIC_*`（缺失时回退 `PROBE_*`）；根地址默认 `https://api.anthropic.com`，
+不应包含 `/v1/messages` 后缀。内置混合场景 `mixed.json` 可直接复用，Agent 场景使用 Anthropic
+专用的 `anthropic-tools.json`（`cargo xtask probe anthropic agent`）：
 
 `responses-tools.json` 第一轮强制 `tool_choice: add`，按上文限制该轮不会思考，`replay: reasoning`
 断言会按设计判失败；此外联调中观察到 JSON Schema 输出与工具叠加时，模型的思考虽决定调用

@@ -80,12 +80,14 @@ pub(super) fn parse_scenario(mode: &str, value: Value) -> Scenario {
 }
 
 pub(super) fn config(values: &[&str]) -> Config {
-    Config::resolve(args(values), |name| match name {
+    let mut configs = Config::resolve(args(values), |name| match name {
         "PROBE_MODEL" => Some("test-model".into()),
         "PROBE_API_KEY" => Some("test-secret".into()),
         _ => None,
     })
-    .unwrap()
+    .unwrap();
+    assert_eq!(configs.len(), 1, "测试辅助只用于单次运行配置");
+    configs.remove(0)
 }
 
 pub(super) enum Script {

@@ -1,34 +1,47 @@
 # 真实 API 场景联调
 
-`cargo xtask probe --mode <模式> --scenario <场景.json>` 加载完整输入和预期，通过统一的
+`cargo xtask probe [协议] [模式] [--scenario <场景.json>]` 加载完整输入和预期，通过统一的
 `LanguageModel` / `run_agent_loop` 访问真实端点。当前支持 `openai-responses`、`openai-chat`
-和 `anthropic-messages`。
+和 `anthropic-messages`（短别名 `responses`、`chat`、`anthropic`）。
 新增输入组合通常只需写 JSON；新增断言或可执行工具时才需扩展联调代码。
 
 ## 快速开始
 
-复制仓库根目录 `.env.local.example` 为 `.env.local`，填写连接信息：
+复制仓库根目录 `.env.local.example` 为 `.env.local`，按厂商填写连接信息：
 
 ```dotenv
-PROBE_API_KEY='你的 API Key'
-PROBE_MODEL='支持所需能力的模型 ID'
-PROBE_BASE_URL='https://api.openai.com/v1'
+# responses / chat 协议读取 OPENAI 组
+PROBE_OPENAI_API_KEY='你的 OpenAI API Key'
+PROBE_OPENAI_MODEL='支持图片、PDF、推理与工具的模型 ID'
+# anthropic 协议读取 ANTHROPIC 组
+PROBE_ANTHROPIC_API_KEY='你的 Anthropic API Key'
+PROBE_ANTHROPIC_MODEL='claude-sonnet-4-6'
+# 可选：不分厂商的兜底；某组缺少的变量会回退到这里
+PROBE_BASE_URL='https://your-gateway.example/v1'
 ```
 
 在仓库根目录运行：
 
 ```powershell
 cargo xtask probe --help
-cargo xtask probe --mode generate --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode stream --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json
+cargo xtask probe anthropic                         # 全套：generate/stream 跑 mixed.json，agent 跑 anthropic-tools.json
+cargo xtask probe chat agent                        # 只跑 openai-chat 的 Agent 场景
+cargo xtask probe responses stream --scenario my.json   # 自定义场景
 ```
 
-每条命令执行一个真实场景，可能产生 API 费用。模型及端点必须支持该场景使用的
+每次运行执行一个真实场景，可能产生 API 费用。模型及端点必须支持该场景使用的
 图片、PDF、推理或工具能力。帮助命令不读取凭据、不加载附件，也不访问网络。
 自动化门禁只跑离线测试，不执行这些真实请求。
 
-`--mode` 可选 `generate`、`stream`、`agent`，省略时为 `stream`。场景文件只定义输入、
+协议省略时为 `responses`。模式可选 `generate`、`stream`、`agent`：
+
+- 省略模式且未指定 `--scenario`：按 `generate → stream → agent` 顺序运行内置套件，单轮模式
+  使用 `mixed.json`，Agent 使用 `<协议>-tools.json`。任一运行失败整体退出码非零，但不会中断
+  后续运行；Ctrl+C 终止整套。
+- 指定模式、省略 `--scenario`：只运行该模式及其内置场景。
+- 指定 `--scenario`：只运行该文件；省略模式时默认 `stream`。
+
+位置参数与 `--protocol` / `--mode` 等价，二者同时出现会报重复。场景文件只定义输入、
 预期和执行所需配置，同一个文件可切换执行方式，无需复制 JSON。普通场景也能使用
 `--mode agent`；未配置 `agent` 对象时不注册工具，最多调用模型 4 次。
 
@@ -269,18 +282,23 @@ Chat Completions 不提供可见推理摘要、推理事件和推理回放，`ch
 
 ## 连接配置与迁移
 
-命令行支持 `--scenario`、`--mode`、`--protocol`、`--model`、`--base-url`、
-`--api-key-env` 和帮助。JSON 中的旧 `mode` 字段已删除，继续使用会报错；
-执行方式只能由 `--mode` 指定。`--prompt/--raw/--timeout-secs/--max-steps/--max-output-tokens`
+命令行支持位置参数 `[协议] [模式]`，以及 `--scenario`、`--mode`、`--protocol`、`--model`、
+`--base-url`、`--api-key-env` 和帮助。JSON 中的旧 `mode` 字段已删除，继续使用会报错；
+执行方式只能由命令行指定。`--prompt/--raw/--timeout-secs/--max-steps/--max-output-tokens`
 已移入场景对应字段，继续传入会报未知参数。
+
+环境变量按厂商分组：`responses` / `chat` 读取 `PROBE_OPENAI_*`，`anthropic` 读取
+`PROBE_ANTHROPIC_*`；某组缺少的变量回退到不带厂商的 `PROBE_*`。这样一份 `.env.local`
+可以同时保存多家凭据，切换协议不需要改文件或传连接参数。
 
 | 配置 | 优先级 |
 | --- | --- |
-| 协议 | `--protocol`，可选 `openai-responses`、`openai-chat`、`anthropic-messages`，默认 `openai-responses` |
-| 执行模式 | `--mode`，默认 `stream` |
-| 模型 | `--model` → `PROBE_MODEL`，无内置默认值 |
-| 根地址 | `--base-url` → `PROBE_BASE_URL` → 协议默认值（OpenAI `https://api.openai.com/v1`，Anthropic `https://api.anthropic.com`） |
-| 密钥 | 指定 `--api-key-env` 时只读指定变量；否则只读 `PROBE_API_KEY` |
+| 协议 | 位置参数或 `--protocol`，可选 `responses` / `chat` / `anthropic` 及完整名称，默认 `responses` |
+| 执行模式 | 位置参数或 `--mode`；省略时见上文套件规则 |
+| 场景 | `--scenario`；省略时按协议与模式选择内置场景 |
+| 模型 | `--model` → `PROBE_<厂商>_MODEL` → `PROBE_MODEL`，无内置默认值 |
+| 根地址 | `--base-url` → `PROBE_<厂商>_BASE_URL` → `PROBE_BASE_URL` → 协议默认值（OpenAI `https://api.openai.com/v1`，Anthropic `https://api.anthropic.com`） |
+| 密钥 | 指定 `--api-key-env` 时只读指定变量；否则 `PROBE_<厂商>_API_KEY` → `PROBE_API_KEY` |
 
 已移除 `OPENAI_MODEL`、`OPENAI_BASE_URL` 和 `OPENAI_API_KEY` 的自动回退。
 已有本地配置请改用 `PROBE_*`；`--api-key-env` 仍可显式选择任意密钥变量。
@@ -305,7 +323,8 @@ OpenAI 根地址包含版本路径，Anthropic 根地址不含 `/v1`；两者都
 | `model_error` / `partial_result` | 模型错误或传输失败前的部分结果 |
 | `agent_event` / `agent_result` | Agent 生命周期、执行事件及最终历史 |
 | `assertion_result` | 断言索引（从 0 开始）、具体预期与是否通过 |
-| `probe_finish` / `probe_error` | 运行是否成功、耗时或失败说明 |
+| `probe_finish` / `probe_error` | 运行是否成功、耗时或失败说明；套件中每次运行各输出一组 |
+| `probe_summary` | 仅套件：运行总数、已完成数、失败数及每次运行的模式、场景与结果 |
 
 任一断言失败返回非零退出码，并输出所有已评估断言，便于一次定位多个不匹配。
 连接和 JSON 配置校验失败时不会开始请求；Ctrl+C 输出错误，不等待正常收尾。
@@ -313,7 +332,7 @@ API Key、认证头、Cookie 和加密推理字段脱敏；其他请求内容（
 线上 HTTP 请求体仅在适配器提供 `GenerateResult.request_body` 时可见。
 
 ```powershell
-cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json > target/probe.jsonl
+cargo xtask probe responses agent > target/probe.jsonl
 cargo test -p xtask probe::
 cargo run -p xtask -- check
 ```
