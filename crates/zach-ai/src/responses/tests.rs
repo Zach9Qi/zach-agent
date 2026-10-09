@@ -3,7 +3,16 @@
 use super::*;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use zach_ai_core::Prompt;
+use zach_ai_core::{LanguageModel, Prompt};
+
+#[test]
+fn responses_model_declares_visible_reasoning_capabilities() {
+    let capabilities = OpenAiResponsesModel::new("secret", "example").capabilities();
+    assert!(capabilities.reasoning.tokens);
+    assert!(capabilities.reasoning.summary);
+    assert!(capabilities.reasoning.stream);
+    assert!(capabilities.reasoning.replay);
+}
 
 #[test]
 fn request_targets_responses_and_keeps_authorization_sensitive() {

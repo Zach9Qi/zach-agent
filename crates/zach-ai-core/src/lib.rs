@@ -7,6 +7,7 @@
 //! 结束原因 [`UnifiedFinishReason::ToolCalls`] 是 `tool_calls`。
 
 pub mod call_options;
+pub mod capabilities;
 pub mod error;
 pub mod file;
 pub mod model;
@@ -19,6 +20,7 @@ pub mod tool;
 
 // 门面精选重导出（Façade Re-exports）
 pub use call_options::{CallOptions, ReasoningEffort, ResponseFormat};
+pub use capabilities::{ModelCapabilities, ReasoningCapabilities};
 pub use error::ModelError;
 pub use file::FileData;
 pub use model::{LanguageModel, LanguageModelStream};

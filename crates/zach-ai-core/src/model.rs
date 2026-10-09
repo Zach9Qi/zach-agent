@@ -1,6 +1,7 @@
 //! 统一语言模型（LanguageModel）Trait 抽象契约
 
 use crate::call_options::CallOptions;
+use crate::capabilities::ModelCapabilities;
 use crate::error::ModelError;
 use crate::model_profile::ModelProfile;
 use crate::response::GenerateResult;
@@ -37,6 +38,11 @@ pub trait LanguageModel: Send + Sync {
     /// 模型档案（能力、限制与计费信息）；未知模型（自定义端点、本地模型等）返回 `None`
     fn profile(&self) -> Option<&ModelProfile> {
         None
+    }
+
+    /// 适配器声明的可观测能力；未声明的能力不能被联调断言强制要求。
+    fn capabilities(&self) -> ModelCapabilities {
+        ModelCapabilities::default()
     }
 
     /// 判断该模型是否原生支持指定媒体类型的直传 URL（无需客户端先下载为字节）

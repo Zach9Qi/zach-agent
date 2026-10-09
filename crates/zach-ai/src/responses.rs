@@ -40,7 +40,8 @@ use reqwest::Client;
 use std::fmt;
 use std::sync::Arc;
 use zach_ai_core::{
-    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
+    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelCapabilities, ModelError,
+    ModelProfile, ReasoningCapabilities,
 };
 
 use error::http_error;
@@ -182,6 +183,17 @@ impl LanguageModel for OpenAiResponsesModel {
 
     fn profile(&self) -> Option<&ModelProfile> {
         crate::ModelCatalog::builtin().get(self.provider(), self.model_id())
+    }
+
+    fn capabilities(&self) -> ModelCapabilities {
+        ModelCapabilities {
+            reasoning: ReasoningCapabilities {
+                tokens: true,
+                summary: true,
+                stream: true,
+                replay: true,
+            },
+        }
     }
 
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {
