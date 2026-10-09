@@ -6,3 +6,6 @@ mod catalog;
 
 #[cfg(feature = "openai-responses")]
 mod responses;
+
+#[cfg(feature = "anthropic")]
+mod anthropic;

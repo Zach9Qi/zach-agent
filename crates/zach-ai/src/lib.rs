@@ -13,3 +13,8 @@ pub use responses::OpenAiResponsesModel;
 pub mod chat;
 #[cfg(feature = "openai-chat")]
 pub use chat::{OpenAiChatCompletionModel, OpenAiChatCompletionsModel, OpenAiChatModel};
+
+#[cfg(feature = "anthropic")]
+pub mod anthropic;
+#[cfg(feature = "anthropic")]
+pub use anthropic::AnthropicMessagesModel;

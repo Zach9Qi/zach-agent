@@ -53,7 +53,7 @@ zach-agent   (编排层: Agent 运行时)
 | Crate | 路径 | 说明 |
 | :--- | :--- | :--- |
 | **`zach-ai-core`** | `crates/zach-ai-core` | **底层抽象契约**。定义 `LanguageModel` 统一接口、`Prompt`/`Message` 结构、流式事件 (`StreamPart`)、流聚合器 (`StreamAccumulator`)、工具协议与调用参数 (`CallOptions`)。 |
-| **`zach-ai`** | `crates/zach-ai` | **厂商实现层**。已实现 OpenAI Responses API、Chat Completions 兼容协议和模型档案目录；Anthropic 适配尚未实现。 |
+| **`zach-ai`** | `crates/zach-ai` | **厂商实现层**。已实现 OpenAI Responses API、Chat Completions 兼容协议、Anthropic Messages API 和模型档案目录。 |
 | **`zach-agent`** | `crates/zach-agent` | **Agent 编排与运行时**。提供低层循环（`run_agent_loop`）与有状态的 `Agent` 句柄：多轮工具调用、并行/串行工具执行、人工审批、插队/追加消息、策略钩子、失败重试与中止，运行过程以 `AgentEvent` 事件流透出。 |
 
 ---
@@ -74,10 +74,12 @@ zach-agent = { path = "crates/zach-agent" }
 
 ### 模型消息与提示词构建
 
-真实模型接入使用 `zach_ai::OpenAiResponsesModel::new(api_key, model_id)`，可直接传给
-`Agent::builder(Arc::new(model))`。默认 feature 已启用 Responses 适配和 Rustls；
-支持范围、流式调用和请求配置见 [OpenAI Responses 使用说明](docs/openai-responses.md) 和
-[OpenAI Chat Completions 使用说明](docs/openai-chat.md)。
+真实模型接入使用 `zach_ai::OpenAiResponsesModel::new(api_key, model_id)` 或
+`zach_ai::AnthropicMessagesModel::new(api_key, model_id)`，可直接传给
+`Agent::builder(Arc::new(model))`。默认 feature 已启用全部适配器和 Rustls；
+支持范围、流式调用和请求配置见 [OpenAI Responses 使用说明](docs/openai-responses.md)、
+[OpenAI Chat Completions 使用说明](docs/openai-chat.md) 和
+[Anthropic Messages 使用说明](docs/anthropic-messages.md)。
 
 使用 `zach-ai-core` 构建多模态且厂商中立的 Prompt：
 

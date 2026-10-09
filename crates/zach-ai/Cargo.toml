@@ -11,7 +11,7 @@ openai = ["openai-responses", "openai-chat"]
 openai-responses = ["dep:base64", "dep:bytes"]
 openai-chat = ["dep:base64", "dep:bytes"]
 openai-chat-completions = ["openai-chat"]
-anthropic = []
+anthropic = ["dep:base64", "dep:bytes"]
 rustls-tls = ["reqwest/rustls"]
 native-tls = ["reqwest/native-tls"]
 
