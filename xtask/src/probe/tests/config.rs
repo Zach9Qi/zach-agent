@@ -7,12 +7,14 @@ use super::super::{
 use super::support::args;
 
 #[test]
-fn help_and_invalid_protocol_do_not_read_credentials() {
+fn help_and_chat_protocol_are_accepted_before_credentials_validation() {
     assert!(Args::parse(&["--help".into()]).unwrap().is_none());
-    let result = Config::resolve(args(&["--protocol", "openai-chat"]), |_| {
-        panic!("未实现的协议不应读取凭据")
-    });
-    assert!(matches!(result, Err(error) if error.contains("尚未实现")));
+    let result = Config::resolve(
+        args(&["--protocol", "openai-chat", "--model", "chat-model"]),
+        |name| (name == "PROBE_API_KEY").then(|| "secret".into()),
+    )
+    .unwrap();
+    assert_eq!(result.protocol, Protocol::OpenAiChat);
 }
 
 #[test]

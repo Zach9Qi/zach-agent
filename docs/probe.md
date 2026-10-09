@@ -1,7 +1,7 @@
 # 真实 API 场景联调
 
 `cargo xtask probe --mode <模式> --scenario <场景.json>` 加载完整输入和预期，通过统一的
-`LanguageModel` / `run_agent_loop` 访问真实端点。当前支持 `openai-responses`。
+`LanguageModel` / `run_agent_loop` 访问真实端点。当前支持 `openai-responses` 和 `openai-chat`。
 新增输入组合通常只需写 JSON；新增断言或可执行工具时才需扩展联调代码。
 
 ## 快速开始
@@ -177,12 +177,15 @@ Responses 适配器将带 Schema 的标准格式映射为 `text.format.type: jso
 | `text_equals` | `value`：回答去掉首尾空白后与给定文本相等 |
 | `json_equals` | `pointer`、`value`：将最后一轮回答整体解析为 JSON，指定节点精确相等 |
 | `json_type` | `pointer`、`kind`：节点类型为 `object/array/string/number/boolean/null` |
-| `reasoning` | `evidence`：`any/summary/tokens/metadata`，检查本次任一轮实际响应 |
-| `event` | `event`、`min`：统一 `StreamPart` 事件名称及最少次数，仅用于流式或 Agent |
+| `reasoning` | `evidence`：`any/summary/tokens/metadata`，检查本次任一轮实际响应；可用 `requires` 声明所需能力 |
+| `event` | `event`、`min`：统一 `StreamPart` 事件名称及最少次数，仅用于流式或 Agent；可用 `requires` 声明所需能力 |
 | `tool_call` | `name`、可选 `input`：本次模型实际调用指定工具，指定 input 时精确匹配 JSON |
 | `tool_result` | `name`、`value`：本次 Agent 新增的成功 JSON 工具结果精确匹配 |
 | `steps` | `min`、`max`：模型完成的轮数范围，包含边界 |
-| `replay` | `content`：`input/reasoning/tool_results`，检查 Agent 实际后续请求 |
+| `replay` | `content`：`input/reasoning/tool_results`，检查 Agent 实际后续请求；可用 `requires` 声明所需能力 |
+
+`requires` 可取 `reasoning_tokens`、`reasoning_summary`、`reasoning_stream` 或 `reasoning_replay`。适配器未声明所需能力时，输出会标记 `applicable: false`、`success: null` 和 `skipped_reason: unsupported_capability`。
+`requires` 只能用于对应的推理证据、`reasoning_delta` 事件或推理回放断言，不能用来跳过正文、JSON、工具或结束原因等基础断言。
 
 `json_equals` 区分缺失字段、`null`、字符串和数字；根节点的 Pointer 使用空字符串。
 JSON 回答不能带 Markdown 围栏；可用 `request.response_format` 请求 JSON 输出。
@@ -192,11 +195,13 @@ JSON 回答不能带 Markdown 围栏；可用 `request.response_format` 请求 J
 `metadata` 要求推理内容块携带非空厂商元数据；`any` 满足其中任一项即可。
 模型可能没有可见摘要，但仍返回推理用量或加密推理项。
 `event` 使用 `reasoning_delta` 等统一名称，不使用厂商 SSE 名称。
+断言带 `requires` 时，只有适配器声明该能力才执行；能力支持后缺少事件仍会失败。
 
-执行方式由命令行决定，但不会自动跳过不适用的断言。`generate` 模式使用 `event`，
+执行方式由命令行决定；只有断言声明的能力未被适配器支持时才会跳过。`generate` 模式使用 `event`，
 或非 `agent` 模式使用 `tool_result/replay`，都会在读取附件和调用模型前报错。
 
-`replay` 至少需要两次实际调用，且不能在没有对应内容时空判成功：
+`replay` 至少需要两次实际调用，且不能在没有对应内容时空判成功。
+若协议不提供该内容，可在断言上设置 `requires`，由适配器能力声明决定是否执行：
 
 - `input`：所有后续请求保留首轮完整消息前缀，包括附件字节、顺序及元数据。
 - `reasoning`：每轮输出的推理块在紧接着的请求中保留文本及完整厂商元数据。
@@ -234,7 +239,7 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 | 文件（均位于 `scenarios/probe/`） | 可用 `--mode` | 覆盖内容 |
 | --- | --- | --- |
 | `mixed.json` | 全部 | 文本＋两张图片＋两份 PDF，共享 Schema、逐项校验及求和 |
-| `mixed-tools.json` | `agent` | 共享 Schema＋混合附件＋推理摘要及事件＋工具执行＋输入、推理、工具结果回传 |
+| `mixed-tools.json` | `agent` | 共享 Schema＋混合附件＋按能力校验推理证据＋工具执行＋输入、推理、工具结果回传 |
 
 日常真实联调只维护这两份混合场景。需要定位某类输入的问题时，可以临时删减混合
 场景中的内容块和对应断言，无需长期维护文本、单图、单文件和单工具的重复案例。
@@ -243,8 +248,9 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 两张图片分别给出 137、263，两份 PDF 分别给出 421、89，总和 910。
 数值只出现在附件和本地断言中，`expect` 不发送给模型。
 混合场景还要求回显正文中的校验码，证明正文与各附件共同参与回答。
-`mixed-tools.json` 同时要求可见推理摘要和 `reasoning_delta` 事件；不提供摘要的
-端点会明确失败。推理元数据和工具结果仍需在下一轮请求中完整回传。
+`mixed-tools.json` 对可见推理摘要、`reasoning_delta` 事件和推理历史回放使用
+`requires` 声明能力：Responses 适配器声明支持时会严格校验，Chat Completions 未声明时
+明确标记为跳过；输入和工具结果仍需在下一轮请求中完整回传。
 
 测试附件已随仓库提供，无需 Python 即可联调。
 若需重新生成，可安装 Pillow 和 reportlab，执行
@@ -259,7 +265,7 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 
 | 配置 | 优先级 |
 | --- | --- |
-| 协议 | `--protocol`，默认 `openai-responses` |
+| 协议 | `--protocol`，可选 `openai-responses`、`openai-chat`，默认 `openai-responses` |
 | 执行模式 | `--mode`，默认 `stream` |
 | 模型 | `--model` → `PROBE_MODEL`，无内置默认值 |
 | 根地址 | `--base-url` → `PROBE_BASE_URL` → `https://api.openai.com/v1` |

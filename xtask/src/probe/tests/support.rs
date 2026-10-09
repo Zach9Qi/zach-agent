@@ -9,8 +9,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use zach_ai_core::{
-    CallOptions, FinishReason, GenerateResult, LanguageModel, LanguageModelStream, ModelError,
-    StreamAccumulator, StreamPart, Usage,
+    CallOptions, FinishReason, GenerateResult, LanguageModel, LanguageModelStream,
+    ModelCapabilities, ModelError, StreamAccumulator, StreamPart, Usage,
 };
 
 #[derive(Clone, Default)]
@@ -98,14 +98,23 @@ pub(super) struct Model {
     scripts: Mutex<VecDeque<Script>>,
     pub(super) requests: Mutex<Vec<CallOptions>>,
     pub(super) methods: Mutex<Vec<&'static str>>,
+    capabilities: ModelCapabilities,
 }
 
 impl Model {
     pub(super) fn new(scripts: Vec<Script>) -> Arc<Self> {
+        Self::with_capabilities(scripts, ModelCapabilities::default())
+    }
+
+    pub(super) fn with_capabilities(
+        scripts: Vec<Script>,
+        capabilities: ModelCapabilities,
+    ) -> Arc<Self> {
         Arc::new(Self {
             scripts: Mutex::new(scripts.into()),
             requests: Mutex::new(vec![]),
             methods: Mutex::new(vec![]),
+            capabilities,
         })
     }
 
@@ -126,6 +135,9 @@ impl LanguageModel for Model {
     }
     fn model_id(&self) -> &str {
         "script-model"
+    }
+    fn capabilities(&self) -> ModelCapabilities {
+        self.capabilities
     }
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {

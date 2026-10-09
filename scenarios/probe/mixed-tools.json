@@ -112,12 +112,14 @@
     },
     {
       "type": "reasoning",
-      "evidence": "summary"
+      "evidence": "summary",
+      "requires": "reasoning_summary"
     },
     {
       "type": "event",
       "event": "reasoning_delta",
-      "min": 1
+      "min": 1,
+      "requires": "reasoning_stream"
     },
     {
       "type": "tool_call",
@@ -145,7 +147,8 @@
     },
     {
       "type": "replay",
-      "content": "reasoning"
+      "content": "reasoning",
+      "requires": "reasoning_replay"
     },
     {
       "type": "replay",

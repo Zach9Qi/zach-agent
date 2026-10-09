@@ -1,29 +1,33 @@
 //! 联调配置：协议选择、命令行优先级及可注入的环境变量读取。
 
 use super::{args::Args, ProbeResult};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub(super) enum Protocol {
     #[serde(rename = "openai-responses")]
     OpenAiResponses,
+    #[serde(rename = "openai-chat")]
+    OpenAiChat,
 }
 
 impl Protocol {
     fn parse(value: &str) -> ProbeResult<Self> {
         match value {
             "openai-responses" => Ok(Self::OpenAiResponses),
-            "openai-chat" | "anthropic-messages" => {
-                Err("该协议尚未实现；当前可用协议为 openai-responses".into())
+            "openai-chat" => Ok(Self::OpenAiChat),
+            "anthropic-messages" => {
+                Err("该协议尚未实现；当前可用协议为 openai-responses、openai-chat".into())
             }
-            _ => Err("未知协议；当前可用协议为 openai-responses".into()),
+            _ => Err("未知协议；当前可用协议为 openai-responses、openai-chat".into()),
         }
     }
 
     fn default_url(self) -> &'static str {
         match self {
             Self::OpenAiResponses => "https://api.openai.com/v1",
+            Self::OpenAiChat => "https://api.openai.com/v1",
         }
     }
 }
@@ -83,8 +87,10 @@ impl Config {
             return Err("根地址须为 HTTP(S) URL，不能包含用户名、密码、查询或片段".into());
         }
         let base_url = base_url.trim_end_matches('/').to_owned();
-        if protocol == Protocol::OpenAiResponses && base_url.ends_with("/responses") {
-            return Err("根地址不应包含 /responses 后缀，适配器会自动追加".into());
+        if (protocol == Protocol::OpenAiResponses && base_url.ends_with("/responses"))
+            || (protocol == Protocol::OpenAiChat && base_url.ends_with("/chat/completions"))
+        {
+            return Err("根地址不应包含协议端点后缀，适配器会自动追加".into());
         }
         let api_key = env(args.get("api-key-env").unwrap_or("PROBE_API_KEY"))
             .filter(|s| !s.trim().is_empty())

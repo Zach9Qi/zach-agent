@@ -29,7 +29,7 @@ const HELP: &str = "\
 
   --scenario <文件>      场景文件：标准 request、schema_file、expect
   --mode <模式>          generate、stream（默认）、agent；同一场景可切换执行方式
-  --protocol <协议>       当前支持 openai-responses（默认）
+  --protocol <协议>       当前支持 openai-responses、openai-chat（默认 openai-responses）
   --model <模型 ID>       覆盖 PROBE_MODEL
   --base-url <根地址>     覆盖 PROBE_BASE_URL
   --api-key-env <变量名>  指定存放密钥的环境变量；默认 PROBE_API_KEY

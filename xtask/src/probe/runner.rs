@@ -38,6 +38,7 @@ pub(super) async fn run(
         scenario.max_steps(config.mode),
         trace.clone(),
     ));
+    let capabilities = model.capabilities();
     let start = Instant::now();
     let result = timeout(Duration::from_secs(scenario.timeout_secs), async {
         let outcome = if config.mode == Mode::Agent {
@@ -51,7 +52,7 @@ pub(super) async fn run(
             let result = call.result.as_ref().ok_or("模型响应没有完整收尾")?;
             require_complete(result.finish_reason.unified)?;
         }
-        expect::verify(&scenario.expect, &outcome, &trace, &reporter)
+        expect::verify(&scenario.expect, capabilities, &outcome, &trace, &reporter)
     })
     .await
     .unwrap_or_else(|_| {

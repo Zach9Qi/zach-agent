@@ -207,6 +207,18 @@ fn invalid_configuration_and_assertions_are_rejected_without_io() {
             "/expect",
             json!([{"type":"event","event":"reasoning_delta","min":0}]),
         ),
+        (
+            "/expect",
+            json!([{"type":"text_equals","value":"答案","requires":"reasoning_summary"}]),
+        ),
+        (
+            "/expect",
+            json!([{"type":"event","event":"text_delta","min":1,"requires":"reasoning_stream"}]),
+        ),
+        (
+            "/expect",
+            json!([{"type":"replay","content":"input","requires":"reasoning_replay"}]),
+        ),
         ("/expect", json!([{"type":"replay","content":"input"}])),
         ("/expect", json!([{"type":"text_nonempty","typo":true}])),
     ] {

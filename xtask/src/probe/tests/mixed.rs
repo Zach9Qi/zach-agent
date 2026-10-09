@@ -9,7 +9,10 @@ use super::{
     support::*,
 };
 use serde_json::json;
-use zach_ai_core::{AssistantPart, CallOptions, Message, StreamPart, UnifiedFinishReason};
+use zach_ai_core::{
+    AssistantPart, CallOptions, Message, ModelCapabilities, ReasoningCapabilities, StreamPart,
+    UnifiedFinishReason,
+};
 
 #[tokio::test]
 async fn mixed_messages_and_reasoning_options_reach_every_mode_unchanged() {
@@ -35,7 +38,7 @@ async fn mixed_messages_and_reasoning_options_reach_every_mode_unchanged() {
                 json!({"type":"replay","content":"reasoning"}),
                 json!({"type":"replay","content":"tool_results"}),
                 json!({"type":"reasoning","evidence":"metadata"}),
-                json!({"type":"event","event":"reasoning_delta","min":1}),
+                json!({"type":"event","event":"reasoning_delta","min":1,"requires":"reasoning_stream"}),
             ]);
         }
         let scenario = parse_scenario(mode, value);
@@ -117,7 +120,7 @@ fn reasoning_replay_requires_exact_metadata_and_an_actual_next_request() {
         steps: 2,
     };
     let assertions = serde_json::from_value::<Vec<expect::Expectation>>(
-        json!([{"type":"replay","content":"reasoning"}]),
+        json!([{"type":"replay","content":"reasoning","requires":"reasoning_replay"}]),
     )
     .unwrap();
     for (part, passes) in [
@@ -140,13 +143,37 @@ fn reasoning_replay_requires_exact_metadata_and_an_actual_next_request() {
         };
         let (reporter, _) = output();
         assert_eq!(
-            expect::verify(&assertions, &outcome, &trace, &reporter).is_ok(),
+            expect::verify(
+                &assertions,
+                ModelCapabilities {
+                    reasoning: ReasoningCapabilities {
+                        replay: true,
+                        ..ReasoningCapabilities::default()
+                    },
+                },
+                &outcome,
+                &trace,
+                &reporter,
+            )
+            .is_ok(),
             passes
         );
     }
     let empty = Trace::default();
     let (reporter, _) = output();
-    assert!(expect::verify(&assertions, &outcome, &empty, &reporter).is_err());
+    assert!(expect::verify(
+        &assertions,
+        ModelCapabilities {
+            reasoning: ReasoningCapabilities {
+                replay: true,
+                ..ReasoningCapabilities::default()
+            },
+        },
+        &outcome,
+        &empty,
+        &reporter,
+    )
+    .is_err());
 }
 
 #[tokio::test]
