@@ -8,3 +8,8 @@ pub use catalog::ModelCatalog;
 pub mod responses;
 #[cfg(feature = "openai-responses")]
 pub use responses::OpenAiResponsesModel;
+
+#[cfg(feature = "openai-chat")]
+pub mod chat;
+#[cfg(feature = "openai-chat")]
+pub use chat::{OpenAiChatCompletionModel, OpenAiChatCompletionsModel, OpenAiChatModel};

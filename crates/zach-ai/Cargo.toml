@@ -7,8 +7,10 @@ license.workspace = true
 
 [features]
 default = ["openai", "anthropic", "rustls-tls"]
-openai = ["openai-responses"]
+openai = ["openai-responses", "openai-chat"]
 openai-responses = ["dep:base64", "dep:bytes"]
+openai-chat = ["dep:base64", "dep:bytes"]
+openai-chat-completions = ["openai-chat"]
 anthropic = []
 rustls-tls = ["reqwest/rustls"]
 native-tls = ["reqwest/native-tls"]
