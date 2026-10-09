@@ -9,8 +9,8 @@ use std::sync::{
     Arc,
 };
 use zach_ai_core::{
-    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelCapabilities, ModelError,
-    ModelProfile, StreamAccumulator,
+    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
+    StreamAccumulator,
 };
 
 pub(super) struct ObservedModel {
@@ -67,9 +67,6 @@ impl LanguageModel for ObservedModel {
     }
     fn profile(&self) -> Option<&ModelProfile> {
         self.inner.profile()
-    }
-    fn capabilities(&self) -> ModelCapabilities {
-        self.inner.capabilities()
     }
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {
         self.inner.is_url_supported(media_type, url)

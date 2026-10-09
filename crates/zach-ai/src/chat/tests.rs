@@ -7,15 +7,6 @@ use serde_json::{json, Value};
 use zach_ai_core::{CallOptions, LanguageModel, Message, StreamAccumulator};
 
 #[test]
-fn chat_model_declares_token_usage_without_visible_reasoning() {
-    let capabilities = OpenAiChatCompletionsModel::new("secret", "gpt-test").capabilities();
-    assert!(capabilities.reasoning.tokens);
-    assert!(!capabilities.reasoning.summary);
-    assert!(!capabilities.reasoning.stream);
-    assert!(!capabilities.reasoning.replay);
-}
-
-#[test]
 fn request_uses_chat_endpoint_and_openai_message_shapes() {
     let model = OpenAiChatCompletionsModel::new("secret", "gpt-test")
         .with_base_url("https://example.test/v1/");

@@ -62,7 +62,7 @@ user/assistant 交替的要求；末尾助手预填充文本会去掉结尾空�
 思考块以 `Reasoning` 事件透出，签名随 `ReasoningEnd` 的 `provider_metadata.anthropic.signature`
 给出；`redacted_thinking` 是正文为空、只带 `anthropic.redacted_thinking` 元数据的推理块。
 回放时两者分别还原为 `thinking` 与 `redacted_thinking` 块，没有签名的推理块不会发送。
-适配器声明 `summary` / `stream` / `replay` 推理能力，不单独报告思考 token 数量。
+Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推理 token 数量。
 
 注意 Anthropic 的限制：**思考与强制工具选择不能共存**。`tool_choice` 为 `any` / `tool` 时，
 `enabled` 模式会被 API 以 400 拒绝，`adaptive` 模式虽被接受但该轮不会产生思考块。

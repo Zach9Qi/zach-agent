@@ -41,8 +41,7 @@ use reqwest::Client;
 use std::fmt;
 use std::sync::Arc;
 use zach_ai_core::{
-    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelCapabilities, ModelError,
-    ModelProfile, ReasoningCapabilities,
+    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
 };
 
 use error::http_error;
@@ -209,18 +208,6 @@ impl LanguageModel for AnthropicMessagesModel {
 
     fn profile(&self) -> Option<&ModelProfile> {
         crate::ModelCatalog::builtin().get(self.provider(), self.model_id())
-    }
-
-    fn capabilities(&self) -> ModelCapabilities {
-        ModelCapabilities {
-            reasoning: ReasoningCapabilities {
-                // Anthropic 把思考 token 计入 output_tokens，不单独报告数量。
-                tokens: false,
-                summary: true,
-                stream: true,
-                replay: true,
-            },
-        }
     }
 
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {

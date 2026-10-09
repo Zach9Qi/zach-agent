@@ -4,19 +4,10 @@ use super::*;
 use reqwest::header::AUTHORIZATION;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use zach_ai_core::{LanguageModel, Prompt, ProviderOptions};
+use zach_ai_core::{Prompt, ProviderOptions};
 
 fn body(request: &reqwest::Request) -> Value {
     serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap()
-}
-
-#[test]
-fn messages_model_declares_visible_streamed_and_replayable_reasoning() {
-    let capabilities = AnthropicMessagesModel::new("secret", "example").capabilities();
-    assert!(!capabilities.reasoning.tokens);
-    assert!(capabilities.reasoning.summary);
-    assert!(capabilities.reasoning.stream);
-    assert!(capabilities.reasoning.replay);
 }
 
 #[test]
