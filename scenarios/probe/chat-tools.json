@@ -52,13 +52,6 @@
     "tool_choice": {
       "type": "tool",
       "tool_name": "add"
-    },
-    "provider_options": {
-      "openai": {
-        "reasoning": {
-          "summary": "auto"
-        }
-      }
     }
   },
   "agent": {
@@ -111,17 +104,6 @@
       "value": "青竹"
     },
     {
-      "type": "reasoning",
-      "evidence": "summary",
-      "requires": "reasoning_summary"
-    },
-    {
-      "type": "event",
-      "event": "reasoning_delta",
-      "min": 1,
-      "requires": "reasoning_stream"
-    },
-    {
       "type": "tool_call",
       "name": "add",
       "input": {
@@ -144,11 +126,6 @@
     {
       "type": "replay",
       "content": "input"
-    },
-    {
-      "type": "replay",
-      "content": "reasoning",
-      "requires": "reasoning_replay"
     },
     {
       "type": "replay",

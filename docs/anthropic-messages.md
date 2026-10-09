@@ -108,7 +108,7 @@ cargo xtask probe --protocol anthropic-messages --mode stream --scenario scenari
 cargo xtask probe --protocol anthropic-messages --mode agent --scenario scenarios/probe/anthropic-tools.json
 ```
 
-`mixed-tools.json` 第一轮强制 `tool_choice: add`，按上文限制该轮不会思考，`replay: reasoning`
+`responses-tools.json` 第一轮强制 `tool_choice: add`，按上文限制该轮不会思考，`replay: reasoning`
 断言会按设计判失败；此外联调中观察到 JSON Schema 输出与工具叠加时，模型的思考虽决定调用
 工具、最终却被 Schema 约束直接产出 JSON。专用场景因此改为 `tool_choice: auto` 且不带 Schema，
 在 `claude-sonnet-4-6` 上可稳定通过全部 16 项断言（含思考签名回放与工具结果回放）。

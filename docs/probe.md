@@ -21,7 +21,7 @@ PROBE_BASE_URL='https://api.openai.com/v1'
 cargo xtask probe --help
 cargo xtask probe --mode generate --scenario scenarios/probe/mixed.json
 cargo xtask probe --mode stream --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode agent --scenario scenarios/probe/mixed-tools.json
+cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json
 ```
 
 每条命令执行一个真实场景，可能产生 API 费用。模型及端点必须支持该场景使用的
@@ -240,19 +240,24 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 | 文件（均位于 `scenarios/probe/`） | 可用 `--mode` | 覆盖内容 |
 | --- | --- | --- |
 | `mixed.json` | 全部 | 文本＋两张图片＋两份 PDF，共享 Schema、逐项校验及求和 |
-| `mixed-tools.json` | `agent` | 共享 Schema＋混合附件＋按能力校验推理证据＋工具执行＋输入、推理、工具结果回传 |
-| `anthropic-tools.json` | `agent` | `mixed-tools.json` 的 Anthropic 变体：`tool_choice: auto`、不带 Schema，其余断言相同 |
+| `responses-tools.json` | `agent` | `openai-responses`：共享 Schema＋混合附件＋推理摘要、事件与回放＋工具执行＋输入、工具结果回传 |
+| `chat-tools.json` | `agent` | `openai-chat`：同上，但不带 Responses 专属的摘要选项，也不断言推理摘要、事件与回放 |
+| `anthropic-tools.json` | `agent` | `anthropic-messages`：同 `responses-tools.json`，改用 `tool_choice: auto` 且不带 Schema |
 
-日常真实联调只维护这几份混合场景。需要定位某类输入的问题时，可以临时删减混合
+日常真实联调只维护这几份混合场景；工具场景按协议各一份，文件名即 `--protocol`。
+需要定位某类输入的问题时，可以临时删减混合
 场景中的内容块和对应断言，无需长期维护文本、单图、单文件和单工具的重复案例。
 配置冲突、错误响应、超时等边界继续由确定性的离线测试覆盖。
 
 两张图片分别给出 137、263，两份 PDF 分别给出 421、89，总和 910。
 数值只出现在附件和本地断言中，`expect` 不发送给模型。
 混合场景还要求回显正文中的校验码，证明正文与各附件共同参与回答。
-`mixed-tools.json` 对可见推理摘要、`reasoning_delta` 事件和推理历史回放使用
-`requires` 声明能力：Responses 适配器声明支持时会严格校验，Chat Completions 未声明时
-明确标记为跳过；输入和工具结果仍需在下一轮请求中完整回传。
+
+三份工具场景是同一任务的协议变体：提示词、附件、JSON 预期、工具调用参数与输入、
+工具结果回传断言完全一致，只在协议相关的请求选项和推理断言上有差异。场景文件所见即所得，
+不做跨文件合并；离线测试会比较这些共同部分，改动一份而漏改其他两份时会直接失败。
+Chat Completions 不提供可见推理摘要、推理事件和推理回放，`chat-tools.json` 因此不包含
+对应断言；输入和工具结果仍需在下一轮请求中完整回传。
 
 `anthropic-tools.json` 专用于 `--protocol anthropic-messages`：Anthropic 在强制 `tool_choice`
 的那一轮不会思考，且 JSON Schema 输出与工具调用叠加时模型常常跳过工具，因此该变体改用
@@ -309,7 +314,7 @@ API Key、认证头、Cookie 和加密推理字段脱敏；其他请求内容（
 线上 HTTP 请求体仅在适配器提供 `GenerateResult.request_body` 时可见。
 
 ```powershell
-cargo xtask probe --mode agent --scenario scenarios/probe/mixed-tools.json > target/probe.jsonl
+cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json > target/probe.jsonl
 cargo test -p xtask probe::
 cargo run -p xtask -- check
 ```

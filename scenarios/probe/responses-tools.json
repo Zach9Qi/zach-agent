@@ -1,4 +1,5 @@
 {
+  "schema_file": "schemas/attachment-summary.json",
   "timeout_secs": 240,
   "request": {
     "prompt": {
@@ -49,7 +50,15 @@
     "max_output_tokens": 8192,
     "reasoning": "high",
     "tool_choice": {
-      "type": "auto"
+      "type": "tool",
+      "tool_name": "add"
+    },
+    "provider_options": {
+      "openai": {
+        "reasoning": {
+          "summary": "auto"
+        }
+      }
     }
   },
   "agent": {

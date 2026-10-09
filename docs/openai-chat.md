@@ -32,7 +32,11 @@ PDF URL。服务端托管工具、音视频和助手历史中的原始推理块�
 联调工具可以通过 `--protocol openai-chat` 选择该协议，根地址仍然不包含
 `/chat/completions` 后缀。
 
-`scenarios/probe/mixed-tools.json` 可同时用于 Responses 和 Chat Completions 联调。场景中的
-推理摘要、推理事件和推理历史回放断言通过 `requires` 声明能力：Responses 适配器声明支持
-时会严格验证，Chat Completions 未声明这些官方协议之外的正文能力时会明确跳过；附件、函数
-调用、工具结果、两轮历史回放和最终 JSON 仍然严格验证。
+```powershell
+cargo xtask probe --protocol openai-chat --mode stream --scenario scenarios/probe/mixed.json
+cargo xtask probe --protocol openai-chat --mode agent --scenario scenarios/probe/chat-tools.json
+```
+
+`chat-tools.json` 与 `responses-tools.json` 是同一任务：附件、函数调用、工具结果、两轮历史
+回放和最终 JSON 的断言完全一致；由于 Chat Completions 不提供可见推理摘要、推理事件和
+推理历史回放，该场景不包含这三类断言，也不携带 Responses 专属的 `reasoning.summary` 选项。

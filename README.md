@@ -177,7 +177,7 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 cargo xtask probe --help
 cargo xtask probe --mode generate --scenario scenarios/probe/mixed.json
 cargo xtask probe --mode stream --scenario scenarios/probe/mixed.json
-cargo xtask probe --mode agent --scenario scenarios/probe/mixed-tools.json
+cargo xtask probe --mode agent --scenario scenarios/probe/responses-tools.json
 ```
 
 在仓库根目录的 `.env.local` 中填写模型 ID 和凭据（可复制 `.env.local.example`，本地文件已被 Git 忽略）；
