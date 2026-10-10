@@ -115,7 +115,7 @@
         "high",
         "max"
       ],
-      "can_disable": true
+      "can_disable": false
     },
     "limits": {
       "context_window": 1048576,
@@ -124,7 +124,8 @@
     "pricing": {
       "input": 3.0,
       "output": 15.0,
-      "cache_read": 0.3
+      "cache_read": 0.3,
+      "cache_write": 3.0
     },
     "status": "active"
   }

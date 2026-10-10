@@ -1253,6 +1253,55 @@
   },
   {
     "provider": "openai",
+    "id": "gpt-6.1-sol",
+    "name": "GPT-6.1 Sol",
+    "modalities": {
+      "input": [
+        "text",
+        "image",
+        "pdf"
+      ],
+      "output": [
+        "text"
+      ]
+    },
+    "tool_call": true,
+    "structured_output": true,
+    "temperature": false,
+    "reasoning": {
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "can_disable": false
+    },
+    "limits": {
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "max_input_tokens": 922000
+    },
+    "pricing": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "tiers": [
+        {
+          "input_tokens_above": 272000,
+          "input": 4.0,
+          "output": 15.0,
+          "cache_read": 0.2,
+          "cache_write": 5.0
+        }
+      ]
+    },
+    "status": "active"
+  },
+  {
+    "provider": "openai",
     "id": "gpt-daybreak-blue-latest",
     "name": "Daybreak Blue",
     "modalities": {
