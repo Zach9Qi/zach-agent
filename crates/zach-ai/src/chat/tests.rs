@@ -137,6 +137,40 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
     );
 }
 
+/// 兼容端点的私有字段透传，但已由通用参数写入的字段不能被扩展参数悄悄覆盖。
+#[test]
+fn provider_options_pass_through_but_cannot_override_adapter_fields() {
+    let mut options = CallOptions::new(vec![Message::user("你好")]).with_temperature(0.5);
+    let mut provider = zach_ai_core::ProviderOptions::new();
+    provider.insert(
+        "openai",
+        json!({"enable_thinking": true, "chat_template_kwargs": {"x": 1}, "max_tokens": 64}),
+    );
+    options.provider_options = Some(provider);
+    let body = request::build_request("qwen", &options, false).unwrap();
+    assert_eq!(body["enable_thinking"], true);
+    assert_eq!(body["chat_template_kwargs"], json!({"x": 1}));
+    assert_eq!(body["max_tokens"], 64);
+    assert_eq!(body["temperature"], 0.5);
+    for (key, value) in [
+        ("temperature", json!(1.0)),
+        ("messages", json!([])),
+        ("model", json!("other")),
+        ("stream", json!(true)),
+    ] {
+        let mut provider = zach_ai_core::ProviderOptions::new();
+        provider.insert("openai", json!({ key: value }));
+        options.provider_options = Some(provider);
+        assert!(
+            matches!(
+                request::build_request("qwen", &options, false),
+                Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. }) if feature == key
+            ),
+            "{key} 不应被覆盖"
+        );
+    }
+}
+
 /// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
 #[test]
 fn reasoning_max_level_is_rejected_before_sending() {

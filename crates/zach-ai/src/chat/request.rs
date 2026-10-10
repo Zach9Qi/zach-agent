@@ -73,25 +73,36 @@ pub(super) fn build_request(
     if stream {
         body["stream_options"] = json!({"include_usage": true});
     }
-    if let Some(extra) = options
+    apply_provider_options(&mut body, options)?;
+    Ok(body)
+}
+
+/// 合并 `provider_options.openai`。
+///
+/// Chat Completions 是众多兼容端点的通用协议，各家私有字段（Qwen 的 `enable_thinking`、
+/// vLLM 的 `chat_template_kwargs` 等）无法穷举，因此采用透传策略；但已由通用参数写入
+/// 正文的字段不允许被悄悄覆盖，否则 `CallOptions` 上的设置会在不知情的情况下失效。
+fn apply_provider_options(body: &mut Value, options: &CallOptions) -> Result<(), ModelError> {
+    let Some(extra) = options
         .provider_options
         .as_ref()
         .and_then(|p| p.inner.get("openai"))
-    {
-        let fields = extra.as_object().ok_or_else(|| {
-            ModelError::InvalidRequest("provider_options.openai 必须是对象".into())
-        })?;
-        for (key, value) in fields {
-            if matches!(key.as_str(), "messages" | "model" | "stream") {
-                return Err(ModelError::unsupported(
-                    key,
-                    Some("不能覆盖适配器管理的请求字段".into()),
-                ));
-            }
-            body[key] = value.clone();
+    else {
+        return Ok(());
+    };
+    let fields = extra
+        .as_object()
+        .ok_or_else(|| ModelError::InvalidRequest("provider_options.openai 必须是对象".into()))?;
+    for (key, value) in fields {
+        if body.get(key).is_some() {
+            return Err(ModelError::unsupported(
+                key,
+                Some("不能覆盖适配器已写入的请求字段，请改用 CallOptions 的对应参数".into()),
+            ));
         }
+        body[key] = value.clone();
     }
-    Ok(body)
+    Ok(())
 }
 
 fn reasoning_name(value: ReasoningEffort) -> &'static str {

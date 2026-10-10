@@ -36,6 +36,14 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 `Reasoning` 事件透出（流式与非流式一致）。由于 Chat Completions 的输入消息不接受
 思考链字段（部分端点收到会直接报错），历史中的推理块不会回传。
 
+## 厂商扩展
+
+`CallOptions.provider_options` 的 `openai` 对象原样并入请求正文：Chat Completions 是众多
+兼容端点的通用协议，各家私有字段（如 Qwen 的 `enable_thinking`、vLLM 的 `chat_template_kwargs`、
+只认 `max_tokens` 的旧端点）无法穷举，因此采用透传。但已由通用参数写入的字段
+（`model`、`messages`、`stream`、`temperature`、`tools` 等）不允许覆盖，会在发送前以
+`UnsupportedFeature` 拒绝，避免 `CallOptions` 上的设置被悄悄改掉。
+
 联调工具通过位置参数 `chat`（或 `--protocol openai-chat`）选择该协议，根地址仍然不包含
 `/chat/completions` 后缀。
 
