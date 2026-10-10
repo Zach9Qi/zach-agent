@@ -81,7 +81,8 @@ async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
     assert_eq!(aggregate(parts).content.len(), 2);
 }
 
-/// 个别端点先发参数增量、后补 id：参数先缓存，id 到达时随 `ToolInputStart` 一次补发，
+/// 防御性用例：协议规定 `id` 随首个增量到达，"参数先到、id 后补"的顺序不见于任何官方文档，
+/// 只是为少数兼容端点兜底。参数先缓存，id 到达时随 `ToolInputStart` 一次补发，
 /// 任何事件都不能带着空 id 泄漏出去，否则累加器会为空 id 另开一个残缺的槽位。
 #[tokio::test]
 async fn arguments_arriving_before_the_id_are_buffered_until_the_id_is_known() {

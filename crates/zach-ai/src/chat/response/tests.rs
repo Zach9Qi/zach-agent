@@ -52,7 +52,8 @@ fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
             "{response}"
         );
     }
-    // 兼容端点可能省略 finish_reason，按正常结束处理但 raw 为空。
+    // 兼容端点可能省略 finish_reason，按正常结束处理但 raw 为空：非流式正文已完整到达，缺字段只能是
+    // 端点省略而非截断；流式缺 finish_reason 与截断无法区分，`stream/tests/failures.rs` 因此判为错误。
     let lenient = parse_response(
         "openai",
         json!({
