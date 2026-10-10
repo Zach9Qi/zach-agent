@@ -4,6 +4,7 @@ mod history;
 mod tool_definitions;
 
 use super::*;
+use crate::test_support::{profile, reasoning_profile};
 use serde_json::json;
 use zach_ai_core::Message;
 
@@ -155,13 +156,16 @@ fn reasoning_effort_maps_to_adaptive_thinking_and_effort() {
 #[test]
 fn profile_downgrades_or_drops_settings_the_model_cannot_honor() {
     use zach_ai_core::ModelWarning;
-    let fable = crate::ModelCatalog::builtin()
-        .get("anthropic", "claude-fable-5")
-        .unwrap();
+    let fable = profile(
+        "anthropic",
+        "claude-fable-5",
+        reasoning_profile(&[ReasoningEffort::Low, ReasoningEffort::High], false),
+        false,
+    );
     let mut options = CallOptions::new(vec![Message::user("x")])
         .with_reasoning(ReasoningEffort::Minimal)
         .with_temperature(0.5);
-    let built = build_request(&fable.id, Some(fable), &options, false).unwrap();
+    let built = build_request(&fable.id, Some(&fable), &options, false).unwrap();
     assert_eq!(built.body["output_config"]["effort"], "low");
     assert!(built.body.get("temperature").is_none());
     assert_eq!(built.warnings.len(), 2);
@@ -175,7 +179,7 @@ fn profile_downgrades_or_drops_settings_the_model_cannot_honor() {
     ));
     options.reasoning = Some(ReasoningEffort::None);
     options.temperature = None;
-    let built = build_request(&fable.id, Some(fable), &options, false).unwrap();
+    let built = build_request(&fable.id, Some(&fable), &options, false).unwrap();
     assert!(built.body.get("thinking").is_none());
     assert_eq!(built.warnings.len(), 1);
     let built = build_request("custom", None, &options, false).unwrap();
@@ -187,15 +191,18 @@ fn profile_downgrades_or_drops_settings_the_model_cannot_honor() {
 /// `temperature` / `top_k` 被丢弃并给出警告，显式关闭思考时则保留。
 #[test]
 fn legacy_generations_use_budget_tokens_and_thinking_drops_sampling_parameters() {
-    let sonnet = crate::ModelCatalog::builtin()
-        .get("anthropic", "claude-sonnet-4-5")
-        .unwrap();
+    let sonnet = profile(
+        "anthropic",
+        "claude-sonnet-4-5",
+        reasoning_profile(&[], false),
+        true,
+    );
     let mut options =
         CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::High);
     options.temperature = Some(0.5);
     options.top_k = Some(40);
     options.top_p = Some(0.75);
-    let built = build_request(&sonnet.id, Some(sonnet), &options, false).unwrap();
+    let built = build_request(&sonnet.id, Some(&sonnet), &options, false).unwrap();
     // 预算换算与采样参数丢弃的具体数值由 `thinking.rs` 的单元测试覆盖，这里只验证接线与顺序。
     assert_eq!(built.body["thinking"]["type"], "enabled");
     assert!(built.body.get("output_config").is_none());
@@ -214,13 +221,16 @@ fn legacy_generations_use_budget_tokens_and_thinking_drops_sampling_parameters()
     assert!(built.body.get("output_config").is_none());
     assert!(built.warnings.is_empty());
     // 覆盖使通用档位整体失效：档案不支持的档位不再触发发送前报错；去掉覆盖则照常拒绝。
-    let opus = crate::ModelCatalog::builtin()
-        .get("anthropic", "claude-opus-4-6")
-        .unwrap();
+    let opus = profile(
+        "anthropic",
+        "claude-opus-4-6",
+        reasoning_profile(&[ReasoningEffort::High], false),
+        true,
+    );
     options.reasoning = Some(ReasoningEffort::Xhigh);
-    assert!(build_request(&opus.id, Some(opus), &options, false).is_ok());
+    assert!(build_request(&opus.id, Some(&opus), &options, false).is_ok());
     options.provider_options = None;
-    assert!(build_request(&opus.id, Some(opus), &options, false).is_err());
+    assert!(build_request(&opus.id, Some(&opus), &options, false).is_err());
 }
 
 #[test]

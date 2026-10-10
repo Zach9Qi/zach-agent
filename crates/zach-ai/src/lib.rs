@@ -17,6 +17,16 @@ mod transport;
 ))]
 mod validate;
 
+#[cfg(all(
+    test,
+    any(
+        feature = "openai-responses",
+        feature = "openai-chat",
+        feature = "anthropic"
+    )
+))]
+mod test_support;
+
 #[cfg(feature = "openai-responses")]
 pub mod responses;
 #[cfg(feature = "openai-responses")]

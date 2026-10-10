@@ -1,6 +1,7 @@
 //! 请求转换覆盖消息顺序、推理回放、附件与协议不支持项。
 
 use super::*;
+use crate::test_support::{profile, reasoning_profile};
 use zach_ai_core::{
     AssistantPart, FileData, FunctionTool, Message, Prompt, ProviderOptions, ProviderTool,
     ToolChoice, ToolPart, UserPart,
@@ -195,44 +196,50 @@ fn provider_options_merge_reasoning_and_keep_replay_enabled() {
     assert_eq!(body["include"], json!(["reasoning.encrypted_content"]));
 }
 
-/// 档案声明不接受 temperature 或不支持某档位时，在发送前丢弃或报错，而不是让服务端返回 400。
+/// 档案声明不接受 temperature 或不支持某档位时，在发送前丢弃或报错，而不是让服务端返回 400；
+/// `max` 按别名降级为 xhigh。
 #[test]
 fn profile_rejects_or_drops_settings_before_sending() {
-    use zach_ai_core::{ModelWarning, ReasoningEffort};
-    let catalog = crate::ModelCatalog::builtin();
-    let gpt5 = catalog.get("openai", "gpt-5").unwrap();
+    use zach_ai_core::ModelWarning;
+    use zach_ai_core::ReasoningEffort::{High, Max, Xhigh};
+    let locked = profile(
+        "openai",
+        "no-temperature",
+        reasoning_profile(&[High], false),
+        false,
+    );
     let mut options = CallOptions::new(vec![Message::user("x")])
         .with_temperature(0.5)
-        .with_reasoning(ReasoningEffort::Xhigh);
+        .with_reasoning(Xhigh);
     assert!(matches!(
-        build_request(&gpt5.id, Some(gpt5), &options, false),
+        build_request(&locked.id, Some(&locked), &options, false),
         Err(ModelError::UnsupportedFeature { feature, .. }) if feature == "reasoning_effort.xhigh"
     ));
-    options.reasoning = Some(ReasoningEffort::High);
-    let built = build_request(&gpt5.id, Some(gpt5), &options, false).unwrap();
+    options.reasoning = Some(High);
+    let built = build_request(&locked.id, Some(&locked), &options, false).unwrap();
     assert!(built.body.get("temperature").is_none());
     assert_eq!(built.body["reasoning"]["effort"], "high");
     assert!(matches!(
         &built.warnings[0],
         ModelWarning::Unsupported { feature, .. } if feature == "temperature"
     ));
-    let gpt41 = catalog.get("openai", "gpt-4.1").unwrap();
-    let built = build_request(&gpt41.id, Some(gpt41), &options, false).unwrap();
+    let plain = profile("openai", "no-reasoning", None, true);
+    let built = build_request(&plain.id, Some(&plain), &options, false).unwrap();
     assert!(built.body.get("reasoning").is_none());
     assert_eq!(built.body["temperature"], 0.5);
     assert!(matches!(
         &built.warnings[0],
         ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
     ));
-    // `max` 由档案裁决：gpt-5.6 照常发送，仅到 xhigh 的 gpt-5.2 降级并给出警告。
     options.temperature = None;
-    options.reasoning = Some(ReasoningEffort::Max);
-    let newest = catalog.get("openai", "gpt-5.6").unwrap();
-    let built = build_request(&newest.id, Some(newest), &options, false).unwrap();
-    assert_eq!(built.body["reasoning"]["effort"], "max");
-    assert!(built.warnings.is_empty());
-    let xhigh_only = catalog.get("openai", "gpt-5.2").unwrap();
-    let built = build_request(&xhigh_only.id, Some(xhigh_only), &options, false).unwrap();
+    options.reasoning = Some(Max);
+    let xhigh_only = profile(
+        "openai",
+        "xhigh-only",
+        reasoning_profile(&[High, Xhigh], true),
+        true,
+    );
+    let built = build_request(&xhigh_only.id, Some(&xhigh_only), &options, false).unwrap();
     assert_eq!(built.body["reasoning"]["effort"], "xhigh");
     assert!(matches!(
         &built.warnings[0],

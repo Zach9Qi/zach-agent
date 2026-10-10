@@ -1,6 +1,7 @@
 //! Chat Completions 请求参数映射：工具结果、推理档位、输出上限、文本部件、输出格式与扩展参数。
 
 use super::*;
+use crate::test_support::{profile, reasoning_profile};
 
 /// tool 消息的 content 只接受文本部件，文件附件必须在发送前被拒绝而非生成非法部件。
 #[test]
@@ -168,10 +169,7 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
 /// 注入的档案参与请求校验：不支持推理的模型丢弃档位并给出警告。
 #[test]
 fn injected_profile_drives_request_validation() {
-    let gpt41 = crate::ModelCatalog::builtin()
-        .get("openai", "gpt-4.1")
-        .unwrap()
-        .clone();
+    let gpt41 = profile("openai", "gpt-4.1", None, true);
     let model = OpenAiChatCompletionsModel::new("k", "proxy-model").with_profile(gpt41);
     let options = CallOptions::new(vec![Message::user("x")])
         .with_reasoning(zach_ai_core::ReasoningEffort::High);
@@ -183,31 +181,36 @@ fn injected_profile_drives_request_validation() {
     ));
 }
 
-/// `max` 档位由档案裁决而非一刀切拒绝：gpt-5.6 及更新代际照常发送，仅到 xhigh 的代际
-/// 降级并给出警告，连 xhigh 都没有的代际发送前报错；档案未知时原样发送由服务端裁决。
+/// `max` 档位由档案裁决而非一刀切拒绝：声明支持的模型照常发送，仅到 xhigh 的模型降级并
+/// 给出警告；档案未知时原样发送由服务端裁决。不支持且无别名时的报错由 `validate` 单元测试覆盖。
 #[test]
 fn max_effort_follows_the_profile_instead_of_a_blanket_rejection() {
-    let catalog = crate::ModelCatalog::builtin();
+    use zach_ai_core::ReasoningEffort::{High, Max, Xhigh};
     let mut options = CallOptions::new(vec![Message::user("你好")]);
-    options.reasoning = Some(zach_ai_core::ReasoningEffort::Max);
-    let newest = catalog.get("openai", "gpt-5.6").unwrap();
+    options.reasoning = Some(Max);
+    let newest = profile(
+        "openai",
+        "supports-max",
+        reasoning_profile(&[High, Xhigh, Max], true),
+        true,
+    );
     let built =
-        request::build_request(&newest.id, "openai", Some(newest), &options, false).unwrap();
+        request::build_request(&newest.id, "openai", Some(&newest), &options, false).unwrap();
     assert_eq!(built.body["reasoning_effort"], "max");
     assert!(built.warnings.is_empty());
-    let xhigh_only = catalog.get("openai", "gpt-5.2").unwrap();
-    let built = request::build_request(&xhigh_only.id, "openai", Some(xhigh_only), &options, false)
-        .unwrap();
+    let xhigh_only = profile(
+        "openai",
+        "xhigh-only",
+        reasoning_profile(&[High, Xhigh], true),
+        true,
+    );
+    let built =
+        request::build_request(&xhigh_only.id, "openai", Some(&xhigh_only), &options, false)
+            .unwrap();
     assert_eq!(built.body["reasoning_effort"], "xhigh");
     assert!(matches!(
         &built.warnings[0],
         zach_ai_core::ModelWarning::Compatibility { feature, .. }
-            if feature == "reasoning_effort.max"
-    ));
-    let no_xhigh = catalog.get("openai", "gpt-5").unwrap();
-    assert!(matches!(
-        request::build_request(&no_xhigh.id, "openai", Some(no_xhigh), &options, false),
-        Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. })
             if feature == "reasoning_effort.max"
     ));
     let unknown = request::build_request("proxy-model", "openai", None, &options, false).unwrap();
