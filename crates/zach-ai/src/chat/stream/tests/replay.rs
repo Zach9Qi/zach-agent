@@ -4,6 +4,18 @@ use super::*;
 use crate::chat::{request::build_request, response::parse_response};
 use zach_ai_core::{CallOptions, Message, OutputContent, ToolPart};
 
+/// index 固定为 0 的单个工具调用增量；`id` 与函数名按需携带。
+fn tool_call_delta(id: Option<&str>, name: Option<&str>, arguments: &str) -> Value {
+    let mut call = json!({"index": 0, "function": {"arguments": arguments}});
+    if let Some(id) = id {
+        call["id"] = json!(id);
+    }
+    if let Some(name) = name {
+        call["function"]["name"] = json!(name);
+    }
+    delta(json!({"tool_calls": [call]}), None)
+}
+
 /// 并行工具调用的收尾事件必须按厂商给出的 index 顺序发出，不能依赖哈希表遍历顺序。
 #[tokio::test]
 async fn parallel_tool_calls_finish_in_index_order() {
@@ -40,16 +52,7 @@ async fn parallel_tool_calls_finish_in_index_order() {
 /// 换 id 时上一个调用必须完整发出，参数不能串到新调用里。
 #[tokio::test]
 async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
-    let call = |id: Option<&str>, name: Option<&str>, arguments: &str| {
-        let mut call = json!({"index": 0, "function": {"arguments": arguments}});
-        if let Some(id) = id {
-            call["id"] = json!(id);
-        }
-        if let Some(name) = name {
-            call["function"]["name"] = json!(name);
-        }
-        delta(json!({"tool_calls": [call]}), None)
-    };
+    let call = tool_call_delta;
     let wire = frame(&call(Some("call_a"), Some("add"), "{\"a\""))
         + &frame(&call(None, None, ":1}"))
         + &frame(&call(Some("call_b"), Some("sub"), "{\"b\":2}"))
@@ -76,6 +79,81 @@ async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
         ]
     );
     assert_eq!(aggregate(parts).content.len(), 2);
+}
+
+/// 个别端点先发参数增量、后补 id：参数先缓存，id 到达时随 `ToolInputStart` 一次补发，
+/// 任何事件都不能带着空 id 泄漏出去，否则累加器会为空 id 另开一个残缺的槽位。
+#[tokio::test]
+async fn arguments_arriving_before_the_id_are_buffered_until_the_id_is_known() {
+    let wire = frame(&tool_call_delta(None, Some("add"), "{\"a\""))
+        + &frame(&tool_call_delta(Some("call_a"), None, ":1"))
+        + &frame(&tool_call_delta(None, None, "}"))
+        + &frame(&delta(json!({}), Some("tool_calls")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    let tool_events: Vec<(&str, String)> = parts
+        .iter()
+        .filter_map(|part| match part {
+            Ok(StreamPart::ToolInputStart { id, tool_name, .. }) => {
+                Some(("start", format!("{id}:{tool_name}")))
+            }
+            Ok(StreamPart::ToolInputDelta { id, delta, .. }) => {
+                Some(("delta", format!("{id}:{delta}")))
+            }
+            Ok(StreamPart::ToolInputEnd { id, .. }) => Some(("end", id.clone())),
+            Ok(StreamPart::ToolCall {
+                tool_call_id,
+                input,
+                ..
+            }) => Some(("call", format!("{tool_call_id}:{input}"))),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        tool_events,
+        [
+            ("start", "call_a:add".to_owned()),
+            ("delta", "call_a:{\"a\"".to_owned()),
+            ("delta", "call_a::1".to_owned()),
+            ("delta", "call_a:}".to_owned()),
+            ("end", "call_a".to_owned()),
+            ("call", "call_a:{\"a\":1}".to_owned()),
+        ]
+    );
+    let result = aggregate(parts);
+    assert_eq!(result.content.len(), 1, "{:?}", result.content);
+}
+
+/// 始终没有 id 的工具调用无法与执行结果配对：不能当作正常调用发出，也不能静默消失——
+/// finish_reason 仍是 `tool_calls`，上层会误以为模型什么都没调用。
+#[tokio::test]
+async fn tool_call_without_any_id_poisons_the_turn_instead_of_vanishing() {
+    let wire = frame(&tool_call_delta(None, Some("add"), "{\"a\":1}"))
+        + &frame(&delta(json!({}), Some("tool_calls")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    assert!(parts.iter().all(Result::is_ok), "{parts:?}");
+    assert!(!parts
+        .iter()
+        .any(|p| matches!(p, Ok(StreamPart::ToolCall { .. }))));
+    assert!(parts.iter().any(|p| matches!(
+        p,
+        Ok(StreamPart::Error { message, raw: Some(raw) })
+            if message.contains("缺少 id") && raw["name"] == "add"
+    )));
+    let mut accumulator = StreamAccumulator::new();
+    for part in parts {
+        accumulator.process(part.unwrap());
+    }
+    assert_eq!(
+        accumulator.finish().finish_reason.unified,
+        UnifiedFinishReason::Error
+    );
+    // 只有 index 的占位增量不是调用，不报错。
+    let wire = frame(&delta(json!({"tool_calls": [{"index": 0}]}), None))
+        + &frame(&delta(json!({"content": "答"}), Some("stop")))
+        + DONE;
+    assert_eq!(aggregate(parse_wire(wire).await).text(), "答");
 }
 
 /// 流式拼接的工具调用与非流式响应得到同样的内容，并按 Chat 消息形状回放到下一轮。

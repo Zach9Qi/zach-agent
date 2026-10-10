@@ -33,6 +33,8 @@ pub(super) struct ChoiceState {
     refusal: Block,
     /// 按 `tool_calls[].index` 排序，并行调用的收尾顺序与厂商编号一致。
     tools: BTreeMap<u64, ToolState>,
+    /// 是否已发出 `Error`（如工具调用始终没有 id），由解析器汇总为本轮失败。
+    pub(super) failed: bool,
 }
 
 impl ChoiceState {
@@ -43,6 +45,7 @@ impl ChoiceState {
             text: Block::Pending,
             refusal: Block::Pending,
             tools: BTreeMap::new(),
+            failed: false,
         }
     }
 
@@ -134,6 +137,7 @@ impl ChoiceState {
     }
 
     /// 工具调用按 `index` 累积：`id` 与函数名通常只在首个增量出现，参数逐块拼接。
+    /// id 到达之前的参数只缓存不透出，避免泄漏 id 为空的事件。
     fn tool_delta(&mut self, call: &Value, parts: &mut Vec<StreamPart>) {
         let tool_index = call["index"].as_u64().unwrap_or(0);
         let incoming_id = call["id"].as_str().filter(|id| !id.is_empty());
@@ -141,7 +145,9 @@ impl ChoiceState {
         // 只能靠 id 变化识别新调用：先把上一个按完整调用发出，再另起状态。
         if let Some(previous) = self.tools.get_mut(&tool_index) {
             if incoming_id.is_some_and(|id| !previous.id.is_empty() && previous.id != id) {
-                finish_tool(previous, parts);
+                if finish_tool(previous, parts) {
+                    self.failed = true;
+                }
                 self.tools.remove(&tool_index);
             }
         }
@@ -172,10 +178,18 @@ impl ChoiceState {
                 provider_metadata: None,
             });
             entry.started = true;
+            // id 晚于参数到达：把此前缓存的参数作为首个增量一次补发。
+            if !entry.arguments.is_empty() {
+                parts.push(StreamPart::ToolInputDelta {
+                    id: entry.id.clone(),
+                    delta: entry.arguments.clone(),
+                    provider_metadata: None,
+                });
+            }
         }
         if let Some(arguments) = call.pointer("/function/arguments").and_then(Value::as_str) {
             entry.arguments.push_str(arguments);
-            if !arguments.is_empty() {
+            if entry.started && !arguments.is_empty() {
                 parts.push(StreamPart::ToolInputDelta {
                     id: entry.id.clone(),
                     delta: arguments.into(),
@@ -215,19 +229,32 @@ impl ChoiceState {
         }
         self.refusal = Block::Closed;
         for state in self.tools.values_mut() {
-            finish_tool(state, parts);
+            if finish_tool(state, parts) {
+                self.failed = true;
+            }
         }
     }
 }
 
-/// 结束一个工具调用：发出入参结束与完整调用；没有 id 的残缺调用无法配对结果，直接丢弃。
-fn finish_tool(state: &mut ToolState, parts: &mut Vec<StreamPart>) {
+/// 结束一个工具调用：发出入参结束与完整调用。
+///
+/// 始终没有 id 的调用无法与执行结果配对，不能当作正常调用发出；但 finish_reason 多半仍是
+/// `tool_calls`，静默丢弃会让上层以为模型"什么都没调用"，因此以 `Error` 报告，返回 `true`。
+/// 既无 id 也无名称和参数的空壳（仅 `index` 的占位增量）直接忽略。
+fn finish_tool(state: &mut ToolState, parts: &mut Vec<StreamPart>) -> bool {
     if state.ended {
-        return;
+        return false;
     }
     state.ended = true;
     if state.id.is_empty() {
-        return;
+        if state.name.is_empty() && state.arguments.is_empty() {
+            return false;
+        }
+        parts.push(StreamPart::Error {
+            message: "Chat Completions 工具调用缺少 id，无法与执行结果配对".into(),
+            raw: Some(json!({"name": state.name, "arguments": state.arguments})),
+        });
+        return true;
     }
     parts.push(StreamPart::ToolInputEnd {
         id: state.id.clone(),
@@ -241,4 +268,5 @@ fn finish_tool(state: &mut ToolState, parts: &mut Vec<StreamPart>) {
         dynamic: false,
         provider_metadata: None,
     });
+    false
 }

@@ -109,10 +109,14 @@ impl ChatStreamParser {
             return;
         }
         let index = choice["index"].as_u64().unwrap_or(0);
-        self.choices
+        let state = self
+            .choices
             .entry(index)
-            .or_insert_with(|| ChoiceState::new(index))
-            .delta(&choice["delta"], parts);
+            .or_insert_with(|| ChoiceState::new(index));
+        state.delta(&choice["delta"], parts);
+        if state.failed {
+            self.failed = true;
+        }
         if let Some(reason) = choice["finish_reason"].as_str() {
             self.pending_finish = Some(finish_reason(Some(reason)));
         }
@@ -129,6 +133,9 @@ impl ChatStreamParser {
         let mut parts = Vec::new();
         for choice in self.choices.values_mut() {
             choice.finish(&mut parts);
+            if choice.failed {
+                self.failed = true;
+            }
         }
         parts.push(StreamPart::Finish {
             usage: self.pending_usage.take().unwrap_or_default(),

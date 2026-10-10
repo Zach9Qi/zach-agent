@@ -24,7 +24,9 @@ while let Some(part) = stream.next().await {
 
 适配器支持文本和图片输入、函数工具、JSON Object/JSON Schema 输出、停止词、采样参数、
 推理强度、非流式生成与 SSE 流式生成。流式请求自动设置 `stream_options.include_usage`，
-以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用。
+以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用；
+`id` 晚于参数到达时参数先缓存，始终没有 `id` 的调用无法与结果配对，会以 `Error` 事件报告
+而不是静默丢弃。
 
 接入 Ollama、vLLM、LM Studio 等无需鉴权的兼容端点时 API Key 传空字符串即可，
 此时不发送 `Authorization` 头。兼容端点上的模型不在内置目录中，可用
