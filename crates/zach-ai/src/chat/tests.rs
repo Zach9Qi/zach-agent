@@ -235,6 +235,23 @@ fn output_limit_field_follows_the_declared_provider() {
     assert!(deepseek.get("max_completion_tokens").is_none());
 }
 
+/// 多段文本保留部件边界（与 Responses 适配器一致），单段仍用字符串兼容老端点。
+#[test]
+fn multiple_user_text_parts_keep_their_boundaries() {
+    use zach_ai_core::UserPart;
+    let options = CallOptions::new(vec![Message::User {
+        content: vec![UserPart::text("第一段"), UserPart::text("第二段")],
+        provider_options: None,
+    }]);
+    let body = request::build_request("gpt-test", "openai", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(
+        body["messages"][0]["content"],
+        json!([{"type": "text", "text": "第一段"}, {"type": "text", "text": "第二段"}])
+    );
+}
+
 /// JSON Schema 输出的严格模式由调用方显式选择：普通 Schema 在严格模式下会被服务端拒绝。
 #[test]
 fn json_schema_output_is_strict_only_when_requested() {

@@ -180,20 +180,11 @@ fn message(message: &Message) -> Result<Vec<Value>, ModelError> {
     }
 }
 
+/// 单个文本块用字符串形态，兼容只接受字符串 `content` 的老端点；多块一律用部件数组，
+/// 保留各段文本的边界（与 Responses 适配器一致），不再无分隔地拼成一段。
 fn user_content(parts: &[UserPart]) -> Result<Value, ModelError> {
-    if parts
-        .iter()
-        .all(|part| matches!(part, UserPart::Text { .. }))
-    {
-        return Ok(Value::String(
-            parts
-                .iter()
-                .filter_map(|part| match part {
-                    UserPart::Text { text, .. } => Some(text.as_str()),
-                    _ => None,
-                })
-                .collect::<String>(),
-        ));
+    if let [UserPart::Text { text, .. }] = parts {
+        return Ok(Value::String(text.clone()));
     }
     parts
         .iter()
