@@ -49,6 +49,12 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
 Agent 层会以 `model.warnings` 事件呈现。
 
+## 流的收尾
+
+`finish_reason` 到达后等用量块（或 `[DONE]`）再发出 `Finish`；`Finish` 之前连接断开视为
+传输错误，之后省略 `[DONE]` 直接断开不影响结果。流内 `error` 分块使本轮结果为 `Error`，
+其后的断开不再额外报告为传输错误。
+
 ## HTTP 配置
 
 `with_client` 可传入自定义 `reqwest::Client`；默认客户端设置 30 秒连接超时与 300 秒读取超时

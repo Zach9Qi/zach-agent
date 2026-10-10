@@ -5,18 +5,13 @@ use crate::anthropic::response::parse_response;
 use zach_ai_core::UnifiedFinishReason;
 
 #[tokio::test]
-async fn eof_without_message_stop_is_a_transport_error() {
+async fn eof_before_finish_is_a_transport_error() {
     for wire in [
         String::new(),
         start_frame(),
         start_frame()
             + &frame(&json!({"type": "content_block_start", "index": 0,
                 "content_block": {"type": "text", "text": "半截"}})),
-        start_frame()
-            + &frame(
-                &json!({"type": "message_delta", "delta": {"stop_reason": "end_turn"},
-                "usage": {"output_tokens": 1}}),
-            ),
     ] {
         let parts = parse_wire(wire).await;
         assert!(matches!(
@@ -24,6 +19,32 @@ async fn eof_without_message_stop_is_a_transport_error() {
             Some(Err(ModelError::StreamError { .. }))
         ));
     }
+}
+
+/// `message_delta` 带 `stop_reason` 后响应已完整，`message_stop` 之前断开
+/// （FIN 或 RST）不能把一次成功的响应整体判为失败。
+#[tokio::test]
+async fn connection_loss_after_finish_without_message_stop_keeps_the_response() {
+    let wire = start_frame()
+        + &frame(&json!({"type": "content_block_start", "index": 0,
+            "content_block": {"type": "text", "text": "完整"}}))
+        + &frame(&json!({"type": "content_block_stop", "index": 0}))
+        + &frame(
+            &json!({"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+            "usage": {"output_tokens": 1}}),
+        );
+    let result = aggregate(parse_wire(wire.clone()).await);
+    assert_eq!(result.text(), "完整");
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Stop);
+    let source = futures::stream::iter(vec![
+        Ok(Bytes::from(wire)),
+        Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
+    ]);
+    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![])
+        .collect::<Vec<_>>()
+        .await;
+    assert!(parts.iter().all(Result::is_ok));
+    assert_eq!(aggregate(parts).text(), "完整");
 }
 
 #[tokio::test]

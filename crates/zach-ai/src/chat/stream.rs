@@ -147,6 +147,10 @@ impl SseParser for ChatStreamParser {
     fn failed(&self) -> bool {
         self.failed
     }
+
+    fn finished(&self) -> bool {
+        self.finished
+    }
 }
 
 pub(super) fn chat_stream<S, E>(

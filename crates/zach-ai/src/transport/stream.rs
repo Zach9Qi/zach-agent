@@ -2,9 +2,12 @@
 //!
 //! 流按消费需求拉取：消费方丢弃流即停止读取网络。三家适配器的终止语义统一为：
 //! - 解析器报告 `terminal` 后不再读取源流；
-//! - 源流在 `terminal` 之前结束，且解析器没有报告过错误事件，视为传输错误；
-//!   已经报告过错误事件（服务端通常随后直接断开）时不再叠加一个传输错误，
-//!   否则上层会把一个不可重试的厂商错误误判为可重试的传输故障。
+//! - 源流在 `terminal` 之前结束（干净 EOF 或传输错误）时，只有解析器既没报告过
+//!   错误事件、也没发出过 `Finish`，才视为传输错误；
+//!   - 已报告错误事件：服务端通常随后直接断开（FIN 或 RST 都有），再叠加一个可重试的
+//!     传输错误会让上层把不可重试的厂商错误误判为传输故障并反复重试；
+//!   - 已发出 `Finish`：Chat 在用量块、Anthropic 在 `message_delta` 就能收尾，之后只剩
+//!     纯终止符；代理或兼容端点省掉终止符就断开时，完整响应不能被尾部错误整体判失败。
 
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
@@ -25,6 +28,9 @@ pub(crate) trait SseParser: Send + 'static {
 
     /// 是否已报告过错误事件，之后连接关闭不再视为传输故障。
     fn failed(&self) -> bool;
+
+    /// 是否已发出 `Finish`（响应已语义完整），之后连接关闭不再视为传输故障。
+    fn finished(&self) -> bool;
 }
 
 struct State<S, P> {
@@ -68,15 +74,17 @@ where
             match state.source.next().await {
                 Some(Ok(bytes)) => state.feed(&bytes),
                 Some(Err(error)) => {
-                    state.queue.push_back(Err(ModelError::stream_error(
-                        format!("读取 {} SSE 字节流失败", state.label),
-                        error,
-                    )));
                     state.ended = true;
+                    if !state.settled() {
+                        state.queue.push_back(Err(ModelError::stream_error(
+                            format!("读取 {} SSE 字节流失败", state.label),
+                            error,
+                        )));
+                    }
                 }
                 None => {
                     state.ended = true;
-                    if !state.parser.failed() {
+                    if !state.settled() {
                         state.queue.push_back(Err(ModelError::StreamError {
                             message: format!("{} SSE 在终止事件到达前结束", state.label),
                             source: None,
@@ -89,6 +97,11 @@ where
 }
 
 impl<S, P: SseParser> State<S, P> {
+    /// 本轮结果是否已由事件决定（失败或完成），之后连接如何结束只是诊断信息。
+    fn settled(&self) -> bool {
+        self.parser.failed() || self.parser.finished()
+    }
+
     fn feed(&mut self, bytes: &[u8]) {
         match self.decoder.push(bytes) {
             Ok(frames) => {
@@ -116,10 +129,12 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
-    /// 脚本化解析器：`done` 帧置位 terminal，`fail` 帧发 Error 并置位 failed，其余原样透出。
+    /// 脚本化解析器：`done` 帧置位 terminal，`fail` 帧发 Error 并置位 failed，
+    /// `finish` 帧发 Finish 并置位 finished，其余原样透出。
     struct Scripted {
         terminal: bool,
         failed: bool,
+        finished: bool,
     }
 
     impl SseParser for Scripted {
@@ -136,6 +151,14 @@ mod tests {
                         raw: None,
                     }]
                 }
+                "finish" => {
+                    self.finished = true;
+                    vec![StreamPart::Finish {
+                        usage: Default::default(),
+                        finish_reason: zach_ai_core::FinishReason::stop(),
+                        provider_metadata: None,
+                    }]
+                }
                 other => vec![StreamPart::TextDelta {
                     id: "t".into(),
                     delta: other.into(),
@@ -149,12 +172,16 @@ mod tests {
         fn failed(&self) -> bool {
             self.failed
         }
+        fn finished(&self) -> bool {
+            self.finished
+        }
     }
 
     fn parser() -> Scripted {
         Scripted {
             terminal: false,
             failed: false,
+            finished: false,
         }
     }
 
@@ -176,12 +203,38 @@ mod tests {
         ));
     }
 
-    /// 服务端在流中报错后直接断开是常态，不能再叠加一个可重试的传输错误。
+    /// 服务端在流中报错后直接断开是常态，无论是干净 FIN 还是 RST，
+    /// 都不能再叠加一个可重试的传输错误。
     #[tokio::test]
-    async fn eof_after_error_event_is_not_reported_again() {
+    async fn connection_loss_after_error_event_is_not_reported_again() {
         let parts = run(vec![Ok("data: fail\n\n")]).await;
         assert_eq!(parts.len(), 2);
         assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
+        let parts = run(vec![
+            Ok("data: fail\n\n"),
+            Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
+        ])
+        .await;
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
+    }
+
+    /// `Finish` 已发出后响应即语义完整，终止符之前的断开（FIN 或 RST）不改变结果。
+    #[tokio::test]
+    async fn connection_loss_after_finish_keeps_the_response_successful() {
+        for tail in [
+            vec![],
+            vec![Err(std::io::Error::from(
+                std::io::ErrorKind::ConnectionReset,
+            ))],
+        ] {
+            let mut chunks = vec![Ok("data: a\n\ndata: finish\n\n")];
+            chunks.extend(tail);
+            let parts = run(chunks).await;
+            assert_eq!(parts.len(), 3, "{parts:?}");
+            assert!(parts.iter().all(Result::is_ok));
+            assert!(matches!(&parts[2], Ok(StreamPart::Finish { .. })));
+        }
     }
 
     #[tokio::test]

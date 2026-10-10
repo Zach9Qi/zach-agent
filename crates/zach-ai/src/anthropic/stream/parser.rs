@@ -11,7 +11,7 @@ pub(in crate::anthropic) struct MessagesStreamParser {
     pub(super) blocks: HashMap<u64, Block>,
     /// `message_start` 给出的用量，后续 `message_delta` 的累计字段覆盖其中同名项。
     usage: Option<Value>,
-    finished: bool,
+    pub(super) finished: bool,
     pub(super) terminal: bool,
     pub(super) failed: bool,
     raw: bool,

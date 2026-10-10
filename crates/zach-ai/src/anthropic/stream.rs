@@ -26,6 +26,10 @@ impl SseParser for MessagesStreamParser {
     fn failed(&self) -> bool {
         self.failed
     }
+
+    fn finished(&self) -> bool {
+        self.finished
+    }
 }
 
 pub(super) fn messages_stream<S, E>(

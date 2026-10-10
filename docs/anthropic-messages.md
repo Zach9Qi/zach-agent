@@ -112,9 +112,11 @@ Agent 层会以 `model.warnings` 事件呈现。
 - 引用：文本块中的 `citations` 以 `Source` 事件透出（网页检索为 URL，文档定位为 Document）。
 - 未知内容块以 `Custom { kind: "anthropic_content_block" }` 透出并原样回放。
 
-流式解析按 `content_block_*` 事件维护生命周期，`message_delta` 给出累计用量与结束原因，
-`message_stop` 之后不再读取网络；在此之前连接断开视为传输错误，流内 `error` 事件
-（如 `overloaded_error`）使本轮结果为 `Error`。HTTP 429 与 529 映射为可重试的限流错误。
+流式解析按 `content_block_*` 事件维护生命周期，`message_delta` 给出累计用量与结束原因并
+发出 `Finish`，`message_stop` 之后不再读取网络。`Finish` 之前连接断开视为传输错误；
+`Finish` 之后、`message_stop` 之前断开（代理省略终止符）不影响结果。流内 `error` 事件
+（如 `overloaded_error`）使本轮结果为 `Error`，其后的断开不再额外报告。
+HTTP 429 与 529 映射为可重试的限流错误。
 
 ## 联调
 

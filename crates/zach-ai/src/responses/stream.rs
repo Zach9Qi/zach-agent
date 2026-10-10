@@ -27,6 +27,11 @@ impl SseParser for ResponsesStreamParser {
     fn failed(&self) -> bool {
         self.failed
     }
+
+    /// Responses 的 `Finish` 只随终止事件一起发出，两者同时成立。
+    fn finished(&self) -> bool {
+        self.terminal
+    }
 }
 
 pub(super) fn responses_stream<S, E>(
