@@ -111,23 +111,53 @@ pub(crate) async fn execute(
     }
 }
 
-/// 流式响应必须是 `text/event-stream`，否则按厂商错误处理（常见于网关返回 HTML 或 JSON）。
-pub(crate) fn require_event_stream(response: &Response, provider: &str) -> Result<(), ModelError> {
+/// 流式响应应是 `text/event-stream`。
+///
+/// 网关返回 JSON、HTML 或纯文本说明拿到的不是流（错误页，或把流式请求当普通请求处理了），
+/// 读出正文按厂商错误报告，避免错误信息丢失；缺失或 `application/octet-stream` 这类配置疏漏
+/// 放行，由 SSE 解码裁决。`guard` 约束读取正文的时长（流式请求的空闲守卫）。
+pub(crate) async fn require_event_stream(
+    response: Response,
+    provider: &str,
+    label: &str,
+    guard: Option<Duration>,
+) -> Result<Response, ModelError> {
     let content_type = response
         .headers()
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    let media_type = content_type.split(';').next().unwrap_or_default().trim();
-    if media_type.eq_ignore_ascii_case("text/event-stream") {
-        Ok(())
-    } else {
-        Err(ModelError::provider_error(
-            provider,
-            format!("期望 text/event-stream，收到 {content_type}"),
-            None,
-        ))
+        .unwrap_or_default()
+        .to_owned();
+    if !looks_like_a_document(&content_type) {
+        return Ok(response);
     }
+    let status = response.status().as_u16();
+    let body = guarded(guard, label, "读取非流式响应", response.bytes())
+        .await?
+        .map_err(|err| ModelError::stream_error(format!("读取 {label} 响应失败"), err))?;
+    Err(match classify(provider, status, &body) {
+        ModelError::ProviderError {
+            provider,
+            message,
+            raw,
+        } => ModelError::ProviderError {
+            provider,
+            message: format!("期望 text/event-stream，收到 {content_type}: {message}"),
+            raw,
+        },
+        other => other,
+    })
+}
+
+/// JSON、HTML 与纯文本是文档而不是事件流。
+fn looks_like_a_document(content_type: &str) -> bool {
+    let media_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    media_type == "text/html" || media_type == "text/plain" || media_type.ends_with("json")
 }
 
 /// 读取 JSON 响应体，连同可转为字符串的响应头一起返回。
@@ -234,6 +264,50 @@ mod tests {
         assert!(classify("p", 400, b"").to_string().contains("HTTP 400"));
         assert!(matches!(classify("p", 400, br#"{"message":"flat"}"#),
             ModelError::ProviderError { message, .. } if message == "flat"));
+    }
+
+    /// 网关把流式请求当普通请求处理时会回 JSON/HTML，正文里的错误信息不能丢；
+    /// 缺失或八位字节流这类 Content-Type 配置疏漏则放行，由 SSE 解码裁决。
+    #[tokio::test]
+    async fn document_content_types_are_rejected_with_the_body_message() {
+        let response = |content_type: Option<&str>, body: &'static str| -> Response {
+            let mut builder = http::Response::builder().status(200);
+            if let Some(content_type) = content_type {
+                builder = builder.header(CONTENT_TYPE, content_type);
+            }
+            builder.body(body).unwrap().into()
+        };
+        let json = response(
+            Some("application/json; charset=utf-8"),
+            r#"{"error":{"message":"not a stream"}}"#,
+        );
+        assert!(matches!(
+            require_event_stream(json, "p", "测试", None).await,
+            Err(ModelError::ProviderError { provider, message, raw: Some(_) })
+                if provider == "p"
+                    && message.contains("not a stream")
+                    && message.contains("application/json")
+        ));
+        for document in ["text/html", "text/plain", "application/problem+json"] {
+            assert!(
+                require_event_stream(response(Some(document), "<html>"), "p", "测试", None)
+                    .await
+                    .is_err(),
+                "{document}"
+            );
+        }
+        for lenient in [
+            Some("text/event-stream; charset=utf-8"),
+            Some("application/octet-stream"),
+            None,
+        ] {
+            assert!(
+                require_event_stream(response(lenient, "data: x\n\n"), "p", "测试", None)
+                    .await
+                    .is_ok(),
+                "{lenient:?}"
+            );
+        }
     }
 
     #[test]

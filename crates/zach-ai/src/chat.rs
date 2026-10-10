@@ -222,7 +222,13 @@ impl LanguageModel for OpenAiChatCompletionsModel {
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         let (response, built) = self.send(&options, true).await?;
-        transport::require_event_stream(&response, &self.provider)?;
+        let response = transport::require_event_stream(
+            response,
+            &self.provider,
+            LABEL,
+            self.timeouts.stream_idle,
+        )
+        .await?;
         Ok(chat_stream(
             response.bytes_stream(),
             ChatStreamParser::new(options.include_raw_chunks),

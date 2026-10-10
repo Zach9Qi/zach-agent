@@ -139,7 +139,9 @@ API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴�
 HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为保留状态码
 与原始正文的 `ServerError`，其他非成功状态映射为保留原始错误 JSON 的 `ProviderError`。
 传输失败映射为 `StreamError` 并保留根因。沿用 core 的重试规则：限流、服务端暂时性故障
-和传输错误可由 Agent 重试，`ProviderError` 是对请求本身的拒绝，不重试。
+和传输错误可由 Agent 重试，`ProviderError` 是对请求本身的拒绝，不重试。流式请求若收到
+JSON、HTML 或纯文本而非 `text/event-stream`（网关错误页、或把流式请求当普通请求处理），
+按带正文信息的 `ProviderError` 报告；Content-Type 缺失或为 `application/octet-stream` 时放行。
 
 SSE JSON/协议错误产生 `StreamPart::Error`；之后可以继续收集诊断与 usage，
 但聚合器不会把本次调用重新判为成功。`*.done` 快照与已收到的增量对不上（中间代理改写了文本）

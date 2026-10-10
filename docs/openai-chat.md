@@ -86,7 +86,9 @@ Agent 层会以 `model.warnings` 事件呈现。
 `read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
 
 HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为可重试的
-`ServerError`，其他非成功状态映射为 `ProviderError`；传输失败映射为 `StreamError`。
+`ServerError`，其他非成功状态映射为 `ProviderError`；传输失败映射为 `StreamError`。流式请求若收到
+JSON、HTML 或纯文本而非 `text/event-stream`，按带正文信息的 `ProviderError` 报告；Content-Type
+缺失或为 `application/octet-stream` 时放行。
 
 ## 厂商扩展
 

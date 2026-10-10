@@ -27,3 +27,5 @@ reqwest = { workspace = true, features = ["json", "stream"] }
 [dev-dependencies]
 # 空闲超时等用例使用虚拟时钟（`start_paused`），避免真实等待
 tokio = { workspace = true, features = ["test-util"] }
+# 用 http::Response 构造 reqwest 响应，离线验证内容类型校验；已在 reqwest 的依赖图中
+http = "1"
