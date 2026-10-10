@@ -82,6 +82,15 @@ fn chat_model_identity_does_not_expose_api_key() {
     assert!(!format!("{model:?}").contains("private"));
 }
 
+/// URL 支持声明必须与请求构建的实际能力一致，防止宿主跳过下载后构建失败。
+#[test]
+fn url_support_claims_match_request_builder_capabilities() {
+    let model = OpenAiChatCompletionsModel::new("secret", "gpt-test");
+    assert!(model.is_url_supported("image/png", "https://example.com/a.png"));
+    assert!(!model.is_url_supported("application/pdf", "https://example.com/a.pdf"));
+    assert!(!model.is_url_supported("image/png", "file:///tmp/a.png"));
+}
+
 /// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
 #[test]
 fn reasoning_max_level_is_rejected_before_sending() {

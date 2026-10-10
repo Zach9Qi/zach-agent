@@ -167,7 +167,9 @@ impl LanguageModel for OpenAiChatCompletionsModel {
     }
 
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {
-        (media_type.starts_with("image/") || media_type == "application/pdf")
+        // Chat Completions 的 `file` 内容块只接受 file_id 或内联数据，
+        // PDF 等文件 URL 会在请求构建时被拒绝，这里必须保持一致。
+        media_type.starts_with("image/")
             && (url.starts_with("https://") || url.starts_with("http://"))
     }
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
