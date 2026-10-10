@@ -1,11 +1,11 @@
-//! Chat Completions 的 HTTP 请求契约、模型身份与非流式结果；请求参数映射见 `tests/params.rs`，
-//! 流式生命周期见 `stream/tests.rs`。
+//! Chat Completions 的 HTTP 请求契约与非流式结果；模型身份等公开契约见 `tests/it/chat.rs`，
+//! 请求参数映射见 `tests/params.rs`，流式生命周期见 `stream/tests.rs`。
 
 mod params;
 
 use super::*;
 use serde_json::{json, Value};
-use zach_ai_core::{CallOptions, LanguageModel, Message};
+use zach_ai_core::{CallOptions, Message};
 
 #[test]
 fn request_uses_chat_endpoint_and_openai_message_shapes() {
@@ -90,41 +90,22 @@ fn generate_requests_carry_a_total_timeout_and_stream_requests_do_not() {
     assert_eq!(generate.timeout(), None);
 }
 
+/// 扩展参数优先读声明厂商的键，未提供时回退协议方 `openai` 的键。
 #[test]
-fn chat_model_identity_does_not_expose_api_key() {
-    let model = OpenAiChatCompletionsModel::new("private", "custom-model");
-    assert_eq!(model.provider(), "openai");
-    assert_eq!(model.model_id(), "custom-model");
-    assert!(!format!("{model:?}").contains("private"));
-}
-
-/// 接入 DeepSeek、Qwen 等兼容端点时声明厂商身份：档案改按该厂商查内置目录，
-/// 扩展参数改读该厂商键（未提供时回退 openai 键），回放标记仍是协议层的 openai 键。
-#[test]
-fn declared_provider_drives_catalog_lookup_and_provider_options_key() {
+fn provider_options_read_the_declared_provider_key_and_fall_back_to_openai() {
     use zach_ai_core::ProviderOptions;
-    let catalog = crate::ModelCatalog::builtin();
-    let deepseek = catalog.provider_models("deepseek")[0];
-    let model = OpenAiChatCompletionsModel::new("k", &deepseek.id)
-        .with_base_url("https://api.deepseek.com/v1")
-        .with_provider("deepseek");
-    assert_eq!(model.provider(), "deepseek");
-    assert_eq!(model.profile(), Some(deepseek));
-    assert!(OpenAiChatCompletionsModel::new("k", &deepseek.id)
-        .profile()
-        .is_none());
     let mut options = CallOptions::new(vec![Message::user("x")]);
     let mut provider = ProviderOptions::new();
     provider.insert("deepseek", json!({"thinking": {"type": "disabled"}}));
     provider.insert("openai", json!({"ignored": true}));
     options.provider_options = Some(provider);
-    let (_, built) = model.request(&options, false).unwrap();
+    let built = request::build_request("deepseek-chat", "deepseek", None, &options, false).unwrap();
     assert_eq!(built.body["thinking"], json!({"type": "disabled"}));
     assert!(built.body.get("ignored").is_none());
     let mut provider = ProviderOptions::new();
     provider.insert("openai", json!({"enable_thinking": false}));
     options.provider_options = Some(provider);
-    let (_, built) = model.request(&options, false).unwrap();
+    let built = request::build_request("deepseek-chat", "deepseek", None, &options, false).unwrap();
     assert_eq!(built.body["enable_thinking"], false);
 }
 
@@ -149,13 +130,4 @@ fn non_stream_response_surfaces_reasoning_content() {
     });
     let result = response::parse_response("openai", via_reasoning).unwrap();
     assert_eq!(result.reasoning().as_deref(), Some("换个字段"));
-}
-
-/// URL 支持声明必须与请求构建的实际能力一致，防止宿主跳过下载后构建失败。
-#[test]
-fn url_support_claims_match_request_builder_capabilities() {
-    let model = OpenAiChatCompletionsModel::new("secret", "gpt-test");
-    assert!(model.is_url_supported("image/png", "https://example.com/a.png"));
-    assert!(!model.is_url_supported("application/pdf", "https://example.com/a.pdf"));
-    assert!(!model.is_url_supported("image/png", "file:///tmp/a.png"));
 }

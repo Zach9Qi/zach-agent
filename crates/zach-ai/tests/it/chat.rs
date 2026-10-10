@@ -31,6 +31,20 @@ fn url_support_claims_match_request_builder_capabilities() {
     assert!(!model.is_url_supported("image/png", "file:///tmp/a.png"));
 }
 
+/// 接入 DeepSeek、Qwen 等兼容端点时声明厂商身份：`provider()` 与档案查询都改按该厂商。
+#[test]
+fn declared_provider_drives_identity_and_catalog_lookup() {
+    let deepseek = ModelCatalog::builtin().provider_models("deepseek")[0];
+    let model = OpenAiChatCompletionsModel::new("k", &deepseek.id)
+        .with_base_url("https://api.deepseek.com/v1")
+        .with_provider("deepseek");
+    assert_eq!(model.provider(), "deepseek");
+    assert_eq!(model.profile(), Some(deepseek));
+    assert!(OpenAiChatCompletionsModel::new("k", &deepseek.id)
+        .profile()
+        .is_none());
+}
+
 #[tokio::test]
 async fn unsupported_options_fail_without_accessing_the_endpoint() {
     let model = OpenAiChatCompletionsModel::new("secret", "example")
