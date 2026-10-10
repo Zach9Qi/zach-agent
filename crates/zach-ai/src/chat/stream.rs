@@ -1,30 +1,30 @@
 //! Chat Completions 增量事件转换：解析器接入共用 SSE 驱动。
+//!
+//! 每个 `choice` 的推理、正文、拒绝与工具调用由 [`choice::ChoiceState`] 维护；
+//! 本文件只处理分块级别的事务：`[DONE]`、错误分块、响应元数据、用量与收尾。
+
+mod choice;
+
+#[cfg(test)]
+mod tests;
 
 use bytes::Bytes;
 use futures::Stream;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
-use zach_ai_core::{LanguageModelStream, StreamPart};
+use std::collections::BTreeMap;
+use zach_ai_core::{FinishReason, LanguageModelStream, StreamPart, Usage};
 
-use super::response::{finish_reason, metadata, response_metadata, usage};
+use super::response::{finish_reason, response_metadata, usage};
 use crate::transport::{sse_stream, SseParser};
-
-struct ToolState {
-    id: String,
-    name: String,
-    arguments: String,
-    started: bool,
-    ended: bool,
-}
+use choice::ChoiceState;
 
 pub(super) struct ChatStreamParser {
-    texts: HashSet<String>,
-    text_buffers: HashMap<String, String>,
-    reasonings: HashSet<String>,
-    tools: HashMap<(u64, u64), ToolState>,
     raw: bool,
-    pending_finish: Option<zach_ai_core::FinishReason>,
-    pending_usage: Option<zach_ai_core::Usage>,
+    /// 按 `choice.index` 排序，收尾事件因此有确定的顺序。
+    choices: BTreeMap<u64, ChoiceState>,
+    /// 已收到的 `finish_reason`，等用量到达或 `[DONE]` 时再发 `Finish`。
+    pending_finish: Option<FinishReason>,
+    pending_usage: Option<Usage>,
     finished: bool,
     pub(super) terminal: bool,
     pub(super) failed: bool,
@@ -33,11 +33,8 @@ pub(super) struct ChatStreamParser {
 impl ChatStreamParser {
     pub(super) fn new(raw: bool) -> Self {
         Self {
-            texts: HashSet::new(),
-            text_buffers: HashMap::new(),
-            reasonings: HashSet::new(),
-            tools: HashMap::new(),
             raw,
+            choices: BTreeMap::new(),
             pending_finish: None,
             pending_usage: None,
             finished: false,
@@ -86,137 +83,32 @@ impl ChatStreamParser {
             });
             return parts;
         }
-        if let Some(id) = event["id"].as_str() {
+        if event["id"].as_str().is_some() {
             parts.push(StreamPart::ResponseMetadata(response_metadata(&event)));
-            let _ = id;
         }
-        let value = event.get("usage").filter(|v| !v.is_null()).map(usage);
-        if let Some(value) = value {
-            self.pending_usage = Some(value);
+        for choice in event["choices"].as_array().into_iter().flatten() {
+            self.choice(choice, &mut parts);
+        }
+        // 用量通常在所有 choice 结束后单独一块到达，也可能与最后一个增量同块。
+        if let Some(value) = event.get("usage").filter(|v| !v.is_null()) {
+            self.pending_usage = Some(usage(value));
             parts.extend(self.finish_pending());
-        }
-        if let Some(choices) = event["choices"].as_array() {
-            for choice in choices {
-                self.choice(choice, &mut parts);
-            }
         }
         parts
     }
 
     fn choice(&mut self, choice: &Value, parts: &mut Vec<StreamPart>) {
         let index = choice["index"].as_u64().unwrap_or(0);
-        let delta = &choice["delta"];
-        // DeepSeek、Qwen 等兼容端点通过 reasoning_content 下发思考链增量。
-        if let Some(reasoning) = delta["reasoning_content"].as_str() {
-            let id = format!("choice:{index}/reasoning");
-            if self.reasonings.insert(id.clone()) {
-                parts.push(StreamPart::ReasoningStart {
-                    id: id.clone(),
-                    provider_metadata: None,
-                });
-            }
-            if !reasoning.is_empty() {
-                parts.push(StreamPart::ReasoningDelta {
-                    id,
-                    delta: reasoning.into(),
-                    provider_metadata: None,
-                });
-            }
-        }
-        if let Some(text) = delta["content"].as_str() {
-            let id = format!("choice:{index}");
-            if self.texts.insert(id.clone()) {
-                parts.push(StreamPart::TextStart {
-                    id: id.clone(),
-                    provider_metadata: metadata(json!({"refusal": false})),
-                });
-                self.text_buffers.insert(id.clone(), String::new());
-            }
-            if !text.is_empty() {
-                self.text_buffers
-                    .entry(id.clone())
-                    .or_default()
-                    .push_str(text);
-                parts.push(StreamPart::TextDelta {
-                    id,
-                    delta: text.into(),
-                    provider_metadata: None,
-                });
-            }
-        }
-        if let Some(refusal) = delta["refusal"].as_str() {
-            let id = format!("choice:{index}/refusal");
-            if self.texts.insert(id.clone()) {
-                parts.push(StreamPart::TextStart {
-                    id: id.clone(),
-                    provider_metadata: metadata(json!({"refusal": true})),
-                });
-                self.text_buffers.insert(id.clone(), String::new());
-            }
-            if !refusal.is_empty() {
-                self.text_buffers
-                    .entry(id.clone())
-                    .or_default()
-                    .push_str(refusal);
-                parts.push(StreamPart::TextDelta {
-                    id,
-                    delta: refusal.into(),
-                    provider_metadata: None,
-                });
-            }
-        }
-        if let Some(calls) = delta["tool_calls"].as_array() {
-            for call in calls {
-                let tool_index = call["index"].as_u64().unwrap_or(0);
-                let entry = self
-                    .tools
-                    .entry((index, tool_index))
-                    .or_insert_with(|| ToolState {
-                        id: String::new(),
-                        name: String::new(),
-                        arguments: String::new(),
-                        started: false,
-                        ended: false,
-                    });
-                if let Some(id) = call["id"].as_str() {
-                    entry.id = id.into();
-                }
-                if let Some(name) = call.pointer("/function/name").and_then(Value::as_str) {
-                    entry.name = name.into();
-                }
-                if !entry.id.is_empty() && !entry.ended && !entry.started {
-                    parts.push(StreamPart::ToolInputStart {
-                        id: entry.id.clone(),
-                        tool_name: entry.name.clone(),
-                        provider_executed: false,
-                        dynamic: false,
-                        title: None,
-                        provider_metadata: None,
-                    });
-                    entry.started = true;
-                }
-                if let Some(arguments) = call.pointer("/function/arguments").and_then(Value::as_str)
-                {
-                    entry.arguments.push_str(arguments);
-                    if !arguments.is_empty() {
-                        parts.push(StreamPart::ToolInputDelta {
-                            id: entry.id.clone(),
-                            delta: arguments.into(),
-                            provider_metadata: None,
-                        });
-                    }
-                }
-            }
-        }
-        if choice
-            .get("finish_reason")
-            .and_then(Value::as_str)
-            .is_some()
-        {
-            self.pending_finish = Some(finish_reason(choice["finish_reason"].as_str()));
+        self.choices
+            .entry(index)
+            .or_insert_with(|| ChoiceState::new(index))
+            .delta(&choice["delta"], parts);
+        if let Some(reason) = choice["finish_reason"].as_str() {
+            self.pending_finish = Some(finish_reason(Some(reason)));
         }
     }
 
+    /// 收到 `finish_reason` 且用量已到（或流已 `[DONE]`）时关闭全部内容块并发出 `Finish`。
     fn finish_pending(&mut self) -> Vec<StreamPart> {
         if self.finished {
             return vec![];
@@ -225,39 +117,11 @@ impl ChatStreamParser {
             return vec![];
         };
         let mut parts = Vec::new();
-        for id in self.reasonings.clone() {
-            parts.push(StreamPart::ReasoningEnd {
-                id,
-                provider_metadata: None,
-            });
-        }
-        for id in self.texts.clone() {
-            parts.push(StreamPart::TextEnd {
-                id,
-                provider_metadata: None,
-            });
-        }
-        for state in self.tools.values_mut() {
-            if !state.ended {
-                if !state.id.is_empty() {
-                    parts.push(StreamPart::ToolInputEnd {
-                        id: state.id.clone(),
-                        provider_metadata: None,
-                    });
-                    parts.push(StreamPart::ToolCall {
-                        tool_call_id: state.id.clone(),
-                        tool_name: state.name.clone(),
-                        input: state.arguments.clone(),
-                        provider_executed: false,
-                        dynamic: false,
-                        provider_metadata: None,
-                    });
-                }
-                state.ended = true;
-            }
+        for choice in self.choices.values_mut() {
+            choice.finish(&mut parts);
         }
         parts.push(StreamPart::Finish {
-            usage: self.pending_usage.clone().unwrap_or_default(),
+            usage: self.pending_usage.take().unwrap_or_default(),
             finish_reason: reason,
             provider_metadata: None,
         });

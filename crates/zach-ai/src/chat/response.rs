@@ -48,12 +48,12 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
             provider_metadata: None,
         });
         accumulator.process(StreamPart::TextEnd {
-            id: text_id,
+            id: text_id.clone(),
             provider_metadata: None,
         });
     }
     if let Some(refusal) = message.get("refusal").and_then(Value::as_str) {
-        let id = format!("{}/refusal", choice["index"].as_u64().unwrap_or(0));
+        let id = format!("{text_id}/refusal");
         accumulator.process(StreamPart::TextStart {
             id: id.clone(),
             provider_metadata: metadata(json!({"refusal": true})),
