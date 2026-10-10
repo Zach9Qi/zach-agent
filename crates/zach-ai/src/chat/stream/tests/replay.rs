@@ -260,6 +260,12 @@ async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
     }))
     .unwrap();
     assert_eq!(streamed.content, generated.content);
+    assert_eq!(streamed.reasoning().as_deref(), Some("先算"));
+    assert_eq!(streamed.text(), "3");
+    assert!(matches!(
+        streamed.content[0],
+        OutputContent::Reasoning { .. }
+    ));
     let options = CallOptions::new(vec![Message::user("x"), streamed.into_assistant_message()]);
     let body = build_request("example", "openai", None, &options, false)
         .unwrap()

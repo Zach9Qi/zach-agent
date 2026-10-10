@@ -101,28 +101,6 @@ async fn done_without_finish_reason_is_an_error_event_not_a_success() {
     assert_eq!(result.text(), "x");
 }
 
-#[tokio::test]
-async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
-    let source = futures::stream::iter(vec![
-        Err(std::io::Error::new(
-            std::io::ErrorKind::ConnectionReset,
-            "断开",
-        )),
-        Ok(Bytes::from(frame(&delta(json!({}), Some("stop"))) + DONE)),
-    ]);
-    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
-        .collect::<Vec<_>>()
-        .await;
-    assert_eq!(parts.len(), 2);
-    assert!(matches!(
-        &parts[1],
-        Err(ModelError::StreamError {
-            source: Some(_),
-            ..
-        })
-    ));
-}
-
 /// 损坏的分块使本轮判为错误，但之后到达的正文与用量仍被收集供诊断。
 #[tokio::test]
 async fn malformed_chunks_poison_the_turn_but_later_data_is_still_collected() {

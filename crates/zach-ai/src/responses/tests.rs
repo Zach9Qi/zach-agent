@@ -49,23 +49,13 @@ fn empty_api_key_sends_no_authorization_header() {
     assert!(request.headers().get(AUTHORIZATION).is_none());
 }
 
+/// 非法根地址在构建 reqwest 请求时失败并映射为 `InvalidRequest`；凭据与请求头的非法字符
+/// 由传输层用例覆盖，空模型 ID 由请求构建用例覆盖。
 #[test]
-fn invalid_credentials_headers_and_endpoint_fail_before_http_execution() {
-    let options = CallOptions::default();
-    assert!(OpenAiResponsesModel::new("bad\nkey", "example")
-        .request(&options, false)
-        .is_err());
-    assert!(OpenAiResponsesModel::new("secret", "")
-        .request(&options, false)
-        .is_err());
+fn invalid_base_url_fails_before_http_execution() {
     let model = OpenAiResponsesModel::new("secret", "example").with_base_url("not a URL");
     assert!(matches!(
-        model.request(&options, false),
+        model.request(&CallOptions::default(), false),
         Err(ModelError::InvalidRequest(_))
     ));
-    let mut options = options;
-    options.headers = Some(HashMap::from([("bad\nname".into(), "value".into())]));
-    assert!(OpenAiResponsesModel::new("secret", "example")
-        .request(&options, false)
-        .is_err());
 }

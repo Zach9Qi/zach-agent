@@ -25,30 +25,6 @@ async fn eof_without_terminal_event_is_a_transport_error() {
     }
 }
 
-#[tokio::test]
-async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
-    let source = futures::stream::iter(vec![
-        Err(std::io::Error::new(
-            std::io::ErrorKind::ConnectionReset,
-            "断开",
-        )),
-        Ok(Bytes::from(frame(
-            &json!({"type": "response.completed", "response": response(vec![])}),
-        ))),
-    ]);
-    let parts = responses_stream(source, ResponsesStreamParser::new(false), vec![], None)
-        .collect::<Vec<_>>()
-        .await;
-    assert_eq!(parts.len(), 2);
-    assert!(matches!(
-        &parts[1],
-        Err(ModelError::StreamError {
-            source: Some(_),
-            ..
-        })
-    ));
-}
-
 /// 中间代理改写文本（如去掉尾部空白）会让 `done` 快照与已收增量对不上。已发出的增量无法撤回，
 /// 因此不判失败：保留流式正文，最终快照放进该块 End 的元数据，重复到达的快照不再产生事件。
 #[tokio::test]

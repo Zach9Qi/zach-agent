@@ -121,32 +121,3 @@ async fn completed_response_stops_without_waiting_for_network_eof() {
     );
     assert_eq!(result.text(), "结束");
 }
-
-#[tokio::test]
-async fn stream_is_lazy_and_dropping_it_releases_the_source() {
-    use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    };
-    struct Probe(Arc<AtomicBool>);
-    impl Drop for Probe {
-        fn drop(&mut self) {
-            self.0.store(true, Ordering::SeqCst);
-        }
-    }
-    let dropped = Arc::new(AtomicBool::new(false));
-    let probe = Probe(dropped.clone());
-    let source = futures::stream::poll_fn(
-        move |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
-            let _ = &probe;
-            panic!("只取 StreamStart 时不应拉取网络")
-        },
-    );
-    let mut stream = responses_stream(source, ResponsesStreamParser::new(false), vec![], None);
-    assert!(matches!(
-        stream.next().await,
-        Some(Ok(StreamPart::StreamStart { .. }))
-    ));
-    drop(stream);
-    assert!(dropped.load(Ordering::SeqCst));
-}

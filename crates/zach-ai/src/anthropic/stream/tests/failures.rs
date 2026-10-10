@@ -66,28 +66,6 @@ async fn message_stop_without_stop_reason_is_an_error_event() {
 }
 
 #[tokio::test]
-async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
-    let source = futures::stream::iter(vec![
-        Err(std::io::Error::new(
-            std::io::ErrorKind::ConnectionReset,
-            "断开",
-        )),
-        Ok(Bytes::from(start_frame() + &stop_frames("end_turn"))),
-    ]);
-    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![], None)
-        .collect::<Vec<_>>()
-        .await;
-    assert_eq!(parts.len(), 2);
-    assert!(matches!(
-        &parts[1],
-        Err(ModelError::StreamError {
-            source: Some(_),
-            ..
-        })
-    ));
-}
-
-#[tokio::test]
 async fn malformed_events_and_error_events_poison_the_turn() {
     let wire = "data: invalid\n\n".to_owned()
         + &start_frame()

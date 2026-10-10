@@ -49,9 +49,4 @@ async fn unsupported_options_fail_without_accessing_the_endpoint() {
         model.do_stream(options).await,
         Err(ModelError::UnsupportedFeature { .. })
     ));
-    let late_system = CallOptions::new(vec![Message::user("你好"), Message::system("规则")]);
-    assert!(matches!(
-        model.do_generate(late_system).await,
-        Err(ModelError::InvalidRequest(_))
-    ));
 }

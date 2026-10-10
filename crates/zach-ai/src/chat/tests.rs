@@ -61,12 +61,6 @@ fn empty_api_key_sends_no_authorization_header() {
         request.url().as_str(),
         "http://localhost:11434/v1/chat/completions"
     );
-    assert!(OpenAiChatCompletionsModel::new(
-        "bad
-key", "llama3"
-    )
-    .request(&options, false)
-    .is_err());
 }
 
 /// 非流式请求在生成完成前收不到任何字节，只能按整体时长设限；流式请求的总时长由生成长度

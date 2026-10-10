@@ -108,25 +108,6 @@ async fn utf8_text_deltas_and_trailing_usage_produce_one_text_block() {
     assert_eq!(response.timestamp, Some(1700000000000));
 }
 
-/// 流式 delta.reasoning_content 需以 Reasoning 事件透出，并在结束前正确闭合。
-#[tokio::test]
-async fn reasoning_content_deltas_are_exposed_before_text() {
-    let wire = frame(&delta(
-        json!({"role": "assistant", "reasoning_content": "先"}),
-        None,
-    )) + &frame(&delta(json!({"reasoning_content": "算"}), None))
-        + &frame(&delta(json!({"content": "3"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
-        + DONE;
-    let result = aggregate(parse_wire(wire).await);
-    assert_eq!(result.reasoning().as_deref(), Some("先算"));
-    assert_eq!(result.text(), "3");
-    assert!(matches!(
-        result.content[0],
-        zach_ai_core::OutputContent::Reasoning { .. }
-    ));
-}
-
 /// OpenRouter、Ollama、Groq 等端点用 `reasoning` 字段下发思考链，与 `reasoning_content` 同等对待；
 /// 结构化取值（如推理明细数组）不是正文，忽略。
 #[tokio::test]
