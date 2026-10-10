@@ -15,7 +15,7 @@ pub(super) fn catalog() -> &'static ModelCatalog {
             // 数据由 xtask 生成并经测试校验，解析失败属于构建产物损坏
             let parsed = ModelCatalog::from_json(json)
                 .unwrap_or_else(|err| panic!("内置模型档案 `{provider}` 解析失败: {err}"));
-            catalog.extend(parsed.profiles.into_values());
+            catalog.extend(parsed);
         }
         catalog
     })

@@ -10,9 +10,11 @@ use std::collections::HashMap;
 use zach_ai_core::ModelProfile;
 
 /// 模型档案目录
+///
+/// 按厂商、模型标识两级索引，查询只做哈希查找，不分配临时字符串。
 #[derive(Debug, Clone, Default)]
 pub struct ModelCatalog {
-    profiles: HashMap<(String, String), ModelProfile>,
+    providers: HashMap<String, HashMap<String, ModelProfile>>,
 }
 
 impl ModelCatalog {
@@ -29,46 +31,46 @@ impl ModelCatalog {
     /// 从 `ModelProfile` 数组形式的 JSON 构建目录
     pub fn from_json(json: &str) -> serde_json::Result<Self> {
         let profiles: Vec<ModelProfile> = serde_json::from_str(json)?;
-        let mut catalog = Self::new();
-        catalog.extend(profiles);
-        Ok(catalog)
+        Ok(profiles.into_iter().collect())
     }
 
     /// 按厂商与模型标识查询
     pub fn get(&self, provider: &str, id: &str) -> Option<&ModelProfile> {
-        self.profiles.get(&(provider.to_owned(), id.to_owned()))
+        self.providers.get(provider)?.get(id)
     }
 
     /// 列出某厂商的全部模型，按模型标识排序
     pub fn provider_models(&self, provider: &str) -> Vec<&ModelProfile> {
         let mut models: Vec<&ModelProfile> = self
-            .profiles
-            .values()
-            .filter(|profile| profile.provider == provider)
-            .collect();
+            .providers
+            .get(provider)
+            .map(|models| models.values().collect())
+            .unwrap_or_default();
         models.sort_by(|a, b| a.id.cmp(&b.id));
         models
     }
 
     /// 遍历全部档案（无序）
     pub fn iter(&self) -> impl Iterator<Item = &ModelProfile> {
-        self.profiles.values()
+        self.providers.values().flat_map(HashMap::values)
     }
 
     /// 档案数量
     pub fn len(&self) -> usize {
-        self.profiles.len()
+        self.providers.values().map(HashMap::len).sum()
     }
 
     /// 是否为空
     pub fn is_empty(&self) -> bool {
-        self.profiles.is_empty()
+        self.providers.values().all(HashMap::is_empty)
     }
 
     /// 插入档案，同 `(provider, id)` 的已有档案会被覆盖并返回
     pub fn insert(&mut self, profile: ModelProfile) -> Option<ModelProfile> {
-        let key = (profile.provider.clone(), profile.id.clone());
-        self.profiles.insert(key, profile)
+        self.providers
+            .entry(profile.provider.clone())
+            .or_default()
+            .insert(profile.id.clone(), profile)
     }
 }
 
@@ -85,5 +87,19 @@ impl FromIterator<ModelProfile> for ModelCatalog {
         let mut catalog = Self::new();
         catalog.extend(iter);
         catalog
+    }
+}
+
+impl IntoIterator for ModelCatalog {
+    type Item = ModelProfile;
+    type IntoIter = std::vec::IntoIter<ModelProfile>;
+
+    /// 按档案逐个取出，顺序不保证
+    fn into_iter(self) -> Self::IntoIter {
+        self.providers
+            .into_values()
+            .flat_map(HashMap::into_values)
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
