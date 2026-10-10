@@ -36,6 +36,7 @@ mod tests;
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
+use serde_json::Value;
 use std::fmt;
 use std::sync::Arc;
 use zach_ai_core::{
@@ -122,24 +123,32 @@ impl OpenAiResponsesModel {
         Ok(headers)
     }
 
-    fn request(&self, options: &CallOptions, stream: bool) -> Result<reqwest::Request, ModelError> {
+    /// 构建请求，同时返回已序列化的正文供调试记录复用。
+    fn request(
+        &self,
+        options: &CallOptions,
+        stream: bool,
+    ) -> Result<(reqwest::Request, Value), ModelError> {
         let body = build_request(&self.model_id, options, stream)?;
-        self.client
+        let request = self
+            .client
             .post(self.endpoint())
             .headers(self.headers(options)?)
             .header(ACCEPT, transport::accept(stream))
             .json(&body)
             .build()
-            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))
+            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
+        Ok((request, body))
     }
 
     async fn send(
         &self,
         options: &CallOptions,
         stream: bool,
-    ) -> Result<reqwest::Response, ModelError> {
-        let request = self.request(options, stream)?;
-        transport::execute(&self.client, PROVIDER, LABEL, request).await
+    ) -> Result<(reqwest::Response, Value), ModelError> {
+        let (request, body) = self.request(options, stream)?;
+        let response = transport::execute(&self.client, PROVIDER, LABEL, request).await?;
+        Ok((response, body))
     }
 }
 
@@ -163,16 +172,16 @@ impl LanguageModel for OpenAiResponsesModel {
     }
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
-        let response = self.send(&options, false).await?;
+        let (response, body) = self.send(&options, false).await?;
         let (value, headers) = transport::read_json(response, LABEL).await?;
         let mut result = parse_response(value)?;
-        result.request_body = Some(build_request(&self.model_id, &options, false)?);
+        result.request_body = Some(body);
         result.response_headers = Some(headers);
         Ok(result)
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
-        let response = self.send(&options, true).await?;
+        let (response, _) = self.send(&options, true).await?;
         transport::require_event_stream(&response, PROVIDER)?;
         let parser = ResponsesStreamParser::new(options.include_raw_chunks);
         Ok(responses_stream(response.bytes_stream(), parser))

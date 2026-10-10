@@ -11,7 +11,7 @@ fn request_uses_chat_endpoint_and_openai_message_shapes() {
     let model = OpenAiChatCompletionsModel::new("secret", "gpt-test")
         .with_base_url("https://example.test/v1/");
     let options = CallOptions::new(vec![Message::system("规则"), Message::user("你好")]);
-    let request = model.request(&options, true).unwrap();
+    let (request, _) = model.request(&options, true).unwrap();
     assert_eq!(
         request.url().as_str(),
         "https://example.test/v1/chat/completions"
