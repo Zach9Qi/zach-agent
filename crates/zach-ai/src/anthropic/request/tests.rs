@@ -225,6 +225,44 @@ fn profile_downgrades_or_drops_settings_the_model_cannot_honor() {
     assert!(built.warnings.is_empty());
 }
 
+/// Claude 4.6 之前的代际只认 `budget_tokens`，按 id 自动换算；思考开启后与之互斥的
+/// `temperature` / `top_k` 被丢弃并给出警告，显式关闭思考时则保留。
+#[test]
+fn legacy_generations_use_budget_tokens_and_thinking_drops_sampling_parameters() {
+    use zach_ai_core::ModelWarning;
+    let sonnet = crate::ModelCatalog::builtin()
+        .get("anthropic", "claude-sonnet-4-5")
+        .unwrap();
+    let mut options =
+        CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::High);
+    options.temperature = Some(0.5);
+    options.top_k = Some(40);
+    options.top_p = Some(0.75);
+    let built = build_request(&sonnet.id, Some(sonnet), &options, false).unwrap();
+    assert_eq!(
+        built.body["thinking"],
+        json!({"type": "enabled", "budget_tokens": 32768})
+    );
+    assert!(built.body.get("output_config").is_none());
+    assert!(built.body.get("temperature").is_none());
+    assert!(built.body.get("top_k").is_none());
+    assert_eq!(built.body["top_p"], 0.75);
+    assert_eq!(built.warnings.len(), 2);
+    assert!(built.warnings.iter().all(|warning| matches!(
+        warning,
+        ModelWarning::Compatibility { feature, .. } if feature == "temperature" || feature == "top_k"
+    )));
+    // 新代际走自适应思考；显式覆盖为关闭时采样参数保留。
+    let built = build_request("claude-opus-4-6", None, &options, false).unwrap();
+    assert_eq!(built.body["thinking"]["type"], "adaptive");
+    assert_eq!(built.body["output_config"]["effort"], "high");
+    options.provider_options = anthropic_options(json!({"thinking": {"type": "disabled"}}));
+    let built = build_request("claude-opus-4-6", None, &options, false).unwrap();
+    assert_eq!(built.body["temperature"], 0.5);
+    assert_eq!(built.body["top_k"], 40);
+    assert!(built.warnings.is_empty());
+}
+
 #[test]
 fn json_schema_output_and_unknown_provider_fields_are_handled() {
     let mut options = CallOptions::new(vec![Message::user("x")]);

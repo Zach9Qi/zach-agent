@@ -2,6 +2,7 @@
 
 mod blocks;
 mod messages;
+mod thinking;
 mod tools;
 
 #[cfg(test)]
@@ -40,19 +41,20 @@ pub(super) fn build_request(
     let Validated {
         reasoning,
         temperature,
-        warnings,
+        mut warnings,
     } = validate(
         profile,
         options,
         &[(ReasoningEffort::Minimal, ReasoningEffort::Low)],
     )?;
     let converted = messages::convert(&options.prompt.messages)?;
+    let max_tokens = options
+        .max_output_tokens
+        .map(u64::from)
+        .unwrap_or_else(|| default_max_tokens(profile));
     let mut body = json!({
         "model": model_id,
-        "max_tokens": options
-            .max_output_tokens
-            .map(u64::from)
-            .unwrap_or_else(|| default_max_tokens(profile)),
+        "max_tokens": max_tokens,
         "messages": converted.messages,
         "stream": stream,
     });
@@ -74,7 +76,7 @@ pub(super) fn build_request(
         body["stop_sequences"] = json!(stop);
     }
     if let Some(effort) = reasoning {
-        apply_reasoning(&mut body, effort);
+        thinking::apply(&mut body, model_id, effort, max_tokens)?;
     }
     if let Some(definitions) = &options.tools {
         body["tools"] = tools::definitions(definitions)?;
@@ -88,6 +90,7 @@ pub(super) fn build_request(
         }
     }
     let betas = apply_provider_options(&mut body, options.provider_options.as_ref())?;
+    thinking::reconcile_sampling(&mut body, &mut warnings);
     Ok(BuiltRequest {
         body,
         betas,
@@ -114,27 +117,6 @@ fn reject_unsupported(options: &CallOptions) -> Result<(), ModelError> {
         ));
     }
     Ok(())
-}
-
-/// 通用推理档位映射为自适应思考加 `output_config.effort`。
-///
-/// 仅支持 `budget_tokens` 的旧模型请通过 `provider_options.anthropic.thinking`
-/// 显式配置，它会覆盖这里的默认值。
-fn apply_reasoning(body: &mut Value, effort: ReasoningEffort) {
-    let level = match effort {
-        ReasoningEffort::ProviderDefault => return,
-        ReasoningEffort::None => {
-            body["thinking"] = json!({ "type": "disabled" });
-            return;
-        }
-        ReasoningEffort::Minimal | ReasoningEffort::Low => "low",
-        ReasoningEffort::Medium => "medium",
-        ReasoningEffort::High => "high",
-        ReasoningEffort::Xhigh => "xhigh",
-        ReasoningEffort::Max => "max",
-    };
-    body["thinking"] = json!({ "type": "adaptive", "display": "summarized" });
-    merge_value(&mut body["output_config"], json!({ "effort": level }));
 }
 
 fn output_format(format: &ResponseFormat) -> Result<Option<Value>, ModelError> {
@@ -200,7 +182,7 @@ fn beta_list(value: &Value) -> Result<Vec<String>, ModelError> {
         })
 }
 
-fn merge_value(target: &mut Value, incoming: Value) {
+pub(super) fn merge_value(target: &mut Value, incoming: Value) {
     match (target, incoming) {
         (Value::Object(existing), Value::Object(fields)) => existing.extend(fields),
         (target, value) => *target = value,

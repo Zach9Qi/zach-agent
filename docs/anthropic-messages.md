@@ -48,18 +48,20 @@ user/assistant 交替的要求；末尾助手预填充文本会去掉结尾空�
 
 ## 推理（思考）
 
-通用 `reasoning` 档位映射为自适应思考加 `output_config.effort`：
+通用 `reasoning` 档位按模型代际（从 id 中的版本号识别，如 `claude-opus-4-6`）映射：
 
-| `ReasoningEffort` | 请求 |
-| --- | --- |
-| `ProviderDefault` | 不设置 `thinking`，沿用模型默认行为 |
-| `None` | `thinking: {"type": "disabled"}` |
-| `Minimal` / `Low` | `thinking: {"type": "adaptive", "display": "summarized"}` + `effort: low` |
-| `Medium` / `High` / `Xhigh` / `Max` | 同上，`effort` 对应 `medium` / `high` / `xhigh` / `max` |
+| `ReasoningEffort` | Claude 4.6 及之后（含代际未知的别名） | Claude 4.5 及之前 |
+| --- | --- | --- |
+| `ProviderDefault` | 不设置 `thinking` | 不设置 `thinking` |
+| `None` | `thinking: {"type": "disabled"}` | 同左 |
+| `Minimal` / `Low` | `thinking: {"type": "adaptive", "display": "summarized"}` + `effort: low` | `enabled`，`budget_tokens` 1024 / 4096 |
+| `Medium` / `High` / `Xhigh` / `Max` | 同上，`effort` 对应 `medium` / `high` / `xhigh` / `max` | `enabled`，`budget_tokens` 16384 / 32768 / 65536 / 131072 |
 
-仅支持 `budget_tokens` 扩展思考的旧模型（如 Claude 4.5 系列）请显式配置
-`provider_options.anthropic.thinking = {"type": "enabled", "budget_tokens": 4096}`，
-它会整体替换通用档位生成的 `thinking`。
+旧代际的 `budget_tokens` 会压到 `max_tokens - 1` 以下；`max_tokens` 不足 1025 时无法启用思考，
+发送前报错。显式配置 `provider_options.anthropic.thinking` 会整体替换上述默认值。
+
+思考开启（`enabled` / `adaptive`）时 Anthropic 不接受 `temperature` 与 `top_k`，这两个参数会被
+丢弃并以 `Compatibility` 警告透出；`top_p` 保留（API 允许 0.95 ~ 1）。
 
 思考块以 `Reasoning` 事件透出，签名随 `ReasoningEnd` 的 `provider_metadata.anthropic.signature`
 给出；`redacted_thinking` 是正文为空、只带 `anthropic.redacted_thinking` 元数据的推理块。
