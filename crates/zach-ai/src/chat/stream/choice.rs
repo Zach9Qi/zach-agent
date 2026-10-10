@@ -58,9 +58,15 @@ impl ChoiceState {
         format!("choice:{}/refusal", self.index)
     }
 
+    /// 处理一个增量。块一律在首个**非空**增量时才开始（LiteLLM、vLLM 等网关惯用
+    /// 空字符串占位，照单全收会产生空块与误判的生命周期）；已结束的块不再接受
+    /// 增量——End 之后不能再有 Delta，迟到内容只能丢弃。
     pub(super) fn delta(&mut self, delta: &Value, parts: &mut Vec<StreamPart>) {
         // DeepSeek、Qwen 等兼容端点通过 reasoning_content 下发思考链增量。
-        if let Some(reasoning) = delta["reasoning_content"].as_str() {
+        if let Some(reasoning) = delta["reasoning_content"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+        {
             if self.reasoning == Block::Pending {
                 self.reasoning = Block::Open;
                 parts.push(StreamPart::ReasoningStart {
@@ -68,7 +74,7 @@ impl ChoiceState {
                     provider_metadata: None,
                 });
             }
-            if !reasoning.is_empty() {
+            if self.reasoning == Block::Open {
                 parts.push(StreamPart::ReasoningDelta {
                     id: self.reasoning_id(),
                     delta: reasoning.into(),
@@ -76,15 +82,21 @@ impl ChoiceState {
                 });
             }
         }
-        // 正文、拒绝或工具调用一旦开始，思考阶段即告结束；不等到流收尾再关闭，
-        // 否则消费方会在整段正文输出完之后才看到"推理结束"。
-        if delta["content"].is_string()
-            || delta["refusal"].is_string()
-            || delta["tool_calls"].is_array()
-        {
+        // 首个非空的正文、拒绝或工具调用增量标志思考阶段结束；不等流收尾再关闭，
+        // 否则消费方要等整段正文输出完才看到"推理结束"。空 `content` 占位不算正文开始。
+        let answer_begun = delta["content"]
+            .as_str()
+            .is_some_and(|text| !text.is_empty())
+            || delta["refusal"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty())
+            || delta["tool_calls"]
+                .as_array()
+                .is_some_and(|calls| !calls.is_empty());
+        if answer_begun {
             self.close_reasoning(parts);
         }
-        if let Some(text) = delta["content"].as_str() {
+        if let Some(text) = delta["content"].as_str().filter(|s| !s.is_empty()) {
             if self.text == Block::Pending {
                 self.text = Block::Open;
                 parts.push(StreamPart::TextStart {
@@ -92,7 +104,7 @@ impl ChoiceState {
                     provider_metadata: metadata(json!({"refusal": false})),
                 });
             }
-            if !text.is_empty() {
+            if self.text == Block::Open {
                 parts.push(StreamPart::TextDelta {
                     id: self.text_id(),
                     delta: text.into(),
@@ -100,7 +112,7 @@ impl ChoiceState {
                 });
             }
         }
-        if let Some(refusal) = delta["refusal"].as_str() {
+        if let Some(refusal) = delta["refusal"].as_str().filter(|s| !s.is_empty()) {
             if self.refusal == Block::Pending {
                 self.refusal = Block::Open;
                 parts.push(StreamPart::TextStart {
@@ -108,7 +120,7 @@ impl ChoiceState {
                     provider_metadata: metadata(json!({"refusal": true})),
                 });
             }
-            if !refusal.is_empty() {
+            if self.refusal == Block::Open {
                 parts.push(StreamPart::TextDelta {
                     id: self.refusal_id(),
                     delta: refusal.into(),
@@ -140,6 +152,10 @@ impl ChoiceState {
             started: false,
             ended: false,
         });
+        if entry.ended {
+            // 已完整发出的调用不再接受任何字段（防御收尾后的迟到增量）。
+            return;
+        }
         if let Some(id) = incoming_id {
             entry.id = id.into();
         }
@@ -179,23 +195,25 @@ impl ChoiceState {
         }
     }
 
-    /// 关闭仍打开的块：推理、正文、拒绝依次结束，工具调用按编号发出完整调用。
+    /// 收尾：推理、正文、拒绝依次结束，工具调用按编号发出完整调用。
+    /// 未曾开始的块也一并置为 Closed，之后的迟到增量不会再开新块。
     pub(super) fn finish(&mut self, parts: &mut Vec<StreamPart>) {
         self.close_reasoning(parts);
+        self.reasoning = Block::Closed;
         if self.text == Block::Open {
-            self.text = Block::Closed;
             parts.push(StreamPart::TextEnd {
                 id: self.text_id(),
                 provider_metadata: None,
             });
         }
+        self.text = Block::Closed;
         if self.refusal == Block::Open {
-            self.refusal = Block::Closed;
             parts.push(StreamPart::TextEnd {
                 id: self.refusal_id(),
                 provider_metadata: None,
             });
         }
+        self.refusal = Block::Closed;
         for state in self.tools.values_mut() {
             finish_tool(state, parts);
         }

@@ -103,6 +103,10 @@ impl ChatStreamParser {
     }
 
     fn choice(&mut self, choice: &Value, parts: &mut Vec<StreamPart>) {
+        // `Finish` 已发出，本轮事件序列已经收尾，迟到的增量（含新 choice）全部忽略。
+        if self.finished {
+            return;
+        }
         let index = choice["index"].as_u64().unwrap_or(0);
         self.choices
             .entry(index)

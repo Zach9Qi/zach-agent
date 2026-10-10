@@ -161,6 +161,69 @@ async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
     aggregate(parts);
 }
 
+/// LiteLLM、vLLM 等网关在思考阶段伴发 `content: ""` 占位：不能据此提前结束推理块，
+/// 也不能为占位开出空文本块（空块会带着元数据留在最终内容里）。
+#[tokio::test]
+async fn empty_content_placeholders_do_not_end_reasoning_or_open_text() {
+    let wire = frame(&delta(
+        json!({"role": "assistant", "reasoning_content": "想", "content": ""}),
+        None,
+    )) + &frame(&delta(
+        json!({"reasoning_content": "着", "content": ""}),
+        None,
+    )) + &frame(&delta(json!({"content": "答"}), None))
+        + &frame(&delta(json!({}), Some("stop")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::ReasoningDelta { .. })))
+            .count(),
+        2
+    );
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::ReasoningEnd { .. })))
+            .count(),
+        1
+    );
+    let end = position(&parts, |p| matches!(p, StreamPart::ReasoningEnd { .. }));
+    let text_start = position(&parts, |p| matches!(p, StreamPart::TextStart { .. }));
+    assert!(end < text_start, "推理块应持续到首个非空正文");
+    let result = aggregate(parts);
+    assert_eq!(result.reasoning().as_deref(), Some("想着"));
+    assert_eq!(result.text(), "答");
+    assert_eq!(
+        result.content.len(),
+        2,
+        "不应残留空文本块: {:?}",
+        result.content
+    );
+}
+
+/// `Finish` 发出后本轮已收尾，迟到的增量分块（含正文、推理与新 choice）不再产生任何事件。
+#[tokio::test]
+async fn late_chunks_after_finish_emit_nothing() {
+    let late = chunk(vec![
+        json!({"index": 0, "delta": {"content": "迟到", "reasoning_content": "迟"},
+            "finish_reason": null}),
+        json!({"index": 1, "delta": {"role": "assistant", "content": "新块"},
+            "finish_reason": null}),
+    ]);
+    let wire = frame(&delta(json!({"content": "x"}), Some("stop")))
+        + &frame(&usage_chunk())
+        + &frame(&late)
+        + DONE;
+    let parts = parse_wire(wire).await;
+    assert!(
+        matches!(parts.last(), Some(Ok(StreamPart::Finish { .. }))),
+        "{parts:?}"
+    );
+    assert_eq!(aggregate(parts).text(), "x");
+}
+
 /// 响应元数据在每个分块里都相同，只透出一次；代理固定附带的 `"error": null` 不是错误。
 #[tokio::test]
 async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
