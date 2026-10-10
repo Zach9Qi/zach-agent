@@ -1,0 +1,2 @@
+# 数据文件统一 LF，避免 Windows 上 autocrlf 让 sync-models 的 diff 被换行符污染
+*.json text eol=lf
