@@ -31,11 +31,16 @@ pub(super) fn build_request(
         return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
     }
     reject_unsupported(options)?;
+    // 线上多数端点的最高档位是 xhigh（gpt-5.6 起档案才声明 max），把 max 降级为最接近的 xhigh。
     let Validated {
         reasoning,
         temperature,
         warnings,
-    } = validate(profile, options, &[])?;
+    } = validate(
+        profile,
+        options,
+        &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
+    )?;
     // Agent 自行管理历史，默认采用无状态模式并请求可回放的加密推理。
     let mut body = json!({
         "model": model_id,
@@ -56,12 +61,6 @@ pub(super) fn build_request(
         }
     }
     if let Some(effort) = reasoning {
-        if effort == ReasoningEffort::Max {
-            return Err(ModelError::unsupported(
-                "reasoning_effort.max",
-                Some("Responses API 的最高推理档位是 xhigh，请改用 Xhigh".into()),
-            ));
-        }
         if effort != ReasoningEffort::ProviderDefault {
             body["reasoning"] = json!({ "effort": effort });
         }

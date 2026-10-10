@@ -44,6 +44,7 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 - 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
 - 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
 - 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
+  本适配器的别名为 `Max` → `Xhigh`（`max` 仅 gpt-5.6 及更新代际的档案声明，档案未知时原样发送）；
 - 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
 
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，

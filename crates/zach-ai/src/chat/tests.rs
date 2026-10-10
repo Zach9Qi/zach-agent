@@ -193,18 +193,31 @@ fn injected_profile_drives_request_validation() {
     ));
 }
 
-/// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
+/// `max` 档位由档案裁决而非一刀切拒绝：gpt-5.6 及更新代际照常发送，仅到 xhigh 的代际
+/// 降级并给出警告，连 xhigh 都没有的代际发送前报错；档案未知时原样发送由服务端裁决。
 #[test]
-fn reasoning_max_level_is_rejected_before_sending() {
+fn max_effort_follows_the_profile_instead_of_a_blanket_rejection() {
+    let catalog = crate::ModelCatalog::builtin();
     let mut options = CallOptions::new(vec![Message::user("你好")]);
     options.reasoning = Some(zach_ai_core::ReasoningEffort::Max);
+    let newest = catalog.get("openai", "gpt-5.6").unwrap();
+    let built = request::build_request(&newest.id, Some(newest), &options, false).unwrap();
+    assert_eq!(built.body["reasoning_effort"], "max");
+    assert!(built.warnings.is_empty());
+    let xhigh_only = catalog.get("openai", "gpt-5.2").unwrap();
+    let built = request::build_request(&xhigh_only.id, Some(xhigh_only), &options, false).unwrap();
+    assert_eq!(built.body["reasoning_effort"], "xhigh");
     assert!(matches!(
-        request::build_request("gpt-test", None, &options, false),
-        Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
+        &built.warnings[0],
+        zach_ai_core::ModelWarning::Compatibility { feature, .. }
+            if feature == "reasoning_effort.max"
     ));
-    options.reasoning = Some(zach_ai_core::ReasoningEffort::Xhigh);
-    let body = request::build_request("gpt-test", None, &options, false)
-        .unwrap()
-        .body;
-    assert_eq!(body["reasoning_effort"], "xhigh");
+    let no_xhigh = catalog.get("openai", "gpt-5").unwrap();
+    assert!(matches!(
+        request::build_request(&no_xhigh.id, Some(no_xhigh), &options, false),
+        Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. })
+            if feature == "reasoning_effort.max"
+    ));
+    let unknown = request::build_request("proxy-model", None, &options, false).unwrap();
+    assert_eq!(unknown.body["reasoning_effort"], "max");
 }

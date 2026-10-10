@@ -219,6 +219,20 @@ fn profile_rejects_or_drops_settings_before_sending() {
         &built.warnings[0],
         ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
     ));
+    // `max` 由档案裁决：gpt-5.6 照常发送，仅到 xhigh 的 gpt-5.2 降级并给出警告。
+    options.temperature = None;
+    options.reasoning = Some(ReasoningEffort::Max);
+    let newest = catalog.get("openai", "gpt-5.6").unwrap();
+    let built = build_request(&newest.id, Some(newest), &options, false).unwrap();
+    assert_eq!(built.body["reasoning"]["effort"], "max");
+    assert!(built.warnings.is_empty());
+    let xhigh_only = catalog.get("openai", "gpt-5.2").unwrap();
+    let built = build_request(&xhigh_only.id, Some(xhigh_only), &options, false).unwrap();
+    assert_eq!(built.body["reasoning"]["effort"], "xhigh");
+    assert!(matches!(
+        &built.warnings[0],
+        ModelWarning::Compatibility { feature, .. } if feature == "reasoning_effort.max"
+    ));
 }
 
 #[test]
@@ -232,12 +246,6 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.seed = None;
-    options.reasoning = Some(ReasoningEffort::Max);
-    assert!(matches!(
-        build_request("model", None, &options, false),
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
-    options.reasoning = None;
     options.tools = Some(vec![ProviderTool::new(
         "openai.web_search",
         "web_search",

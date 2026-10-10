@@ -9,7 +9,7 @@ use zach_ai_core::{
     ResponseFormat, ToolPart, UserPart,
 };
 
-use crate::validate::{validate, Validated};
+use crate::validate::{effort_name, validate, Validated};
 
 /// 已构建的请求：正文与档案校验产生的警告。
 #[derive(Debug)]
@@ -33,11 +33,16 @@ pub(super) fn build_request(
             Some("Chat Completions 不支持此参数".into()),
         ));
     }
+    // 线上多数端点的最高档位是 xhigh（gpt-5.6 起档案才声明 max），把 max 降级为最接近的 xhigh。
     let Validated {
         reasoning,
         temperature,
         warnings,
-    } = validate(profile, options, &[])?;
+    } = validate(
+        profile,
+        options,
+        &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
+    )?;
     let mut body = json!({
         "model": model_id,
         "messages": messages(&options.prompt.messages)?,
@@ -66,14 +71,8 @@ pub(super) fn build_request(
         body["seed"] = json!(seed);
     }
     if let Some(reasoning) = reasoning {
-        if reasoning == ReasoningEffort::Max {
-            return Err(ModelError::unsupported(
-                "reasoning_effort.max",
-                Some("Chat Completions 的最高推理档位是 xhigh，请改用 Xhigh".into()),
-            ));
-        }
         if reasoning != ReasoningEffort::ProviderDefault {
-            body["reasoning_effort"] = json!(reasoning_name(reasoning));
+            body["reasoning_effort"] = json!(effort_name(reasoning));
         }
     }
     if let Some(tools_value) = &options.tools {
@@ -118,21 +117,6 @@ fn apply_provider_options(body: &mut Value, options: &CallOptions) -> Result<(),
         body[key] = value.clone();
     }
     Ok(())
-}
-
-fn reasoning_name(value: ReasoningEffort) -> &'static str {
-    match value {
-        ReasoningEffort::None => "none",
-        ReasoningEffort::Minimal => "minimal",
-        ReasoningEffort::Low => "low",
-        ReasoningEffort::Medium => "medium",
-        ReasoningEffort::High => "high",
-        ReasoningEffort::Xhigh => "xhigh",
-        // Max 与 ProviderDefault 已在 build_request 中提前过滤
-        ReasoningEffort::Max | ReasoningEffort::ProviderDefault => {
-            unreachable!("build_request 已过滤该档位")
-        }
-    }
 }
 
 fn messages(messages: &[Message]) -> Result<Vec<Value>, ModelError> {
