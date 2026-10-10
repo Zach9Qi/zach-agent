@@ -40,7 +40,8 @@ pub(super) fn build_request(
         warnings,
     } = validate(
         profile,
-        options,
+        options.reasoning,
+        options.temperature,
         &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
     )?;
     let mut body = json!({

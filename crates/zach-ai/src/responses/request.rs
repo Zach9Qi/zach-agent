@@ -38,7 +38,8 @@ pub(super) fn build_request(
         warnings,
     } = validate(
         profile,
-        options,
+        options.reasoning,
+        options.temperature,
         &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
     )?;
     // Agent 自行管理历史，默认采用无状态模式并请求可回放的加密推理。

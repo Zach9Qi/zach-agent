@@ -10,7 +10,7 @@
 //!
 //! 警告随 `StreamStart` / `GenerateResult.warnings` 透出，Agent 层会把它们作为事件呈现。
 
-use zach_ai_core::{CallOptions, ModelError, ModelProfile, ModelWarning, ReasoningEffort};
+use zach_ai_core::{ModelError, ModelProfile, ModelWarning, ReasoningEffort};
 
 /// 经档案校验后的有效通用参数与产生的警告。
 pub(crate) struct Validated {
@@ -19,23 +19,25 @@ pub(crate) struct Validated {
     pub(crate) warnings: Vec<ModelWarning>,
 }
 
-/// 校验 `options` 中的推理档位与温度。
+/// 校验推理档位与温度（调用方自 `CallOptions` 取出传入）。
 ///
 /// `aliases` 是适配器定义的降级对：`(请求档位, 替代档位)`，仅在替代档位受支持时生效。
+/// 某项已被厂商专有配置整体覆盖时传 `None`：不再校验，也不产生警告。
 pub(crate) fn validate(
     profile: Option<&ModelProfile>,
-    options: &CallOptions,
+    effort: Option<ReasoningEffort>,
+    temperature: Option<f32>,
     aliases: &[(ReasoningEffort, ReasoningEffort)],
 ) -> Result<Validated, ModelError> {
     let mut validated = Validated {
-        reasoning: options.reasoning,
-        temperature: options.temperature,
+        reasoning: effort,
+        temperature,
         warnings: Vec::new(),
     };
     let Some(profile) = profile else {
         return Ok(validated);
     };
-    validated.reasoning = reasoning(profile, options.reasoning, aliases, &mut validated.warnings)?;
+    validated.reasoning = reasoning(profile, effort, aliases, &mut validated.warnings)?;
     if validated.temperature.is_some() && !profile.temperature {
         validated.temperature = None;
         validated.warnings.push(ModelWarning::Unsupported {
@@ -139,18 +141,9 @@ mod tests {
         profile
     }
 
-    fn options(effort: Option<ReasoningEffort>, temperature: Option<f32>) -> CallOptions {
-        CallOptions {
-            reasoning: effort,
-            temperature,
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn unknown_profile_passes_everything_through() {
-        let validated =
-            validate(None, &options(Some(ReasoningEffort::Max), Some(0.5)), &[]).unwrap();
+        let validated = validate(None, Some(ReasoningEffort::Max), Some(0.5), &[]).unwrap();
         assert_eq!(validated.reasoning, Some(ReasoningEffort::Max));
         assert_eq!(validated.temperature, Some(0.5));
         assert!(validated.warnings.is_empty());
@@ -159,28 +152,19 @@ mod tests {
     #[test]
     fn non_reasoning_model_drops_effort_with_a_warning_except_none() {
         let profile = profile(None, true);
-        let validated = validate(
-            Some(&profile),
-            &options(Some(ReasoningEffort::High), None),
-            &[],
-        )
-        .unwrap();
+        let validated = validate(Some(&profile), Some(ReasoningEffort::High), None, &[]).unwrap();
         assert_eq!(validated.reasoning, None);
         assert!(matches!(
             &validated.warnings[0],
             ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
         ));
-        let silent = validate(
-            Some(&profile),
-            &options(Some(ReasoningEffort::None), None),
-            &[],
-        )
-        .unwrap();
+        let silent = validate(Some(&profile), Some(ReasoningEffort::None), None, &[]).unwrap();
         assert_eq!(silent.reasoning, None);
         assert!(silent.warnings.is_empty());
         let default = validate(
             Some(&profile),
-            &options(Some(ReasoningEffort::ProviderDefault), None),
+            Some(ReasoningEffort::ProviderDefault),
+            None,
             &[],
         )
         .unwrap();
@@ -197,13 +181,14 @@ mod tests {
             true,
         );
         assert!(matches!(
-            validate(Some(&profile), &options(Some(ReasoningEffort::Medium), None), &[]),
+            validate(Some(&profile), Some(ReasoningEffort::Medium), None, &[]),
             Err(ModelError::UnsupportedFeature { feature, details: Some(details) })
                 if feature == "reasoning_effort.medium" && details.contains("low, high")
         ));
         let aliased = validate(
             Some(&profile),
-            &options(Some(ReasoningEffort::Minimal), None),
+            Some(ReasoningEffort::Minimal),
+            None,
             &[(ReasoningEffort::Minimal, ReasoningEffort::Low)],
         )
         .unwrap();
@@ -215,16 +200,12 @@ mod tests {
         // 别名目标本身不受支持时不生效。
         assert!(validate(
             Some(&profile),
-            &options(Some(ReasoningEffort::Minimal), None),
+            Some(ReasoningEffort::Minimal),
+            None,
             &[(ReasoningEffort::Minimal, ReasoningEffort::Medium)],
         )
         .is_err());
-        let exact = validate(
-            Some(&profile),
-            &options(Some(ReasoningEffort::High), None),
-            &[],
-        )
-        .unwrap();
+        let exact = validate(Some(&profile), Some(ReasoningEffort::High), None, &[]).unwrap();
         assert_eq!(exact.reasoning, Some(ReasoningEffort::High));
         assert!(exact.warnings.is_empty());
     }
@@ -238,12 +219,7 @@ mod tests {
             }),
             true,
         );
-        let validated = validate(
-            Some(&locked),
-            &options(Some(ReasoningEffort::None), None),
-            &[],
-        )
-        .unwrap();
+        let validated = validate(Some(&locked), Some(ReasoningEffort::None), None, &[]).unwrap();
         assert_eq!(validated.reasoning, None);
         assert!(matches!(
             &validated.warnings[0],
@@ -256,33 +232,23 @@ mod tests {
             }),
             true,
         );
-        let validated = validate(
-            Some(&toggle),
-            &options(Some(ReasoningEffort::None), None),
-            &[],
-        )
-        .unwrap();
+        let validated = validate(Some(&toggle), Some(ReasoningEffort::None), None, &[]).unwrap();
         assert_eq!(validated.reasoning, Some(ReasoningEffort::None));
         // 档位列表为空表示未知，不做限制。
-        let any = validate(
-            Some(&toggle),
-            &options(Some(ReasoningEffort::Xhigh), None),
-            &[],
-        )
-        .unwrap();
+        let any = validate(Some(&toggle), Some(ReasoningEffort::Xhigh), None, &[]).unwrap();
         assert_eq!(any.reasoning, Some(ReasoningEffort::Xhigh));
     }
 
     #[test]
     fn temperature_is_dropped_with_a_warning_when_the_model_rejects_it() {
         let profile = profile(None, false);
-        let validated = validate(Some(&profile), &options(None, Some(0.3)), &[]).unwrap();
+        let validated = validate(Some(&profile), None, Some(0.3), &[]).unwrap();
         assert_eq!(validated.temperature, None);
         assert!(matches!(
             &validated.warnings[0],
             ModelWarning::Unsupported { feature, .. } if feature == "temperature"
         ));
-        let untouched = validate(Some(&profile), &options(None, None), &[]).unwrap();
+        let untouched = validate(Some(&profile), None, None, &[]).unwrap();
         assert!(untouched.warnings.is_empty());
     }
 }

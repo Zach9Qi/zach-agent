@@ -172,7 +172,7 @@ fn reasoning_effort_maps_to_adaptive_thinking_and_effort() {
     let default =
         CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::ProviderDefault);
     assert!(build(&default).get("thinking").is_none());
-    // 显式厂商配置覆盖通用档位，effort 与其他 output_config 字段按字段合并。
+    // 显式厂商配置整体替换通用档位：派生的 effort 不残留，output_config 其余字段照常合并。
     let mut explicit =
         CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::Medium);
     explicit.provider_options = anthropic_options(json!({
@@ -186,7 +186,7 @@ fn reasoning_effort_maps_to_adaptive_thinking_and_effort() {
         built.body["thinking"],
         json!({"type": "enabled", "budget_tokens": 2048})
     );
-    assert_eq!(built.body["output_config"]["effort"], "medium");
+    assert!(built.body["output_config"].get("effort").is_none());
     assert_eq!(built.body["output_config"]["format"]["type"], "json_schema");
     assert_eq!(built.body["metadata"], json!({"user_id": "u1"}));
     assert_eq!(built.betas, vec!["example-beta".to_owned()]);
@@ -260,7 +260,16 @@ fn legacy_generations_use_budget_tokens_and_thinking_drops_sampling_parameters()
     let built = build_request("claude-opus-4-6", None, &options, false).unwrap();
     assert_eq!(built.body["temperature"], 0.5);
     assert_eq!(built.body["top_k"], 40);
+    assert!(built.body.get("output_config").is_none());
     assert!(built.warnings.is_empty());
+    // 覆盖使通用档位整体失效：档案不支持的档位不再触发发送前报错；去掉覆盖则照常拒绝。
+    let opus = crate::ModelCatalog::builtin()
+        .get("anthropic", "claude-opus-4-6")
+        .unwrap();
+    options.reasoning = Some(ReasoningEffort::Xhigh);
+    assert!(build_request(&opus.id, Some(opus), &options, false).is_ok());
+    options.provider_options = None;
+    assert!(build_request(&opus.id, Some(opus), &options, false).is_err());
 }
 
 #[test]

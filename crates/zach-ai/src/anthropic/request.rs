@@ -37,6 +37,10 @@ pub(super) fn build_request(
         return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
     }
     reject_unsupported(options)?;
+    // 显式 thinking 覆盖整体替换通用档位：不写入默认 `thinking` 与派生的
+    // `output_config.effort`，被覆盖的档位也不参与档案校验。
+    let thinking_override =
+        anthropic_field(options.provider_options.as_ref(), "thinking").is_some();
     // Anthropic 没有 minimal 档，按最接近的 low 发送并给出降级警告。
     let Validated {
         reasoning,
@@ -44,7 +48,12 @@ pub(super) fn build_request(
         mut warnings,
     } = validate(
         profile,
-        options,
+        if thinking_override {
+            None
+        } else {
+            options.reasoning
+        },
+        options.temperature,
         &[(ReasoningEffort::Minimal, ReasoningEffort::Low)],
     )?;
     let converted = messages::convert(&options.prompt.messages)?;
@@ -148,7 +157,7 @@ fn apply_provider_options(
     for (key, value) in fields {
         match key.as_str() {
             "betas" => betas = beta_list(value)?,
-            // 显式的思考配置整体替换通用推理档位生成的默认值。
+            // 显式的思考配置整体替换通用档位（build_request 已跳过默认映射）。
             "thinking" => body["thinking"] = value.clone(),
             "output_config" | "metadata" | "context_management" => {
                 merge_value(&mut body[key], value.clone())
