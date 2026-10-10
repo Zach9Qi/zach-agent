@@ -123,7 +123,8 @@ fn text_message(parts: &[AssistantPart]) -> (Value, usize) {
         content.push(if is_refusal(meta) {
             json!({"type": "refusal", "refusal": text})
         } else {
-            json!({"type": "output_text", "text": text})
+            // `annotations` 在输出项 schema 中为必填；无引用时 API 自身返回的就是空数组。
+            json!({"type": "output_text", "text": text, "annotations": []})
         });
         if phase.is_null() {
             if let Some(value) = meta.and_then(|m| m.get("phase")).filter(|v| !v.is_null()) {

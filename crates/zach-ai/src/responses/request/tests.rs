@@ -83,13 +83,13 @@ fn text_with_item_id_replays_as_message_item_and_merges_adjacent_parts() {
     assert_eq!(
         input[0],
         json!({"type": "message", "id": "msg_1", "role": "assistant", "status": "completed",
-            "content": [{"type": "output_text", "text": "前半"},
+            "content": [{"type": "output_text", "text": "前半", "annotations": []},
                         {"type": "refusal", "refusal": "无法回答"}]})
     );
     assert_eq!(input[1]["id"], "msg_2");
     assert_eq!(
         input[1]["content"],
-        json!([{"type": "output_text", "text": "另一条"}])
+        json!([{"type": "output_text", "text": "另一条", "annotations": []}])
     );
     assert_eq!(
         input[2],
