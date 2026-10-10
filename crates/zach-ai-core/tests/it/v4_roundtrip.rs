@@ -9,7 +9,7 @@ use zach_ai_core::{
 };
 
 #[test]
-fn test_prompt_serialization_and_deserialization() {
+fn prompt_round_trips_through_json() {
     let mut prompt = Prompt::new();
     prompt.push(Message::system("你是一个专业的助手"));
     prompt.push(Message::user("帮我分析一下这张图片"));
@@ -32,7 +32,7 @@ fn test_prompt_serialization_and_deserialization() {
 }
 
 #[test]
-fn test_file_data_base64_roundtrip() {
+fn file_data_bytes_round_trip_as_base64() {
     let raw = Bytes::from_static(b"hello world \x00\x01\x02 binary");
     let file = FileData::from_bytes(raw.clone());
 
@@ -47,7 +47,7 @@ fn test_file_data_base64_roundtrip() {
 }
 
 #[test]
-fn test_call_options_builder() {
+fn call_options_builders_set_their_fields() {
     let prompt = Prompt::new().with_user("你好，介绍一下 Rust 语言");
     let options = CallOptions::new(prompt)
         .with_temperature(0.7)
@@ -62,7 +62,7 @@ fn test_call_options_builder() {
 }
 
 #[test]
-fn test_stream_accumulator_aggregates_complete_result() {
+fn stream_accumulator_aggregates_a_complete_turn_into_the_next_assistant_message() {
     let mut accumulator = StreamAccumulator::new();
 
     // 1. 模拟流开始
