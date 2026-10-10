@@ -25,6 +25,8 @@ pub(super) struct ChatStreamParser {
     /// 已收到的 `finish_reason`，等用量到达或 `[DONE]` 时再发 `Finish`。
     pending_finish: Option<FinishReason>,
     pending_usage: Option<Usage>,
+    /// 响应 id / 模型 / 时间戳在所有分块里相同，只在首个分块透出一次。
+    metadata_sent: bool,
     finished: bool,
     pub(super) terminal: bool,
     pub(super) failed: bool,
@@ -37,6 +39,7 @@ impl ChatStreamParser {
             choices: BTreeMap::new(),
             pending_finish: None,
             pending_usage: None,
+            metadata_sent: false,
             finished: false,
             terminal: false,
             failed: false,
@@ -72,7 +75,8 @@ impl ChatStreamParser {
                 raw_value: event.clone(),
             });
         }
-        if let Some(error) = event.get("error") {
+        // 部分代理会固定带上 `"error": null`，只有非空对象才是错误。
+        if let Some(error) = event.get("error").filter(|error| !error.is_null()) {
             self.failed = true;
             parts.push(StreamPart::Error {
                 message: error["message"]
@@ -83,7 +87,8 @@ impl ChatStreamParser {
             });
             return parts;
         }
-        if event["id"].as_str().is_some() {
+        if !self.metadata_sent && event["id"].as_str().is_some() {
+            self.metadata_sent = true;
             parts.push(StreamPart::ResponseMetadata(response_metadata(&event)));
         }
         for choice in event["choices"].as_array().into_iter().flatten() {

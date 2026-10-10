@@ -184,6 +184,32 @@ async fn parallel_tool_calls_finish_in_index_order() {
     ));
 }
 
+/// 响应元数据在每个分块里都相同，只透出一次；代理固定附带的 `"error": null` 不是错误。
+#[tokio::test]
+async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
+    let mut with_null_error = delta(json!({"content": "好"}), None);
+    with_null_error["error"] = Value::Null;
+    let wire = frame(&delta(json!({"role": "assistant", "content": "你"}), None))
+        + &frame(&with_null_error)
+        + &frame(&delta(json!({}), Some("stop")))
+        + &frame(&usage_chunk())
+        + DONE;
+    let parts = parse_wire(wire).await;
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::ResponseMetadata(_))))
+            .count(),
+        1
+    );
+    assert!(!parts
+        .iter()
+        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    let result = aggregate(parts);
+    assert_eq!(result.text(), "你好");
+    assert_eq!(result.response.unwrap().id.as_deref(), Some("chatcmpl-1"));
+}
+
 /// 服务端在流中下发 `error` 后通常直接断开而不发 `[DONE]`，此时不能再叠加一个
 /// 可重试的传输错误，否则上层会把厂商错误误判为传输故障并反复重试。
 #[tokio::test]
