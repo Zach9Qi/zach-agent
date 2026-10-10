@@ -190,6 +190,29 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
     );
 }
 
+/// `reasoning_effort: "none"` 只是 OpenAI 官方端点的约定，第三方端点关闭思考的字段各不相同，
+/// 不能假装发出去就关掉了：改为不发送并给出警告，提示改用扩展参数。
+#[test]
+fn disabling_reasoning_on_a_third_party_provider_warns_instead_of_sending_none() {
+    use zach_ai_core::{ModelWarning, ReasoningEffort};
+    let options = CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::None);
+    let built = request::build_request("qwen3", "alibaba", None, &options, false).unwrap();
+    assert!(built.body.get("reasoning_effort").is_none());
+    assert!(matches!(
+        &built.warnings[0],
+        ModelWarning::Compatibility { feature, details: Some(details) }
+            if feature == "reasoning_effort.none" && details.contains("provider_options.alibaba")
+    ));
+    let built = request::build_request("gpt-5.1", "openai", None, &options, false).unwrap();
+    assert_eq!(built.body["reasoning_effort"], "none");
+    assert!(built.warnings.is_empty());
+    // 其他档位仍按 reasoning_effort 发送，由服务端裁决。
+    let high = CallOptions::new(vec![Message::user("x")]).with_reasoning(ReasoningEffort::High);
+    let built = request::build_request("qwen3", "alibaba", None, &high, false).unwrap();
+    assert_eq!(built.body["reasoning_effort"], "high");
+    assert!(built.warnings.is_empty());
+}
+
 /// OpenAI 官方端点只认 `max_completion_tokens`，第三方兼容端点普遍只认 `max_tokens`。
 #[test]
 fn output_limit_field_follows_the_declared_provider() {

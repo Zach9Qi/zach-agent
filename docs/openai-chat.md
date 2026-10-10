@@ -55,7 +55,10 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 - 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
 - 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
   本适配器的别名为 `Max` → `Xhigh`（`max` 仅 gpt-5.6 及更新代际的档案声明，档案未知时原样发送）；
-- 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
+- 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告；
+- 声明了非 `openai` 的厂商身份且要求 `ReasoningEffort::None`：不发送 `reasoning_effort`（`none`
+  只是 OpenAI 的约定）并给出 `Compatibility` 警告，请改用 `provider_options` 传入该端点的关闭字段
+  （如 Qwen 的 `enable_thinking: false`、DeepSeek 的 `thinking: {"type": "disabled"}`）。
 
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
 Agent 层会以 `model.warnings` 事件呈现。

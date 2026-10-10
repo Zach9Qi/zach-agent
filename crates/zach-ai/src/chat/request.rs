@@ -39,13 +39,14 @@ pub(super) fn build_request(
     let Validated {
         reasoning,
         temperature,
-        warnings,
+        mut warnings,
     } = validate(
         profile,
         options.reasoning,
         options.temperature,
         &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
     )?;
+    let reasoning = disable_reasoning_for_provider(provider, reasoning, &mut warnings);
     let mut body = json!({
         "model": model_id,
         "messages": messages(&options.prompt.messages)?,
@@ -92,6 +93,29 @@ pub(super) fn build_request(
     }
     apply_provider_options(&mut body, provider, options)?;
     Ok(BuiltRequest { body, warnings })
+}
+
+/// `reasoning_effort: "none"` 只是 OpenAI 官方端点的约定；第三方兼容端点关闭思考的字段各不相同
+/// （Qwen 的 `enable_thinking`、DeepSeek 的 `thinking.type` 等），无法统一映射。
+/// 发一个对方不认的取值会让思考在不知情的情况下保持开启，因此改为不发送并给出警告。
+fn disable_reasoning_for_provider(
+    provider: &str,
+    reasoning: Option<ReasoningEffort>,
+    warnings: &mut Vec<ModelWarning>,
+) -> Option<ReasoningEffort> {
+    match reasoning {
+        Some(ReasoningEffort::None) if provider != "openai" => {
+            warnings.push(ModelWarning::Compatibility {
+                feature: "reasoning_effort.none".into(),
+                details: Some(format!(
+                    "厂商 {provider} 的 Chat Completions 端点关闭思考的字段不统一，未发送 \
+                     reasoning_effort；请通过 provider_options.{provider} 传入该端点的关闭字段"
+                )),
+            });
+            None
+        }
+        other => other,
+    }
 }
 
 /// 输出上限的字段名。
