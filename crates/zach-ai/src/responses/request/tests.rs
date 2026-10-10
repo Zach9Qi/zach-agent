@@ -55,6 +55,47 @@ fn unmarked_reasoning_is_never_sent_as_assistant_text() {
     assert_eq!(body["input"][0]["content"], "答案");
 }
 
+/// 无状态回放加密推理时 reasoning 项必须跟随按 id 配对的 message 项，
+/// 因此带 item_id 的助手文本要以原始 message 形状回放并合并相邻分段。
+#[test]
+fn text_with_item_id_replays_as_message_item_and_merges_adjacent_parts() {
+    let text_part = |text: &str, item_id: &str, refusal: bool| {
+        let mut metadata = ProviderOptions::new();
+        metadata.insert(
+            "openai",
+            json!({"item_id": item_id, "refusal": refusal, "phase": Value::Null}),
+        );
+        AssistantPart::Text {
+            text: text.into(),
+            provider_options: Some(metadata),
+        }
+    };
+    let options = CallOptions::new(vec![Message::assistant_tool_calls(vec![
+        text_part("前半", "msg_1", false),
+        text_part("无法回答", "msg_1", true),
+        text_part("另一条", "msg_2", false),
+        AssistantPart::text("手工文本"),
+    ])]);
+    let body = build_request("model", &options, false).unwrap();
+    let input = body["input"].as_array().unwrap();
+    assert_eq!(input.len(), 3);
+    assert_eq!(
+        input[0],
+        json!({"type": "message", "id": "msg_1", "role": "assistant", "status": "completed",
+            "content": [{"type": "output_text", "text": "前半"},
+                        {"type": "refusal", "refusal": "无法回答"}]})
+    );
+    assert_eq!(input[1]["id"], "msg_2");
+    assert_eq!(
+        input[1]["content"],
+        json!([{"type": "output_text", "text": "另一条"}])
+    );
+    assert_eq!(
+        input[2],
+        json!({"role": "assistant", "content": "手工文本"})
+    );
+}
+
 #[test]
 fn files_use_distinct_url_data_and_reference_fields() {
     let parts = vec![

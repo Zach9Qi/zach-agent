@@ -1,7 +1,7 @@
 //! 按历史顺序回放 Responses 消息、函数调用与加密推理。
 
 use serde_json::{json, Value};
-use zach_ai_core::{AssistantPart, Message, ModelError, ToolPart, UserPart};
+use zach_ai_core::{AssistantPart, Message, ModelError, ProviderOptions, ToolPart, UserPart};
 
 use super::media;
 
@@ -30,9 +30,17 @@ pub(super) fn messages(messages: &[Message]) -> Result<Vec<Value>, ModelError> {
                 input.push(json!({"role": "user", "content": content}));
             }
             Message::Assistant { content, .. } => {
-                for part in content {
-                    if let Some(item) = assistant_part(part)? {
+                let mut index = 0;
+                while index < content.len() {
+                    if matches!(content[index], AssistantPart::Text { .. }) {
+                        let (item, consumed) = text_message(&content[index..]);
                         input.push(item);
+                        index += consumed;
+                    } else {
+                        if let Some(item) = assistant_part(&content[index])? {
+                            input.push(item);
+                        }
+                        index += 1;
                     }
                 }
             }
@@ -59,33 +67,81 @@ pub(super) fn messages(messages: &[Message]) -> Result<Vec<Value>, ModelError> {
     Ok(input)
 }
 
-fn assistant_part(part: &AssistantPart) -> Result<Option<Value>, ModelError> {
-    let item = match part {
-        AssistantPart::Text {
+/// 读取文本块回放所需的 openai 元数据。
+fn openai_meta(options: &Option<ProviderOptions>) -> Option<&Value> {
+    options.as_ref().and_then(|p| p.inner.get("openai"))
+}
+
+fn text_item_id(meta: Option<&Value>) -> Option<&str> {
+    meta.and_then(|m| m.get("item_id")).and_then(Value::as_str)
+}
+
+fn is_refusal(meta: Option<&Value>) -> bool {
+    meta.and_then(|m| m.get("refusal")).and_then(Value::as_bool) == Some(true)
+}
+
+/// 回放助手文本。首块必须是 Text；带 `item_id` 的相邻文本合并回同一条
+/// message 项并保留原始 id，否则无状态回放加密推理时会因 reasoning 项
+/// 缺少按 id 配对的后继输出项而被 API 拒绝。
+fn text_message(parts: &[AssistantPart]) -> (Value, usize) {
+    let AssistantPart::Text {
+        text,
+        provider_options,
+    } = &parts[0]
+    else {
+        unreachable!("调用方保证首块为文本");
+    };
+    let meta = openai_meta(provider_options);
+    let Some(item_id) = text_item_id(meta) else {
+        // 无本协议回放信息的文本（如手工构造或跨厂商历史）保持简单形状。
+        let mut message = if is_refusal(meta) {
+            json!({"type": "message", "role": "assistant", "status": "completed",
+                "content": [{"type": "refusal", "refusal": text}]})
+        } else {
+            json!({"role": "assistant", "content": text})
+        };
+        if let Some(phase) = meta.and_then(|m| m.get("phase")).filter(|v| !v.is_null()) {
+            message["phase"] = phase.clone();
+        }
+        return (message, 1);
+    };
+    let mut content = Vec::new();
+    let mut phase = Value::Null;
+    let mut consumed = 0;
+    for part in parts {
+        let AssistantPart::Text {
             text,
             provider_options,
-        } => {
-            let metadata = provider_options
-                .as_ref()
-                .and_then(|p| p.inner.get("openai"));
-            let mut message = if metadata
-                .and_then(|m| m.get("refusal"))
-                .and_then(Value::as_bool)
-                == Some(true)
-            {
-                json!({"type": "message", "role": "assistant", "status": "completed",
-                    "content": [{"type": "refusal", "refusal": text}]})
-            } else {
-                json!({"role": "assistant", "content": text})
-            };
-            if let Some(phase) = metadata
-                .and_then(|m| m.get("phase"))
-                .filter(|v| !v.is_null())
-            {
-                message["phase"] = phase.clone();
-            }
-            message
+        } = part
+        else {
+            break;
+        };
+        let meta = openai_meta(provider_options);
+        if text_item_id(meta) != Some(item_id) {
+            break;
         }
+        content.push(if is_refusal(meta) {
+            json!({"type": "refusal", "refusal": text})
+        } else {
+            json!({"type": "output_text", "text": text})
+        });
+        if phase.is_null() {
+            if let Some(value) = meta.and_then(|m| m.get("phase")).filter(|v| !v.is_null()) {
+                phase = value.clone();
+            }
+        }
+        consumed += 1;
+    }
+    let mut message = json!({"type": "message", "id": item_id, "role": "assistant",
+        "status": "completed", "content": content});
+    if !phase.is_null() {
+        message["phase"] = phase;
+    }
+    (message, consumed)
+}
+
+fn assistant_part(part: &AssistantPart) -> Result<Option<Value>, ModelError> {
+    let item = match part {
         AssistantPart::Reasoning {
             provider_options, ..
         } => {

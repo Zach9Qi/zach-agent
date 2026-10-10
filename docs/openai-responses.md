@@ -54,6 +54,7 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
 | --- | --- |
 | 普通生成与 SSE | 文本、拒绝、推理摘要、函数参数增量及最终工具调用 |
 | 多轮函数调用 | 区分输出项 `id` 和执行关联 `call_id`，按原始顺序回放调用与结果 |
+| 文本历史 | 带 `item_id` 的助手文本以原始 message 项回放并合并相邻分段，满足加密推理的 id 配对要求 |
 | 推理历史 | 保留原始推理项及 `encrypted_content`，通过 provider metadata 回放 |
 | 附件 | 图片、PDF 的 URL/字节/`openai` 文件引用，以及内联文本 |
 | 工具结果 | 文本、JSON、错误、拒绝和受支持的复合内容块 |
