@@ -67,12 +67,18 @@ pub(super) fn tool_output(output: &ToolResultOutput) -> Result<Value, ModelError
                 ToolResultContentBlock::Text { text, .. } => {
                     Ok(json!({"type":"text", "text":text}))
                 }
+                // tool 消息的 content 只接受文本部件，图片/文件会被服务端 400 拒绝。
                 ToolResultContentBlock::File {
-                    media_type,
-                    data,
-                    filename,
-                    ..
-                } => input(media_type, data, filename.as_deref()),
+                    media_type, data, ..
+                } => match data {
+                    FileData::Text { text } => Ok(json!({"type":"text", "text":text})),
+                    _ => Err(ModelError::unsupported(
+                        "tool_result_file",
+                        Some(format!(
+                            "Chat Completions 工具结果只接受文本内容，无法携带 {media_type} 附件"
+                        )),
+                    )),
+                },
                 ToolResultContentBlock::Custom { .. } => {
                     Err(ModelError::unsupported("custom_tool_result", None))
                 }

@@ -91,6 +91,43 @@ fn url_support_claims_match_request_builder_capabilities() {
     assert!(!model.is_url_supported("image/png", "file:///tmp/a.png"));
 }
 
+/// tool 消息的 content 只接受文本部件，文件附件必须在发送前被拒绝而非生成非法部件。
+#[test]
+fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
+    use zach_ai_core::{FileData, ToolPart, ToolResultContentBlock, ToolResultOutput};
+    let result = |blocks| {
+        Message::tool(vec![ToolPart::ToolResult {
+            tool_call_id: "call_1".into(),
+            tool_name: "render".into(),
+            output: ToolResultOutput::Content { value: blocks },
+            provider_options: None,
+        }])
+    };
+    let image = CallOptions::new(vec![result(vec![ToolResultContentBlock::File {
+        media_type: "image/png".into(),
+        data: FileData::from_bytes(vec![1, 2, 3]),
+        filename: None,
+        provider_options: None,
+    }])]);
+    assert!(matches!(
+        request::build_request("gpt-test", &image, false),
+        Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
+    ));
+    let text = CallOptions::new(vec![result(vec![ToolResultContentBlock::File {
+        media_type: "text/plain".into(),
+        data: FileData::Text {
+            text: "日志内容".into(),
+        },
+        filename: None,
+        provider_options: None,
+    }])]);
+    let body = request::build_request("gpt-test", &text, false).unwrap();
+    assert_eq!(
+        body["messages"][0]["content"],
+        json!([{"type":"text", "text":"日志内容"}])
+    );
+}
+
 /// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
 #[test]
 fn reasoning_max_level_is_rejected_before_sending() {
