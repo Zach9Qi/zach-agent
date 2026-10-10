@@ -60,8 +60,15 @@ Agent 层会以 `model.warnings` 事件呈现。
 
 ## HTTP 配置
 
-`with_client` 可传入自定义 `reqwest::Client`；默认客户端设置 30 秒连接超时与 300 秒读取超时
-（相邻两次收到字节的间隔），不设整体超时。
+默认客户端只设 30 秒连接超时；读取与整体超时按请求类型区分：
+
+- 非流式请求（`do_generate`）在服务端生成完之前收不到任何字节，默认整体超时 10 分钟，
+  `with_generate_timeout(Some(..))` 可放宽，`None` 表示不限制；
+- 流式请求（`do_stream`）等待响应头、以及相邻两次收到数据之间默认最多 5 分钟，
+  `with_stream_idle_timeout` 可调整；超时以可重试的 `StreamError` 结束流。
+
+`with_client` 可传入自定义 `reqwest::Client` 配置连接池与代理；客户端级的 `timeout` /
+`read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
 
 HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为可重试的
 `ServerError`，其他非成功状态映射为 `ProviderError`；传输失败映射为 `StreamError`。

@@ -118,10 +118,18 @@ options.provider_options = Some(provider);
 ## HTTP 配置与错误
 
 `with_base_url` 接收包含版本路径的根地址，不包含 `/responses` 后缀。
-`with_client` 接收调用方构造的 `reqwest::Client`，用于配置连接池、代理与超时；
-默认客户端设置 30 秒连接超时与 300 秒读取超时（相邻两次收到字节的间隔），不设整体超时，
-连接假死时流会以传输错误结束而不是永远挂住。适配器内部不启动后台重试。
-`with_header` 设置默认头，`CallOptions.headers` 按调用覆盖。
+`with_header` 设置默认头，`CallOptions.headers` 按调用覆盖。适配器内部不启动后台重试。
+
+默认客户端只设 30 秒连接超时；读取与整体超时按请求类型区分：
+
+- 非流式请求（`do_generate`）在服务端生成完之前收不到任何字节，默认整体超时 10 分钟，
+  `with_generate_timeout(Some(..))` 可放宽，`None` 表示不限制；
+- 流式请求（`do_stream`）等待响应头、以及相邻两次收到数据之间默认最多 5 分钟，
+  `with_stream_idle_timeout` 可调整；超时以可重试的 `StreamError` 结束流。
+
+`with_client` 可传入自定义 `reqwest::Client` 配置连接池与代理；客户端级的 `timeout` /
+`read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
+
 `with_profile` 注入模型档案，优先于内置目录中的同名条目，用于代理端点或目录未收录的模型。
 API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴权的网关。
 

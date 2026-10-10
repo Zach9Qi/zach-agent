@@ -2,17 +2,21 @@
 //!
 //! 流按消费需求拉取：消费方丢弃流即停止读取网络。三家适配器的终止语义统一为：
 //! - 解析器报告 `terminal` 后不再读取源流；
-//! - 源流在 `terminal` 之前结束（干净 EOF 或传输错误）时，只有解析器既没报告过
+//! - 源流在 `terminal` 之前结束（干净 EOF、传输错误或空闲超时）时，只有解析器既没报告过
 //!   错误事件、也没发出过 `Finish`，才视为传输错误；
 //!   - 已报告错误事件：服务端通常随后直接断开（FIN 或 RST 都有），再叠加一个可重试的
 //!     传输错误会让上层把不可重试的厂商错误误判为传输故障并反复重试；
 //!   - 已发出 `Finish`：Chat 在用量块、Anthropic 在 `message_delta` 就能收尾，之后只剩
 //!     纯终止符；代理或兼容端点省掉终止符就断开时，完整响应不能被尾部错误整体判失败。
 
+#[cfg(test)]
+mod tests;
+
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
 use std::collections::VecDeque;
 use std::pin::Pin;
+use std::time::Duration;
 use zach_ai_core::{LanguageModelStream, ModelError, ModelWarning, StreamPart};
 
 use super::sse::SseDecoder;
@@ -38,17 +42,30 @@ struct State<S, P> {
     decoder: SseDecoder,
     parser: P,
     label: &'static str,
+    /// 相邻两次收到数据之间的上限；`None` 不限制。
+    idle: Option<Duration>,
     queue: VecDeque<Result<StreamPart, ModelError>>,
     ended: bool,
 }
 
+/// 从源流拉取一次的结果。
+enum Pull<E> {
+    Bytes(Bytes),
+    Failed(E),
+    /// 超过空闲上限没有收到任何数据。
+    Idle(Duration),
+    End,
+}
+
 /// 以 `parser` 驱动 `source`，`label` 用于错误信息中标识协议；
-/// `warnings` 是请求构建阶段产生的降级警告，随首个 `StreamStart` 事件透出。
+/// `warnings` 是请求构建阶段产生的降级警告，随首个 `StreamStart` 事件透出；
+/// `idle` 是相邻两次收到数据之间的上限，超过即按传输错误结束。
 pub(crate) fn sse_stream<S, E, P>(
     label: &'static str,
     source: S,
     parser: P,
     warnings: Vec<ModelWarning>,
+    idle: Option<Duration>,
 ) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
@@ -60,6 +77,7 @@ where
         decoder: SseDecoder::new(label),
         parser,
         label,
+        idle,
         queue: VecDeque::from([Ok(StreamPart::StreamStart { warnings })]),
         ended: false,
     };
@@ -71,32 +89,58 @@ where
             if state.ended {
                 return None;
             }
-            match state.source.next().await {
-                Some(Ok(bytes)) => state.feed(&bytes),
-                Some(Err(error)) => {
-                    state.ended = true;
-                    if !state.settled() {
-                        state.queue.push_back(Err(ModelError::stream_error(
-                            format!("读取 {} SSE 字节流失败", state.label),
-                            error,
-                        )));
-                    }
-                }
-                None => {
-                    state.ended = true;
-                    if !state.settled() {
-                        state.queue.push_back(Err(ModelError::StreamError {
-                            message: format!("{} SSE 在终止事件到达前结束", state.label),
-                            source: None,
-                        }));
-                    }
-                }
+            match state.pull().await {
+                Pull::Bytes(bytes) => state.feed(&bytes),
+                Pull::Failed(error) => state.end(ModelError::stream_error(
+                    format!("读取 {} SSE 字节流失败", state.label),
+                    error,
+                )),
+                Pull::Idle(limit) => state.end(ModelError::StreamError {
+                    message: format!(
+                        "{} SSE 超过 {} 秒没有收到数据",
+                        state.label,
+                        limit.as_secs()
+                    ),
+                    source: None,
+                }),
+                Pull::End => state.end(ModelError::StreamError {
+                    message: format!("{} SSE 在终止事件到达前结束", state.label),
+                    source: None,
+                }),
             }
         }
     }))
 }
 
-impl<S, P: SseParser> State<S, P> {
+impl<S, E, P> State<S, P>
+where
+    S: Stream<Item = Result<Bytes, E>>,
+    P: SseParser,
+{
+    async fn pull(&mut self) -> Pull<E> {
+        let next = self.source.next();
+        let item = match self.idle {
+            Some(limit) => match tokio::time::timeout(limit, next).await {
+                Ok(item) => item,
+                Err(_) => return Pull::Idle(limit),
+            },
+            None => next.await,
+        };
+        match item {
+            Some(Ok(bytes)) => Pull::Bytes(bytes),
+            Some(Err(error)) => Pull::Failed(error),
+            None => Pull::End,
+        }
+    }
+
+    /// 源流在终止事件之前结束：结果尚未由事件决定时才补一个传输错误。
+    fn end(&mut self, error: ModelError) {
+        self.ended = true;
+        if !self.settled() {
+            self.queue.push_back(Err(error));
+        }
+    }
+
     /// 本轮结果是否已由事件决定（失败或完成），之后连接如何结束只是诊断信息。
     fn settled(&self) -> bool {
         self.parser.failed() || self.parser.finished()
@@ -119,173 +163,5 @@ impl<S, P: SseParser> State<S, P> {
                 self.ended = true;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! 驱动循环的终止语义：终止事件、错误事件与连接断开的组合。
-    use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-
-    /// 脚本化解析器：`done` 帧置位 terminal，`fail` 帧发 Error 并置位 failed，
-    /// `finish` 帧发 Finish 并置位 finished，其余原样透出。
-    struct Scripted {
-        terminal: bool,
-        failed: bool,
-        finished: bool,
-    }
-
-    impl SseParser for Scripted {
-        fn data(&mut self, data: &str) -> Vec<StreamPart> {
-            match data {
-                "done" => {
-                    self.terminal = true;
-                    vec![]
-                }
-                "fail" => {
-                    self.failed = true;
-                    vec![StreamPart::Error {
-                        message: "服务端错误".into(),
-                        raw: None,
-                    }]
-                }
-                "finish" => {
-                    self.finished = true;
-                    vec![StreamPart::Finish {
-                        usage: Default::default(),
-                        finish_reason: zach_ai_core::FinishReason::stop(),
-                        provider_metadata: None,
-                    }]
-                }
-                other => vec![StreamPart::TextDelta {
-                    id: "t".into(),
-                    delta: other.into(),
-                    provider_metadata: None,
-                }],
-            }
-        }
-        fn terminal(&self) -> bool {
-            self.terminal
-        }
-        fn failed(&self) -> bool {
-            self.failed
-        }
-        fn finished(&self) -> bool {
-            self.finished
-        }
-    }
-
-    fn parser() -> Scripted {
-        Scripted {
-            terminal: false,
-            failed: false,
-            finished: false,
-        }
-    }
-
-    async fn run(
-        chunks: Vec<Result<&'static str, std::io::Error>>,
-    ) -> Vec<Result<StreamPart, ModelError>> {
-        let source = futures::stream::iter(chunks.into_iter().map(|chunk| chunk.map(Bytes::from)));
-        sse_stream("测试", source, parser(), vec![]).collect().await
-    }
-
-    #[tokio::test]
-    async fn eof_before_terminal_without_error_event_is_a_transport_error() {
-        let parts = run(vec![Ok("data: a\n\n")]).await;
-        assert!(matches!(&parts[0], Ok(StreamPart::StreamStart { .. })));
-        assert!(matches!(&parts[1], Ok(StreamPart::TextDelta { delta, .. }) if delta == "a"));
-        assert!(matches!(
-            &parts[2],
-            Err(ModelError::StreamError { message, .. }) if message.contains("终止事件")
-        ));
-    }
-
-    /// 服务端在流中报错后直接断开是常态，无论是干净 FIN 还是 RST，
-    /// 都不能再叠加一个可重试的传输错误。
-    #[tokio::test]
-    async fn connection_loss_after_error_event_is_not_reported_again() {
-        let parts = run(vec![Ok("data: fail\n\n")]).await;
-        assert_eq!(parts.len(), 2);
-        assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
-        let parts = run(vec![
-            Ok("data: fail\n\n"),
-            Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
-        ])
-        .await;
-        assert_eq!(parts.len(), 2);
-        assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
-    }
-
-    /// `Finish` 已发出后响应即语义完整，终止符之前的断开（FIN 或 RST）不改变结果。
-    #[tokio::test]
-    async fn connection_loss_after_finish_keeps_the_response_successful() {
-        for tail in [
-            vec![],
-            vec![Err(std::io::Error::from(
-                std::io::ErrorKind::ConnectionReset,
-            ))],
-        ] {
-            let mut chunks = vec![Ok("data: a\n\ndata: finish\n\n")];
-            chunks.extend(tail);
-            let parts = run(chunks).await;
-            assert_eq!(parts.len(), 3, "{parts:?}");
-            assert!(parts.iter().all(Result::is_ok));
-            assert!(matches!(&parts[2], Ok(StreamPart::Finish { .. })));
-        }
-    }
-
-    #[tokio::test]
-    async fn terminal_frame_stops_reading_even_if_more_bytes_follow() {
-        let source = futures::stream::iter(vec![Ok::<_, std::io::Error>(Bytes::from(
-            "data: done\n\ndata: late\n\n",
-        ))])
-        .chain(futures::stream::poll_fn(
-            |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
-                panic!("终止后不应再读取源流")
-            },
-        ));
-        let parts: Vec<_> = sse_stream("测试", source, parser(), vec![]).collect().await;
-        assert_eq!(parts.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn transport_errors_end_the_stream_immediately() {
-        let parts = run(vec![Err(std::io::Error::other("断开")), Ok("data: a\n\n")]).await;
-        assert_eq!(parts.len(), 2);
-        assert!(matches!(
-            &parts[1],
-            Err(ModelError::StreamError {
-                source: Some(_),
-                ..
-            })
-        ));
-    }
-
-    #[tokio::test]
-    async fn stream_is_lazy_and_dropping_it_releases_the_source() {
-        struct Probe(Arc<AtomicBool>);
-        impl Drop for Probe {
-            fn drop(&mut self) {
-                self.0.store(true, Ordering::SeqCst);
-            }
-        }
-        let dropped = Arc::new(AtomicBool::new(false));
-        let probe = Probe(dropped.clone());
-        let source = futures::stream::poll_fn(
-            move |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
-                let _ = &probe;
-                panic!("只取 StreamStart 时不应拉取网络")
-            },
-        );
-        let mut stream = sse_stream("测试", source, parser(), vec![]);
-        assert!(matches!(
-            stream.next().await,
-            Some(Ok(StreamPart::StreamStart { .. }))
-        ));
-        drop(stream);
-        assert!(dropped.load(Ordering::SeqCst));
     }
 }

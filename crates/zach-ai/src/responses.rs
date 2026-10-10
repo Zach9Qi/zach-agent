@@ -38,6 +38,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION,
 use reqwest::Client;
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 use zach_ai_core::{
     CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
 };
@@ -61,6 +62,7 @@ pub struct OpenAiResponsesModel {
     default_headers: HeaderMap,
     /// 调用方注入的档案，优先于内置目录。
     profile: Option<Arc<ModelProfile>>,
+    timeouts: transport::Timeouts,
 }
 
 impl fmt::Debug for OpenAiResponsesModel {
@@ -91,7 +93,25 @@ impl OpenAiResponsesModel {
             model_id: Arc::from(model_id.into()),
             default_headers: HeaderMap::new(),
             profile: None,
+            timeouts: transport::Timeouts::default(),
         }
+    }
+
+    /// 非流式请求的整体超时（从发起连接到读完响应体），默认 10 分钟；`None` 表示不限制。
+    ///
+    /// 非流式请求在服务端生成完之前收不到任何字节，推理模型的高档位可能长时间无响应，
+    /// 需要更长时间时在此放宽。流式请求不受此限制。
+    pub fn with_generate_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.timeouts.generate = timeout;
+        self
+    }
+
+    /// 流式请求等待响应头、以及相邻两次收到数据之间的上限，默认 5 分钟；`None` 表示不限制。
+    ///
+    /// 推理模型可能长时间不吐字，若遇到空闲超时可在此放宽；超时以可重试的传输错误结束流。
+    pub fn with_stream_idle_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.timeouts.stream_idle = timeout;
+        self
     }
 
     /// 注入模型档案（能力、限制与计费），覆盖内置目录中的同名条目。
@@ -140,7 +160,7 @@ impl OpenAiResponsesModel {
         stream: bool,
     ) -> Result<(reqwest::Request, BuiltRequest), ModelError> {
         let built = build_request(&self.model_id, self.profile(), options, stream)?;
-        let request = self
+        let mut request = self
             .client
             .post(self.endpoint())
             .headers(self.headers(options)?)
@@ -148,6 +168,7 @@ impl OpenAiResponsesModel {
             .json(&built.body)
             .build()
             .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
+        transport::prepare(&mut request, &self.timeouts, stream);
         Ok((request, built))
     }
 
@@ -157,7 +178,14 @@ impl OpenAiResponsesModel {
         stream: bool,
     ) -> Result<(reqwest::Response, BuiltRequest), ModelError> {
         let (request, built) = self.request(options, stream)?;
-        let response = transport::execute(&self.client, PROVIDER, LABEL, request).await?;
+        let response = transport::execute(
+            &self.client,
+            PROVIDER,
+            LABEL,
+            request,
+            self.timeouts.guard(stream),
+        )
+        .await?;
         Ok((response, built))
     }
 }
@@ -201,6 +229,7 @@ impl LanguageModel for OpenAiResponsesModel {
             response.bytes_stream(),
             parser,
             built.warnings,
+            self.timeouts.stream_idle,
         ))
     }
 }

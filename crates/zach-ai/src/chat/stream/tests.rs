@@ -47,6 +47,7 @@ async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
         futures::stream::iter(chunks),
         ChatStreamParser::new(false),
         vec![],
+        None,
     )
     .collect()
     .await

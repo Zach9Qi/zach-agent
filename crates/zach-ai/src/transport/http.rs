@@ -4,25 +4,52 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT
 use reqwest::{Client, Request, Response};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::future::Future;
 use std::time::Duration;
 use zach_ai_core::ModelError;
+
+use super::Timeouts;
 
 /// 建立连接的上限。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// 相邻两次读到字节之间的上限：推理模型可能长时间不吐字，但不应无限等待。
-const READ_TIMEOUT: Duration = Duration::from_secs(300);
-
-/// 适配器默认的 HTTP 客户端：带连接与读取超时，避免连接假死时 `do_stream` 永远挂住。
+/// 适配器默认的 HTTP 客户端：只设连接超时。
 ///
-/// 不设置整体超时，因为流式响应的总时长由生成长度决定；需要更细的控制时
+/// 读取与整体超时按请求类型区分（见 [`Timeouts`]）：客户端级 `read_timeout` 在等待响应头
+/// 阶段同样生效，会把长时间推理的非流式请求误杀。需要代理、连接池等更细的控制时
 /// 用 `with_client` 传入自定义客户端。
 pub(crate) fn default_client() -> Client {
     Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
-        .read_timeout(READ_TIMEOUT)
         .build()
         .expect("默认 HTTP 客户端构建失败")
+}
+
+/// 按请求类型套用超时：非流式请求设置请求级整体超时，流式请求不设（由空闲守卫约束）。
+pub(crate) fn prepare(request: &mut Request, timeouts: &Timeouts, stream: bool) {
+    if !stream {
+        *request.timeout_mut() = timeouts.generate;
+    }
+}
+
+/// 给一个阶段加上时长守卫；超时映射为可重试的传输错误。
+async fn guarded<T>(
+    guard: Option<Duration>,
+    label: &str,
+    phase: &str,
+    future: impl Future<Output = T>,
+) -> Result<T, ModelError> {
+    match guard {
+        Some(limit) => {
+            tokio::time::timeout(limit, future)
+                .await
+                .map_err(|_| ModelError::StreamError {
+                    message: format!("{label} {phase}超过 {} 秒", limit.as_secs()),
+                    source: None,
+                })
+        }
+        None => Ok(future.await),
+    }
 }
 
 /// 请求流式还是普通响应时的 `Accept` 值。
@@ -61,20 +88,26 @@ pub(crate) fn extend_headers(
 }
 
 /// 执行请求：传输失败映射为 `StreamError`，非 2xx 按状态分类。
+///
+/// `guard` 约束等待响应头与读取错误正文的时长（流式请求的空闲守卫）；
+/// 非流式请求传 `None`，由 [`prepare`] 设置的请求级超时覆盖全程。
 pub(crate) async fn execute(
     client: &Client,
     provider: &str,
     label: &str,
     request: Request,
+    guard: Option<Duration>,
 ) -> Result<Response, ModelError> {
-    let response = client
-        .execute(request)
-        .await
+    let response = guarded(guard, label, "等待响应头", client.execute(request))
+        .await?
         .map_err(|err| ModelError::stream_error(format!("请求 {label} 失败"), err))?;
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err(http_error(provider, label, response).await)
+        let error = http_error(provider, label, response);
+        Err(guarded(guard, label, "读取错误响应", error)
+            .await
+            .unwrap_or_else(|timeout| timeout))
     }
 }
 

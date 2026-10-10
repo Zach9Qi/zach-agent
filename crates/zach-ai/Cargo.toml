@@ -23,3 +23,7 @@ async-trait.workspace = true
 tokio.workspace = true
 futures.workspace = true
 reqwest = { workspace = true, features = ["json", "stream"] }
+
+[dev-dependencies]
+# 空闲超时等用例使用虚拟时钟（`start_paused`），避免真实等待
+tokio = { workspace = true, features = ["test-util"] }

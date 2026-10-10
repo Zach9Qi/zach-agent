@@ -8,6 +8,7 @@ mod tests;
 
 use bytes::Bytes;
 use futures::Stream;
+use std::time::Duration;
 use zach_ai_core::{LanguageModelStream, ModelWarning, StreamPart};
 
 use crate::transport::{sse_stream, SseParser};
@@ -36,10 +37,11 @@ pub(super) fn messages_stream<S, E>(
     source: S,
     parser: MessagesStreamParser,
     warnings: Vec<ModelWarning>,
+    idle: Option<Duration>,
 ) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    sse_stream(super::LABEL, source, parser, warnings)
+    sse_stream(super::LABEL, source, parser, warnings, idle)
 }

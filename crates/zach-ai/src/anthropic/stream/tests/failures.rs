@@ -40,7 +40,7 @@ async fn connection_loss_after_finish_without_message_stop_keeps_the_response() 
         Ok(Bytes::from(wire)),
         Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
     ]);
-    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![])
+    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![], None)
         .collect::<Vec<_>>()
         .await;
     assert!(parts.iter().all(Result::is_ok));
@@ -74,7 +74,7 @@ async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
         )),
         Ok(Bytes::from(start_frame() + &stop_frames("end_turn"))),
     ]);
-    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![])
+    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![], None)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(parts.len(), 2);

@@ -66,6 +66,27 @@ key", "llama3"
     .is_err());
 }
 
+/// 非流式请求在生成完成前收不到任何字节，只能按整体时长设限；流式请求的总时长由生成长度
+/// 决定，不能套用整体超时，而由驱动循环的空闲守卫约束。
+#[test]
+fn generate_requests_carry_a_total_timeout_and_stream_requests_do_not() {
+    use std::time::Duration;
+    let options = CallOptions::new(vec![Message::user("你好")]);
+    let model = OpenAiChatCompletionsModel::new("secret", "gpt-test");
+    let (generate, _) = model.request(&options, false).unwrap();
+    assert_eq!(generate.timeout(), Some(&Duration::from_secs(600)));
+    let (stream, _) = model.request(&options, true).unwrap();
+    assert_eq!(stream.timeout(), None);
+    let relaxed = model
+        .clone()
+        .with_generate_timeout(Some(Duration::from_secs(1800)));
+    let (generate, _) = relaxed.request(&options, false).unwrap();
+    assert_eq!(generate.timeout(), Some(&Duration::from_secs(1800)));
+    let unlimited = model.with_generate_timeout(None);
+    let (generate, _) = unlimited.request(&options, false).unwrap();
+    assert_eq!(generate.timeout(), None);
+}
+
 #[test]
 fn chat_model_identity_does_not_expose_api_key() {
     let model = OpenAiChatCompletionsModel::new("private", "custom-model");

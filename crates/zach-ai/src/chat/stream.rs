@@ -12,6 +12,7 @@ use bytes::Bytes;
 use futures::Stream;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::time::Duration;
 use zach_ai_core::{FinishReason, LanguageModelStream, ModelWarning, StreamPart, Usage};
 
 use super::response::{finish_reason, response_metadata, usage};
@@ -161,10 +162,11 @@ pub(super) fn chat_stream<S, E>(
     source: S,
     parser: ChatStreamParser,
     warnings: Vec<ModelWarning>,
+    idle: Option<Duration>,
 ) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    sse_stream(super::LABEL, source, parser, warnings)
+    sse_stream(super::LABEL, source, parser, warnings, idle)
 }

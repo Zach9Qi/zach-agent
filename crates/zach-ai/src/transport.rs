@@ -7,9 +7,11 @@
 mod http;
 mod sse;
 mod stream;
+mod timeouts;
 
 pub(crate) use http::{
-    accept, default_client, execute, extend_headers, read_json, require_event_stream,
+    accept, default_client, execute, extend_headers, prepare, read_json, require_event_stream,
     sensitive_header,
 };
 pub(crate) use stream::{sse_stream, SseParser};
+pub(crate) use timeouts::Timeouts;

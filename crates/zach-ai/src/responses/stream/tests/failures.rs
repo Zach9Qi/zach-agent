@@ -36,7 +36,7 @@ async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
             &json!({"type": "response.completed", "response": response(vec![])}),
         ))),
     ]);
-    let parts = responses_stream(source, ResponsesStreamParser::new(false), vec![])
+    let parts = responses_stream(source, ResponsesStreamParser::new(false), vec![], None)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(parts.len(), 2);

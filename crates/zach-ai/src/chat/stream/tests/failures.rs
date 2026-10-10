@@ -54,7 +54,7 @@ async fn connection_loss_after_finish_without_done_keeps_the_response() {
         Ok(Bytes::from(wire)),
         Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
     ]);
-    let parts = chat_stream(source, ChatStreamParser::new(false), vec![])
+    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
         .collect::<Vec<_>>()
         .await;
     assert!(parts.iter().all(Result::is_ok));
@@ -90,7 +90,7 @@ async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
         )),
         Ok(Bytes::from(frame(&delta(json!({}), Some("stop"))) + DONE)),
     ]);
-    let parts = chat_stream(source, ChatStreamParser::new(false), vec![])
+    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(parts.len(), 2);
