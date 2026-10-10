@@ -29,6 +29,10 @@ while let Some(part) = stream.next().await {
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
 
+DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链，适配器会将其以
+`Reasoning` 事件透出（流式与非流式一致）。由于 Chat Completions 的输入消息不接受
+思考链字段（部分端点收到会直接报错），历史中的推理块不会回传。
+
 联调工具通过位置参数 `chat`（或 `--protocol openai-chat`）选择该协议，根地址仍然不包含
 `/chat/completions` 后缀。
 

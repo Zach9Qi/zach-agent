@@ -191,6 +191,8 @@ fn assistant_message(parts: &[AssistantPart]) -> Result<Vec<Value>, ModelError> 
                 }
                 calls.push(json!({"id":tool_call_id, "type":"function", "function":{"name":tool_name, "arguments":serde_json::to_string(input)?}}));
             }
+            // Chat Completions 的输入消息不接受思考链字段（DeepSeek 等端点
+            // 收到 reasoning_content 会直接 400），历史推理不回传。
             AssistantPart::Reasoning { .. } => {}
             AssistantPart::ToolResult { .. }
             | AssistantPart::ReasoningFile { .. }

@@ -20,6 +20,23 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
     accumulator.process(StreamPart::StreamStart { warnings: vec![] });
     accumulator.process(StreamPart::ResponseMetadata(response_metadata(&value)));
     let text_id = format!("choice:{}", choice["index"].as_u64().unwrap_or(0));
+    // DeepSeek、Qwen 等兼容端点在 message.reasoning_content 返回思考链。
+    if let Some(reasoning) = message.get("reasoning_content").and_then(Value::as_str) {
+        let id = format!("{text_id}/reasoning");
+        accumulator.process(StreamPart::ReasoningStart {
+            id: id.clone(),
+            provider_metadata: None,
+        });
+        accumulator.process(StreamPart::ReasoningDelta {
+            id: id.clone(),
+            delta: reasoning.into(),
+            provider_metadata: None,
+        });
+        accumulator.process(StreamPart::ReasoningEnd {
+            id,
+            provider_metadata: None,
+        });
+    }
     if let Some(text) = message.get("content").and_then(Value::as_str) {
         accumulator.process(StreamPart::TextStart {
             id: text_id.clone(),

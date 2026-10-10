@@ -82,6 +82,52 @@ fn chat_model_identity_does_not_expose_api_key() {
     assert!(!format!("{model:?}").contains("private"));
 }
 
+/// 兼容端点（DeepSeek/Qwen）在 message.reasoning_content 返回思考链，不能被静默丢弃。
+#[test]
+fn non_stream_response_surfaces_reasoning_content() {
+    let value = json!({
+        "id":"chatcmpl-1", "object":"chat.completion", "created":1700000000, "model":"r1",
+        "choices":[{"index":0,"message":{"role":"assistant","reasoning_content":"先算加法","content":"结果是 3"},"finish_reason":"stop"}],
+        "usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}
+    });
+    let result = response::parse_response(value).unwrap();
+    assert_eq!(result.reasoning().as_deref(), Some("先算加法"));
+    assert_eq!(result.text(), "结果是 3");
+    assert!(matches!(
+        result.content[0],
+        zach_ai_core::OutputContent::Reasoning { .. }
+    ));
+}
+
+/// 流式 delta.reasoning_content 需以 Reasoning 事件透出，并在结束前正确闭合。
+#[tokio::test]
+async fn stream_surfaces_reasoning_content_deltas_before_text() {
+    let chunks = [
+        "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"r1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"先\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"r1\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"算\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"r1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"3\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"r1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: [DONE]\n\n",
+    ]
+    .concat();
+    let mut output = chat_stream(
+        stream::iter(vec![Ok::<_, std::io::Error>(Bytes::from(chunks))]),
+        ChatStreamParser::new(false),
+    );
+    let parts: Vec<_> = output.by_ref().collect().await;
+    let mut accumulator = StreamAccumulator::new();
+    for part in parts {
+        accumulator.process(part.unwrap());
+    }
+    let result = accumulator.finish();
+    assert_eq!(result.reasoning().as_deref(), Some("先算"));
+    assert_eq!(result.text(), "3");
+    assert!(matches!(
+        result.content[0],
+        zach_ai_core::OutputContent::Reasoning { .. }
+    ));
+}
+
 /// URL 支持声明必须与请求构建的实际能力一致，防止宿主跳过下载后构建失败。
 #[test]
 fn url_support_claims_match_request_builder_capabilities() {

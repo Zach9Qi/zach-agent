@@ -23,6 +23,7 @@ struct ToolState {
 pub(super) struct ChatStreamParser {
     texts: HashSet<String>,
     text_buffers: HashMap<String, String>,
+    reasonings: HashSet<String>,
     tools: HashMap<(u64, u64), ToolState>,
     raw: bool,
     pending_finish: Option<zach_ai_core::FinishReason>,
@@ -37,6 +38,7 @@ impl ChatStreamParser {
         Self {
             texts: HashSet::new(),
             text_buffers: HashMap::new(),
+            reasonings: HashSet::new(),
             tools: HashMap::new(),
             raw,
             pending_finish: None,
@@ -107,6 +109,23 @@ impl ChatStreamParser {
     fn choice(&mut self, choice: &Value, parts: &mut Vec<StreamPart>) {
         let index = choice["index"].as_u64().unwrap_or(0);
         let delta = &choice["delta"];
+        // DeepSeek、Qwen 等兼容端点通过 reasoning_content 下发思考链增量。
+        if let Some(reasoning) = delta["reasoning_content"].as_str() {
+            let id = format!("choice:{index}/reasoning");
+            if self.reasonings.insert(id.clone()) {
+                parts.push(StreamPart::ReasoningStart {
+                    id: id.clone(),
+                    provider_metadata: None,
+                });
+            }
+            if !reasoning.is_empty() {
+                parts.push(StreamPart::ReasoningDelta {
+                    id,
+                    delta: reasoning.into(),
+                    provider_metadata: None,
+                });
+            }
+        }
         if let Some(text) = delta["content"].as_str() {
             let id = format!("choice:{index}");
             if self.texts.insert(id.clone()) {
@@ -209,6 +228,12 @@ impl ChatStreamParser {
             return vec![];
         };
         let mut parts = Vec::new();
+        for id in self.reasonings.clone() {
+            parts.push(StreamPart::ReasoningEnd {
+                id,
+                provider_metadata: None,
+            });
+        }
         for id in self.texts.clone() {
             parts.push(StreamPart::TextEnd {
                 id,
