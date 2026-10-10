@@ -22,6 +22,12 @@ fn stream_error_keeps_underlying_source() {
 fn only_transient_errors_are_retryable() {
     assert!(ModelError::RateLimit("429".to_string()).is_retryable());
     assert!(ModelError::stream_error("连接重置", "reset").is_retryable());
+    let unavailable = ModelError::server_error("openai", 503, "overloaded", None);
+    assert!(unavailable.is_retryable());
+    assert_eq!(
+        unavailable.to_string(),
+        "厂商 [openai] 服务端暂时不可用 (HTTP 503): overloaded"
+    );
 
     assert!(!ModelError::Authentication("key 无效".to_string()).is_retryable());
     assert!(!ModelError::InvalidRequest("缺少 model".to_string()).is_retryable());

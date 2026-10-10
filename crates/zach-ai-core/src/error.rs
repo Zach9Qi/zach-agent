@@ -24,12 +24,26 @@ pub enum ModelError {
     #[error("触发限流或配额耗尽: {0}")]
     RateLimit(String),
 
+    /// 厂商服务端暂时性故障（HTTP 5xx、408 等），重试可能成功
+    ///
+    /// 与 [`Self::ProviderError`] 的区别只在可重试性：后者是服务端明确拒绝了请求本身
+    /// （参数非法、模型不存在等），重试同样的请求没有意义。
+    #[error("厂商 [{provider}] 服务端暂时不可用 (HTTP {status}): {message}")]
+    ServerError {
+        provider: String,
+        status: u16,
+        message: String,
+        /// 原始错误正文，同 [`Self::ProviderError`] 装箱
+        raw: Option<Box<serde_json::Value>>,
+    },
+
     /// 厂商服务端返回的明确错误
     #[error("厂商 [{provider}] 返回错误: {message}")]
     ProviderError {
         provider: String,
         message: String,
-        raw: Option<serde_json::Value>,
+        /// 原始错误正文；装箱以控制 `ModelError` 的体积，`Result` 传递时不必搬运大块载荷
+        raw: Option<Box<serde_json::Value>>,
     },
 
     /// 流式传输中断或读取超时（不可恢复，流随即结束）
@@ -55,11 +69,14 @@ pub enum ModelError {
 }
 
 impl ModelError {
-    /// 该错误本身是否属于暂时性故障（限流、传输中断），重试可能成功
+    /// 该错误本身是否属于暂时性故障（限流、服务端故障、传输中断），重试可能成功
     ///
     /// 只判断错误性质；流中途失败时可能已产出部分内容，是否真正重试由上层决定。
     pub fn is_retryable(&self) -> bool {
-        matches!(self, Self::RateLimit(_) | Self::StreamError { .. })
+        matches!(
+            self,
+            Self::RateLimit(_) | Self::ServerError { .. } | Self::StreamError { .. }
+        )
     }
 
     /// 构造厂商返回错误
@@ -71,7 +88,22 @@ impl ModelError {
         Self::ProviderError {
             provider: provider.into(),
             message: message.into(),
-            raw,
+            raw: raw.map(Box::new),
+        }
+    }
+
+    /// 构造厂商服务端暂时性故障
+    pub fn server_error(
+        provider: impl Into<String>,
+        status: u16,
+        message: impl Into<String>,
+        raw: Option<serde_json::Value>,
+    ) -> Self {
+        Self::ServerError {
+            provider: provider.into(),
+            status,
+            message: message.into(),
+            raw: raw.map(Box::new),
         }
     }
 
