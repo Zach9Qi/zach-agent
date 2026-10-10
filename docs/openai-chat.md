@@ -24,7 +24,9 @@ while let Some(part) = stream.next().await {
 
 适配器支持文本和图片输入、函数工具、JSON Object/JSON Schema 输出、停止词、采样参数、
 推理强度、非流式生成与 SSE 流式生成。`max_output_tokens` 在 `openai` 身份下发送为
-`max_completion_tokens`（o 系列起官方端点只认此字段），其他厂商身份下发送为 `max_tokens`。流式请求自动设置 `stream_options.include_usage`，
+`max_completion_tokens`（o 系列起官方端点只认此字段），其他厂商身份下发送为 `max_tokens`。
+函数工具与 JSON Schema 输出的严格模式都由调用方显式选择（`with_strict`），未指定时沿用服务端
+默认的不严格校验，普通 Schema 不会因严格模式的额外约束被拒绝。流式请求自动设置 `stream_options.include_usage`，
 以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用；
 `id` 晚于参数到达时参数先缓存，始终没有 `id` 的调用无法与结果配对，会以 `Error` 事件报告
 而不是静默丢弃。

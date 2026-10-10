@@ -299,10 +299,16 @@ fn response_format(format: &ResponseFormat) -> Value {
             schema: Some(schema),
             name,
             description,
+            strict,
         } => {
-            let mut schema_value = json!({"name":name.as_deref().unwrap_or("response"), "schema":schema, "strict":true});
+            // 严格模式由调用方显式选择，与函数工具的 `strict` 一致；默认沿用服务端的不严格。
+            let mut schema_value =
+                json!({"name":name.as_deref().unwrap_or("response"), "schema":schema});
             if let Some(description) = description {
                 schema_value["description"] = json!(description);
+            }
+            if let Some(strict) = strict {
+                schema_value["strict"] = json!(strict);
             }
             json!({"type":"json_schema", "json_schema":schema_value})
         }

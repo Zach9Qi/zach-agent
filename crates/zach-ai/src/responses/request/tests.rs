@@ -153,6 +153,7 @@ fn tools_and_json_modes_use_responses_shapes() {
         schema: None,
         name: None,
         description: None,
+        strict: None,
     });
     let body = build_request("model", None, &options, true).unwrap().body;
     assert_eq!(body["tools"][0]["type"], "function");
@@ -169,8 +170,12 @@ fn tools_and_json_modes_use_responses_shapes() {
     let body = build_request("model", None, &options, false).unwrap().body;
     assert_eq!(body["text"]["format"]["type"], "json_schema");
     assert_eq!(body["text"]["format"]["schema"], schema);
-    assert_eq!(body["text"]["format"]["strict"], true);
+    // 严格模式与函数工具一致，由调用方显式选择。
+    assert!(body["text"]["format"].get("strict").is_none());
     assert!(body["text"]["format"].get("description").is_none());
+    options.response_format = Some(ResponseFormat::json_schema(schema).with_strict(true));
+    let body = build_request("model", None, &options, false).unwrap().body;
+    assert_eq!(body["text"]["format"]["strict"], true);
 }
 
 #[test]

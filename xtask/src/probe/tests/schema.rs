@@ -49,7 +49,8 @@ fn file_reference_uses_scenario_directory_and_preserves_standard_format_metadata
             Some(ResponseFormat::Json {
                 schema: Some(schema()),
                 name: format.as_ref().map(|_| "amount".into()),
-                description: format.as_ref().map(|_| "金额".into())
+                description: format.as_ref().map(|_| "金额".into()),
+                strict: None,
             })
         );
     }

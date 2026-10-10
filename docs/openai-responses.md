@@ -68,9 +68,11 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
 声明不支持的工具或请求参数会在发送前返回 `UnsupportedFeature`。
 通用参数 `top_k`、`presence_penalty`、`frequency_penalty`、`stop_sequences`、`seed` 不映射到 Responses。
 
-函数声明未指定 `strict` 时发送 `false`，保留通用 JSON Schema 的可选字段语义。
-显式启用严格模式以及使用 JSON Schema 输出时，调用方需提供满足 OpenAI 严格模式要求的 schema；
-适配器不自动修改 schema。模型的具体能力仍取决于所选模型和端点。
+函数声明未指定 `strict` 时发送 `false`，JSON Schema 输出未指定 `strict` 时不发送该字段，
+都保留通用 JSON Schema 的可选字段语义。显式启用严格模式（`FunctionTool::with_strict`、
+`ResponseFormat::with_strict`）时，调用方需提供满足 OpenAI 严格模式要求的 schema
+（每个对象 `additionalProperties: false` 且全部字段 required）；适配器不自动修改 schema。
+模型的具体能力仍取决于所选模型和端点。
 
 ## 档案校验与警告
 

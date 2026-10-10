@@ -24,17 +24,33 @@ pub enum ResponseFormat {
         /// Schema 作用描述
         #[serde(default, skip_serializing_if = "Option::is_none")]
         description: Option<String>,
+        /// 是否要求厂商按严格模式校验 Schema（OpenAI 的 `strict`）；`None` 沿用厂商默认（不严格）
+        ///
+        /// 严格模式要求 Schema 满足厂商的额外约束（如每个对象 `additionalProperties: false`
+        /// 且全部字段 required），普通 Schema 会被拒绝，因此与 [`crate::FunctionTool::strict`]
+        /// 一样由调用方显式选择。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        strict: Option<bool>,
     },
 }
 
 impl ResponseFormat {
-    /// 便捷构造 JSON Schema 约束格式
+    /// 便捷构造 JSON Schema 约束格式（不启用严格模式）
     pub fn json_schema(schema: Value) -> Self {
         Self::Json {
             schema: Some(schema),
             name: None,
             description: None,
+            strict: None,
         }
+    }
+
+    /// 设置严格模式；对 [`Self::Text`] 无效
+    pub fn with_strict(mut self, strict: bool) -> Self {
+        if let Self::Json { strict: slot, .. } = &mut self {
+            *slot = Some(strict);
+        }
+        self
     }
 }
 

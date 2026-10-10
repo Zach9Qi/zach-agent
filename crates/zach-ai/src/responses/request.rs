@@ -157,15 +157,19 @@ fn response_format(format: &ResponseFormat) -> Value {
             schema: Some(schema),
             name,
             description,
+            strict,
         } => {
+            // 严格模式由调用方显式选择，与函数工具的 `strict` 一致；默认沿用服务端的不严格。
             let mut format = json!({
                 "type": "json_schema",
                 "name": name.as_deref().unwrap_or("response"),
                 "schema": schema,
-                "strict": true,
             });
             if let Some(description) = description {
                 format["description"] = json!(description);
+            }
+            if let Some(strict) = strict {
+                format["strict"] = json!(strict);
             }
             format
         }

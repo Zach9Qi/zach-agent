@@ -229,6 +229,38 @@ fn output_limit_field_follows_the_declared_provider() {
     assert!(deepseek.get("max_completion_tokens").is_none());
 }
 
+/// JSON Schema 输出的严格模式由调用方显式选择：普通 Schema 在严格模式下会被服务端拒绝。
+#[test]
+fn json_schema_output_is_strict_only_when_requested() {
+    use zach_ai_core::ResponseFormat;
+    let schema = json!({"type": "object", "properties": {"v": {"type": "integer"}}});
+    let mut options = CallOptions::new(vec![Message::user("x")]);
+    options.response_format = Some(ResponseFormat::json_schema(schema.clone()));
+    let body = request::build_request("gpt-test", "openai", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(body["response_format"]["type"], "json_schema");
+    assert_eq!(body["response_format"]["json_schema"]["schema"], schema);
+    assert!(body["response_format"]["json_schema"]
+        .get("strict")
+        .is_none());
+    options.response_format = Some(ResponseFormat::json_schema(schema).with_strict(true));
+    let body = request::build_request("gpt-test", "openai", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(body["response_format"]["json_schema"]["strict"], true);
+    options.response_format = Some(ResponseFormat::Json {
+        schema: None,
+        name: None,
+        description: None,
+        strict: None,
+    });
+    let body = request::build_request("gpt-test", "openai", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(body["response_format"], json!({"type": "json_object"}));
+}
+
 /// 兼容端点的私有字段透传，但已由通用参数写入的字段不能被扩展参数悄悄覆盖。
 #[test]
 fn provider_options_pass_through_but_cannot_override_adapter_fields() {

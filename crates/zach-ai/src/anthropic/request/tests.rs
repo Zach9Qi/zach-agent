@@ -284,6 +284,7 @@ fn json_schema_output_and_unknown_provider_fields_are_handled() {
         schema: None,
         name: None,
         description: None,
+        strict: None,
     });
     assert!(matches!(
         build_request("example", None, &options, false),
