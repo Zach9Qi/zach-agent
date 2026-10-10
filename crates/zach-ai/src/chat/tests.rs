@@ -81,3 +81,17 @@ fn chat_model_identity_does_not_expose_api_key() {
     assert_eq!(model.model_id(), "custom-model");
     assert!(!format!("{model:?}").contains("private"));
 }
+
+/// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
+#[test]
+fn reasoning_max_level_is_rejected_before_sending() {
+    let mut options = CallOptions::new(vec![Message::user("你好")]);
+    options.reasoning = Some(zach_ai_core::ReasoningEffort::Max);
+    assert!(matches!(
+        request::build_request("gpt-test", &options, false),
+        Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
+    ));
+    options.reasoning = Some(zach_ai_core::ReasoningEffort::Xhigh);
+    let body = request::build_request("gpt-test", &options, false).unwrap();
+    assert_eq!(body["reasoning_effort"], "xhigh");
+}

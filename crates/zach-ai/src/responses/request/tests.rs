@@ -160,6 +160,12 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.seed = None;
+    options.reasoning = Some(ReasoningEffort::Max);
+    assert!(matches!(
+        build_request("model", &options, false),
+        Err(ModelError::UnsupportedFeature { .. })
+    ));
+    options.reasoning = None;
     options.tools = Some(vec![ProviderTool::new(
         "openai.web_search",
         "web_search",

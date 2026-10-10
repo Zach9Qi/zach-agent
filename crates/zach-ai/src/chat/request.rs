@@ -51,6 +51,12 @@ pub(super) fn build_request(
         body["seed"] = json!(seed);
     }
     if let Some(reasoning) = options.reasoning {
+        if reasoning == ReasoningEffort::Max {
+            return Err(ModelError::unsupported(
+                "reasoning_effort.max",
+                Some("Chat Completions 的最高推理档位是 xhigh，请改用 Xhigh".into()),
+            ));
+        }
         if reasoning != ReasoningEffort::ProviderDefault {
             body["reasoning_effort"] = json!(reasoning_name(reasoning));
         }
@@ -96,8 +102,10 @@ fn reasoning_name(value: ReasoningEffort) -> &'static str {
         ReasoningEffort::Medium => "medium",
         ReasoningEffort::High => "high",
         ReasoningEffort::Xhigh => "xhigh",
-        ReasoningEffort::Max => "max",
-        ReasoningEffort::ProviderDefault => "",
+        // Max 与 ProviderDefault 已在 build_request 中提前过滤
+        ReasoningEffort::Max | ReasoningEffort::ProviderDefault => {
+            unreachable!("build_request 已过滤该档位")
+        }
     }
 }
 

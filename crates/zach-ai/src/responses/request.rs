@@ -42,6 +42,12 @@ pub(super) fn build_request(
         }
     }
     if let Some(effort) = options.reasoning {
+        if effort == ReasoningEffort::Max {
+            return Err(ModelError::unsupported(
+                "reasoning_effort.max",
+                Some("Responses API 的最高推理档位是 xhigh，请改用 Xhigh".into()),
+            ));
+        }
         if effort != ReasoningEffort::ProviderDefault {
             body["reasoning"] = json!({ "effort": effort });
         }
