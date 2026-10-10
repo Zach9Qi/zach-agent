@@ -75,7 +75,7 @@ impl fmt::Debug for OpenAiResponsesModel {
 impl OpenAiResponsesModel {
     /// 使用 OpenAI 官方端点创建模型。
     pub fn new(api_key: impl Into<String>, model_id: impl Into<String>) -> Self {
-        Self::with_client(Client::new(), api_key, model_id)
+        Self::with_client(transport::default_client(), api_key, model_id)
     }
 
     /// 使用自定义 HTTP 客户端创建模型，便于复用连接池和测试配置。

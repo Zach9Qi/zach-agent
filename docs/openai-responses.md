@@ -118,7 +118,8 @@ options.provider_options = Some(provider);
 
 `with_base_url` 接收包含版本路径的根地址，不包含 `/responses` 后缀。
 `with_client` 接收调用方构造的 `reqwest::Client`，用于配置连接池、代理与超时；
-默认构造器沿用 reqwest 默认超时行为，适配器内部不启动后台重试。
+默认客户端设置 30 秒连接超时与 300 秒读取超时（相邻两次收到字节的间隔），不设整体超时，
+连接假死时流会以传输错误结束而不是永远挂住。适配器内部不启动后台重试。
 `with_header` 设置默认头，`CallOptions.headers` 按调用覆盖。
 `with_profile` 注入模型档案，优先于内置目录中的同名条目，用于代理端点或目录未收录的模型。
 API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴权的网关。

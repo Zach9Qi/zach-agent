@@ -49,6 +49,11 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
 Agent 层会以 `model.warnings` 事件呈现。
 
+## HTTP 配置
+
+`with_client` 可传入自定义 `reqwest::Client`；默认客户端设置 30 秒连接超时与 300 秒读取超时
+（相邻两次收到字节的间隔），不设整体超时。
+
 ## 厂商扩展
 
 `CallOptions.provider_options` 的 `openai` 对象原样并入请求正文：Chat Completions 是众多

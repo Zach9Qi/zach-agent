@@ -9,6 +9,7 @@ mod sse;
 mod stream;
 
 pub(crate) use http::{
-    accept, execute, extend_headers, read_json, require_event_stream, sensitive_header,
+    accept, default_client, execute, extend_headers, read_json, require_event_stream,
+    sensitive_header,
 };
 pub(crate) use stream::{sse_stream, SseParser};

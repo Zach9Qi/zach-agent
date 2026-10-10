@@ -58,7 +58,7 @@ impl fmt::Debug for OpenAiChatCompletionsModel {
 impl OpenAiChatCompletionsModel {
     /// 使用 OpenAI 官方端点创建模型。
     pub fn new(api_key: impl Into<String>, model_id: impl Into<String>) -> Self {
-        Self::with_client(Client::new(), api_key, model_id)
+        Self::with_client(transport::default_client(), api_key, model_id)
     }
 
     /// 使用自定义客户端创建模型。

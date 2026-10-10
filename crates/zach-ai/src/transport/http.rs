@@ -4,7 +4,26 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT
 use reqwest::{Client, Request, Response};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
 use zach_ai_core::ModelError;
+
+/// 建立连接的上限。
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 相邻两次读到字节之间的上限：推理模型可能长时间不吐字，但不应无限等待。
+const READ_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// 适配器默认的 HTTP 客户端：带连接与读取超时，避免连接假死时 `do_stream` 永远挂住。
+///
+/// 不设置整体超时，因为流式响应的总时长由生成长度决定；需要更细的控制时
+/// 用 `with_client` 传入自定义客户端。
+pub(crate) fn default_client() -> Client {
+    Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .build()
+        .expect("默认 HTTP 客户端构建失败")
+}
 
 /// 请求流式还是普通响应时的 `Accept` 值。
 pub(crate) fn accept(stream: bool) -> &'static str {

@@ -85,6 +85,11 @@ Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推�
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
 Agent 层会以 `model.warnings` 事件呈现。
 
+## HTTP 配置
+
+`with_client` 可传入自定义 `reqwest::Client`；默认客户端设置 30 秒连接超时与 300 秒读取超时
+（相邻两次收到字节的间隔），不设整体超时。
+
 ## 厂商扩展
 
 `provider_options.anthropic` 支持以下键：
