@@ -41,6 +41,7 @@ async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
     responses_stream(
         futures::stream::iter(chunks),
         ResponsesStreamParser::new(false),
+        vec![],
     )
     .collect()
     .await
@@ -113,7 +114,7 @@ async fn completed_response_stops_without_waiting_for_network_eof() {
         ),
     );
     let result = aggregate(
-        responses_stream(source, ResponsesStreamParser::new(false))
+        responses_stream(source, ResponsesStreamParser::new(false), vec![])
             .collect()
             .await,
     );
@@ -140,7 +141,7 @@ async fn stream_is_lazy_and_dropping_it_releases_the_source() {
             panic!("只取 StreamStart 时不应拉取网络")
         },
     );
-    let mut stream = responses_stream(source, ResponsesStreamParser::new(false));
+    let mut stream = responses_stream(source, ResponsesStreamParser::new(false), vec![]);
     assert!(matches!(
         stream.next().await,
         Some(Ok(StreamPart::StreamStart { .. }))

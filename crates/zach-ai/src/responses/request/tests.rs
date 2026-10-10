@@ -30,7 +30,7 @@ fn history_is_flat_and_keeps_reasoning_call_and_result_order() {
             json!({"sum": 1}),
         )]),
     ]);
-    let body = build_request("model", &options, true).unwrap();
+    let body = build_request("model", None, &options, true).unwrap().body;
     let input = body["input"].as_array().unwrap();
     assert_eq!(input.len(), 6);
     assert!(input.iter().all(Value::is_object));
@@ -50,7 +50,7 @@ fn unmarked_reasoning_is_never_sent_as_assistant_text() {
         AssistantPart::reasoning("其他协议摘要"),
         AssistantPart::text("答案"),
     ])]);
-    let body = build_request("model", &options, false).unwrap();
+    let body = build_request("model", None, &options, false).unwrap().body;
     assert_eq!(body["input"].as_array().unwrap().len(), 1);
     assert_eq!(body["input"][0]["content"], "答案");
 }
@@ -76,7 +76,7 @@ fn text_with_item_id_replays_as_message_item_and_merges_adjacent_parts() {
         text_part("另一条", "msg_2", false),
         AssistantPart::text("手工文本"),
     ])]);
-    let body = build_request("model", &options, false).unwrap();
+    let body = build_request("model", None, &options, false).unwrap().body;
     let input = body["input"].as_array().unwrap();
     assert_eq!(input.len(), 3);
     assert_eq!(
@@ -119,7 +119,7 @@ fn files_use_distinct_url_data_and_reference_fields() {
         content: parts,
         provider_options: None,
     }]);
-    let body = build_request("model", &options, false).unwrap();
+    let body = build_request("model", None, &options, false).unwrap().body;
     let content = &body["input"][0]["content"];
     assert_eq!(content[0]["image_url"], "data:image/png;base64,AQID");
     assert_eq!(content[1]["file_id"], "file_image");
@@ -137,7 +137,7 @@ fn foreign_file_reference_fails_instead_of_using_an_arbitrary_id() {
         FileData::from_reference("anthropic", "other-file"),
     )]);
     assert!(matches!(
-        build_request("model", &options, false),
+        build_request("model", None, &options, false),
         Err(ModelError::InvalidRequest(_))
     ));
 }
@@ -154,7 +154,7 @@ fn tools_and_json_modes_use_responses_shapes() {
         name: None,
         description: None,
     });
-    let body = build_request("model", &options, true).unwrap();
+    let body = build_request("model", None, &options, true).unwrap().body;
     assert_eq!(body["tools"][0]["type"], "function");
     assert_eq!(body["tools"][0]["strict"], false);
     assert!(body["tools"][0].get("function").is_none());
@@ -166,7 +166,7 @@ fn tools_and_json_modes_use_responses_shapes() {
     let schema = json!({"type":"object", "properties":{"value":{"type":"integer"}},
         "required":["value"], "additionalProperties":false});
     options.response_format = Some(ResponseFormat::json_schema(schema.clone()));
-    let body = build_request("model", &options, false).unwrap();
+    let body = build_request("model", None, &options, false).unwrap().body;
     assert_eq!(body["text"]["format"]["type"], "json_schema");
     assert_eq!(body["text"]["format"]["schema"], schema);
     assert_eq!(body["text"]["format"]["strict"], true);
@@ -182,12 +182,43 @@ fn provider_options_merge_reasoning_and_keep_replay_enabled() {
         json!({"reasoning": {"summary": "auto"}, "include": []}),
     );
     options.provider_options = Some(provider);
-    let body = build_request("model", &options, false).unwrap();
+    let body = build_request("model", None, &options, false).unwrap().body;
     assert_eq!(
         body["reasoning"],
         json!({"effort": "high", "summary": "auto"})
     );
     assert_eq!(body["include"], json!(["reasoning.encrypted_content"]));
+}
+
+/// 档案声明不接受 temperature 或不支持某档位时，在发送前丢弃或报错，而不是让服务端返回 400。
+#[test]
+fn profile_rejects_or_drops_settings_before_sending() {
+    use zach_ai_core::{ModelWarning, ReasoningEffort};
+    let catalog = crate::ModelCatalog::builtin();
+    let gpt5 = catalog.get("openai", "gpt-5").unwrap();
+    let mut options = CallOptions::new(vec![Message::user("x")])
+        .with_temperature(0.5)
+        .with_reasoning(ReasoningEffort::Xhigh);
+    assert!(matches!(
+        build_request(&gpt5.id, Some(gpt5), &options, false),
+        Err(ModelError::UnsupportedFeature { feature, .. }) if feature == "reasoning_effort.xhigh"
+    ));
+    options.reasoning = Some(ReasoningEffort::High);
+    let built = build_request(&gpt5.id, Some(gpt5), &options, false).unwrap();
+    assert!(built.body.get("temperature").is_none());
+    assert_eq!(built.body["reasoning"]["effort"], "high");
+    assert!(matches!(
+        &built.warnings[0],
+        ModelWarning::Unsupported { feature, .. } if feature == "temperature"
+    ));
+    let gpt41 = catalog.get("openai", "gpt-4.1").unwrap();
+    let built = build_request(&gpt41.id, Some(gpt41), &options, false).unwrap();
+    assert!(built.body.get("reasoning").is_none());
+    assert_eq!(built.body["temperature"], 0.5);
+    assert!(matches!(
+        &built.warnings[0],
+        ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
+    ));
 }
 
 #[test]
@@ -197,13 +228,13 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
         ..Default::default()
     };
     assert!(matches!(
-        build_request("model", &options, false),
+        build_request("model", None, &options, false),
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.seed = None;
     options.reasoning = Some(ReasoningEffort::Max);
     assert!(matches!(
-        build_request("model", &options, false),
+        build_request("model", None, &options, false),
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.reasoning = None;
@@ -214,18 +245,18 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
     )
     .into()]);
     assert!(matches!(
-        build_request("model", &options, false),
+        build_request("model", None, &options, false),
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.tools = None;
     let mut provider = ProviderOptions::new();
     provider.insert("openai", json!({"background": true}));
     options.provider_options = Some(provider);
-    assert!(build_request("model", &options, true).is_err());
+    assert!(build_request("model", None, &options, true).is_err());
     options
         .provider_options
         .as_mut()
         .unwrap()
         .insert("openai", json!("bad"));
-    assert!(build_request("model", &options, true).is_err());
+    assert!(build_request("model", None, &options, true).is_err());
 }

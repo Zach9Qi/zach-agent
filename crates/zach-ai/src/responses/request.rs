@@ -8,17 +8,34 @@ mod tools;
 mod tests;
 
 use serde_json::{json, Value};
-use zach_ai_core::{CallOptions, ModelError, ReasoningEffort, ResponseFormat};
+use zach_ai_core::{
+    CallOptions, ModelError, ModelProfile, ModelWarning, ReasoningEffort, ResponseFormat,
+};
+
+use crate::validate::{validate, Validated};
+
+/// 已构建的请求：正文与档案校验产生的警告。
+#[derive(Debug)]
+pub(super) struct BuiltRequest {
+    pub(super) body: Value,
+    pub(super) warnings: Vec<ModelWarning>,
+}
 
 pub(super) fn build_request(
     model_id: &str,
+    profile: Option<&ModelProfile>,
     options: &CallOptions,
     stream: bool,
-) -> Result<Value, ModelError> {
+) -> Result<BuiltRequest, ModelError> {
     if model_id.trim().is_empty() {
         return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
     }
     reject_unsupported(options)?;
+    let Validated {
+        reasoning,
+        temperature,
+        warnings,
+    } = validate(profile, options, &[])?;
     // Agent 自行管理历史，默认采用无状态模式并请求可回放的加密推理。
     let mut body = json!({
         "model": model_id,
@@ -30,10 +47,7 @@ pub(super) fn build_request(
     if let Some(value) = options.max_output_tokens {
         body["max_output_tokens"] = json!(value);
     }
-    for (name, value) in [
-        ("temperature", options.temperature),
-        ("top_p", options.top_p),
-    ] {
+    for (name, value) in [("temperature", temperature), ("top_p", options.top_p)] {
         if let Some(value) = value {
             if !value.is_finite() {
                 return Err(ModelError::InvalidRequest(format!("{name} 必须是有限数值")));
@@ -41,7 +55,7 @@ pub(super) fn build_request(
             body[name] = json!(value);
         }
     }
-    if let Some(effort) = options.reasoning {
+    if let Some(effort) = reasoning {
         if effort == ReasoningEffort::Max {
             return Err(ModelError::unsupported(
                 "reasoning_effort.max",
@@ -108,7 +122,7 @@ pub(super) fn build_request(
             values.push(encrypted);
         }
     }
-    Ok(body)
+    Ok(BuiltRequest { body, warnings })
 }
 
 fn merge_value(target: &mut Value, incoming: Value) {

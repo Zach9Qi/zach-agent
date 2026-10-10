@@ -40,9 +40,13 @@ pub(super) async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelErro
         .into_iter()
         .map(|b| Ok::<_, std::io::Error>(Bytes::from(vec![b])))
         .collect::<Vec<_>>();
-    chat_stream(futures::stream::iter(chunks), ChatStreamParser::new(false))
-        .collect()
-        .await
+    chat_stream(
+        futures::stream::iter(chunks),
+        ChatStreamParser::new(false),
+        vec![],
+    )
+    .collect()
+    .await
 }
 
 pub(super) fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {

@@ -37,6 +37,18 @@ DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链�
 `Reasoning` 事件透出（流式与非流式一致）。由于 Chat Completions 的输入消息不接受
 思考链字段（部分端点收到会直接报错），历史中的推理块不会回传。
 
+## 档案校验与警告
+
+请求构建时会对照模型档案（内置目录或 `with_profile` 注入）校验通用参数，档案未知时跳过：
+
+- 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
+- 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
+- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
+- 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
+
+警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
+Agent 层会以 `model.warnings` 事件呈现。
+
 ## 厂商扩展
 
 `CallOptions.provider_options` 的 `openai` 对象原样并入请求正文：Chat Completions 是众多

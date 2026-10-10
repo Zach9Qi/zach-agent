@@ -18,7 +18,7 @@ fn request_targets_responses_and_keeps_authorization_sensitive() {
         headers: Some(HashMap::from([("x-request-id".into(), "test-id".into())])),
         ..Default::default()
     };
-    let (request, body) = model.request(&options, true).unwrap();
+    let (request, built) = model.request(&options, true).unwrap();
     assert_eq!(request.url().as_str(), "https://example.com/v1/responses");
     assert_eq!(request.method(), reqwest::Method::POST);
     assert_eq!(request.headers()[AUTHORIZATION], "Bearer secret");
@@ -30,11 +30,11 @@ fn request_targets_responses_and_keeps_authorization_sensitive() {
         "text/event-stream"
     );
     let sent: Value = serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap();
-    assert_eq!(sent, body);
-    assert_eq!(body["stream"], true);
-    assert_eq!(body["model"], "example");
+    assert_eq!(sent, built.body);
+    assert_eq!(sent["stream"], true);
+    assert_eq!(sent["model"], "example");
     assert_eq!(
-        body["input"][0]["content"],
+        sent["input"][0]["content"],
         json!([{"type":"input_text", "text":"你好"}])
     );
 }

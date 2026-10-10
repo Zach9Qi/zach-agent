@@ -10,7 +10,7 @@ use bytes::Bytes;
 use futures::{Stream, StreamExt};
 use std::collections::VecDeque;
 use std::pin::Pin;
-use zach_ai_core::{LanguageModelStream, ModelError, StreamPart};
+use zach_ai_core::{LanguageModelStream, ModelError, ModelWarning, StreamPart};
 
 use super::sse::SseDecoder;
 
@@ -36,8 +36,14 @@ struct State<S, P> {
     ended: bool,
 }
 
-/// 以 `parser` 驱动 `source`，`label` 用于错误信息中标识协议。
-pub(crate) fn sse_stream<S, E, P>(label: &'static str, source: S, parser: P) -> LanguageModelStream
+/// 以 `parser` 驱动 `source`，`label` 用于错误信息中标识协议；
+/// `warnings` 是请求构建阶段产生的降级警告，随首个 `StreamStart` 事件透出。
+pub(crate) fn sse_stream<S, E, P>(
+    label: &'static str,
+    source: S,
+    parser: P,
+    warnings: Vec<ModelWarning>,
+) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
@@ -48,7 +54,7 @@ where
         decoder: SseDecoder::new(label),
         parser,
         label,
-        queue: VecDeque::from([Ok(StreamPart::StreamStart { warnings: vec![] })]),
+        queue: VecDeque::from([Ok(StreamPart::StreamStart { warnings })]),
         ended: false,
     };
     Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -156,7 +162,7 @@ mod tests {
         chunks: Vec<Result<&'static str, std::io::Error>>,
     ) -> Vec<Result<StreamPart, ModelError>> {
         let source = futures::stream::iter(chunks.into_iter().map(|chunk| chunk.map(Bytes::from)));
-        sse_stream("测试", source, parser()).collect().await
+        sse_stream("测试", source, parser(), vec![]).collect().await
     }
 
     #[tokio::test]
@@ -188,7 +194,7 @@ mod tests {
                 panic!("终止后不应再读取源流")
             },
         ));
-        let parts: Vec<_> = sse_stream("测试", source, parser()).collect().await;
+        let parts: Vec<_> = sse_stream("测试", source, parser(), vec![]).collect().await;
         assert_eq!(parts.len(), 1);
     }
 
@@ -221,7 +227,7 @@ mod tests {
                 panic!("只取 StreamStart 时不应拉取网络")
             },
         );
-        let mut stream = sse_stream("测试", source, parser());
+        let mut stream = sse_stream("测试", source, parser(), vec![]);
         assert!(matches!(
             stream.next().await,
             Some(Ok(StreamPart::StreamStart { .. }))

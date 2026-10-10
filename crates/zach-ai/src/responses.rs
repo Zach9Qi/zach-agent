@@ -36,7 +36,6 @@ mod tests;
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
-use serde_json::Value;
 use std::fmt;
 use std::sync::Arc;
 use zach_ai_core::{
@@ -44,7 +43,7 @@ use zach_ai_core::{
 };
 
 use crate::transport;
-use request::build_request;
+use request::{build_request, BuiltRequest};
 use response::parse_response;
 use stream::{responses_stream, ResponsesStreamParser};
 
@@ -139,27 +138,27 @@ impl OpenAiResponsesModel {
         &self,
         options: &CallOptions,
         stream: bool,
-    ) -> Result<(reqwest::Request, Value), ModelError> {
-        let body = build_request(&self.model_id, options, stream)?;
+    ) -> Result<(reqwest::Request, BuiltRequest), ModelError> {
+        let built = build_request(&self.model_id, self.profile(), options, stream)?;
         let request = self
             .client
             .post(self.endpoint())
             .headers(self.headers(options)?)
             .header(ACCEPT, transport::accept(stream))
-            .json(&body)
+            .json(&built.body)
             .build()
             .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
-        Ok((request, body))
+        Ok((request, built))
     }
 
     async fn send(
         &self,
         options: &CallOptions,
         stream: bool,
-    ) -> Result<(reqwest::Response, Value), ModelError> {
-        let (request, body) = self.request(options, stream)?;
+    ) -> Result<(reqwest::Response, BuiltRequest), ModelError> {
+        let (request, built) = self.request(options, stream)?;
         let response = transport::execute(&self.client, PROVIDER, LABEL, request).await?;
-        Ok((response, body))
+        Ok((response, built))
     }
 }
 
@@ -185,18 +184,23 @@ impl LanguageModel for OpenAiResponsesModel {
     }
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
-        let (response, body) = self.send(&options, false).await?;
+        let (response, built) = self.send(&options, false).await?;
         let (value, headers) = transport::read_json(response, LABEL).await?;
         let mut result = parse_response(value)?;
-        result.request_body = Some(body);
+        result.request_body = Some(built.body);
         result.response_headers = Some(headers);
+        result.warnings = built.warnings;
         Ok(result)
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
-        let (response, _) = self.send(&options, true).await?;
+        let (response, built) = self.send(&options, true).await?;
         transport::require_event_stream(&response, PROVIDER)?;
         let parser = ResponsesStreamParser::new(options.include_raw_chunks);
-        Ok(responses_stream(response.bytes_stream(), parser))
+        Ok(responses_stream(
+            response.bytes_stream(),
+            parser,
+            built.warnings,
+        ))
     }
 }

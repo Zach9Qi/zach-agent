@@ -12,7 +12,7 @@ use bytes::Bytes;
 use futures::Stream;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use zach_ai_core::{FinishReason, LanguageModelStream, StreamPart, Usage};
+use zach_ai_core::{FinishReason, LanguageModelStream, ModelWarning, StreamPart, Usage};
 
 use super::response::{finish_reason, response_metadata, usage};
 use crate::transport::{sse_stream, SseParser};
@@ -149,10 +149,14 @@ impl SseParser for ChatStreamParser {
     }
 }
 
-pub(super) fn chat_stream<S, E>(source: S, parser: ChatStreamParser) -> LanguageModelStream
+pub(super) fn chat_stream<S, E>(
+    source: S,
+    parser: ChatStreamParser,
+    warnings: Vec<ModelWarning>,
+) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    sse_stream(super::LABEL, source, parser)
+    sse_stream(super::LABEL, source, parser, warnings)
 }

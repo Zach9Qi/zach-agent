@@ -9,17 +9,21 @@ mod tests;
 
 use serde_json::{json, Value};
 use zach_ai_core::{
-    CallOptions, ModelError, ModelProfile, ProviderOptions, ReasoningEffort, ResponseFormat,
+    CallOptions, ModelError, ModelProfile, ModelWarning, ProviderOptions, ReasoningEffort,
+    ResponseFormat,
 };
+
+use crate::validate::{validate, Validated};
 
 /// 模型档案未知时使用的 `max_tokens` 默认值（Messages API 要求必填）。
 const DEFAULT_MAX_TOKENS: u64 = 8192;
 
-/// 已构建的请求：正文与请求派生的 `anthropic-beta` 标记。
+/// 已构建的请求：正文、请求派生的 `anthropic-beta` 标记与档案校验产生的警告。
 #[derive(Debug)]
 pub(super) struct BuiltRequest {
     pub(super) body: Value,
     pub(super) betas: Vec<String>,
+    pub(super) warnings: Vec<ModelWarning>,
 }
 
 pub(super) fn build_request(
@@ -32,6 +36,16 @@ pub(super) fn build_request(
         return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
     }
     reject_unsupported(options)?;
+    // Anthropic 没有 minimal 档，按最接近的 low 发送并给出降级警告。
+    let Validated {
+        reasoning,
+        temperature,
+        warnings,
+    } = validate(
+        profile,
+        options,
+        &[(ReasoningEffort::Minimal, ReasoningEffort::Low)],
+    )?;
     let converted = messages::convert(&options.prompt.messages)?;
     let mut body = json!({
         "model": model_id,
@@ -45,10 +59,7 @@ pub(super) fn build_request(
     if !converted.system.is_empty() {
         body["system"] = Value::Array(converted.system);
     }
-    for (name, value) in [
-        ("temperature", options.temperature),
-        ("top_p", options.top_p),
-    ] {
+    for (name, value) in [("temperature", temperature), ("top_p", options.top_p)] {
         if let Some(value) = value {
             if !value.is_finite() {
                 return Err(ModelError::InvalidRequest(format!("{name} 必须是有限数值")));
@@ -62,7 +73,7 @@ pub(super) fn build_request(
     if let Some(stop) = &options.stop_sequences {
         body["stop_sequences"] = json!(stop);
     }
-    if let Some(effort) = options.reasoning {
+    if let Some(effort) = reasoning {
         apply_reasoning(&mut body, effort);
     }
     if let Some(definitions) = &options.tools {
@@ -77,7 +88,11 @@ pub(super) fn build_request(
         }
     }
     let betas = apply_provider_options(&mut body, options.provider_options.as_ref())?;
-    Ok(BuiltRequest { body, betas })
+    Ok(BuiltRequest {
+        body,
+        betas,
+        warnings,
+    })
 }
 
 fn default_max_tokens(profile: Option<&ModelProfile>) -> u64 {

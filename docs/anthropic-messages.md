@@ -71,6 +71,18 @@ Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推�
 需要推理回放的多轮场景应使用 `tool_choice: auto`（或 `none`），由提示词引导工具调用。
 适配器不会静默改写这两个参数。
 
+## 档案校验与警告
+
+请求构建时会对照模型档案（内置目录或 `with_profile` 注入）校验通用参数，档案未知时跳过：
+
+- 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
+- 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
+- 档位不在模型支持列表里：`Minimal` 降级为 `low` 并给出 `Compatibility` 警告，其余发送前报 `UnsupportedFeature`；
+- 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
+
+警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
+Agent 层会以 `model.warnings` 事件呈现。
+
 ## 厂商扩展
 
 `provider_options.anthropic` 支持以下键：

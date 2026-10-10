@@ -119,7 +119,7 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
         provider_options: None,
     }])]);
     assert!(matches!(
-        request::build_request("gpt-test", &image, false),
+        request::build_request("gpt-test", None, &image, false),
         Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
     ));
     let text = CallOptions::new(vec![result(vec![ToolResultContentBlock::File {
@@ -130,7 +130,9 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
         filename: None,
         provider_options: None,
     }])]);
-    let body = request::build_request("gpt-test", &text, false).unwrap();
+    let body = request::build_request("gpt-test", None, &text, false)
+        .unwrap()
+        .body;
     assert_eq!(
         body["messages"][0]["content"],
         json!([{"type":"text", "text":"日志内容"}])
@@ -147,7 +149,9 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
         json!({"enable_thinking": true, "chat_template_kwargs": {"x": 1}, "max_tokens": 64}),
     );
     options.provider_options = Some(provider);
-    let body = request::build_request("qwen", &options, false).unwrap();
+    let body = request::build_request("qwen", None, &options, false)
+        .unwrap()
+        .body;
     assert_eq!(body["enable_thinking"], true);
     assert_eq!(body["chat_template_kwargs"], json!({"x": 1}));
     assert_eq!(body["max_tokens"], 64);
@@ -163,12 +167,30 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
         options.provider_options = Some(provider);
         assert!(
             matches!(
-                request::build_request("qwen", &options, false),
+                request::build_request("qwen", None, &options, false),
                 Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. }) if feature == key
             ),
             "{key} 不应被覆盖"
         );
     }
+}
+
+/// 注入的档案参与请求校验：不支持推理的模型丢弃档位并给出警告。
+#[test]
+fn injected_profile_drives_request_validation() {
+    let gpt41 = crate::ModelCatalog::builtin()
+        .get("openai", "gpt-4.1")
+        .unwrap()
+        .clone();
+    let model = OpenAiChatCompletionsModel::new("k", "proxy-model").with_profile(gpt41);
+    let options = CallOptions::new(vec![Message::user("x")])
+        .with_reasoning(zach_ai_core::ReasoningEffort::High);
+    let (_, built) = model.request(&options, false).unwrap();
+    assert!(built.body.get("reasoning_effort").is_none());
+    assert!(matches!(
+        &built.warnings[0],
+        zach_ai_core::ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
+    ));
 }
 
 /// Chat Completions 没有 `max` 推理档位，防止非法值直达线上端点返回 400。
@@ -177,10 +199,12 @@ fn reasoning_max_level_is_rejected_before_sending() {
     let mut options = CallOptions::new(vec![Message::user("你好")]);
     options.reasoning = Some(zach_ai_core::ReasoningEffort::Max);
     assert!(matches!(
-        request::build_request("gpt-test", &options, false),
+        request::build_request("gpt-test", None, &options, false),
         Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
     ));
     options.reasoning = Some(zach_ai_core::ReasoningEffort::Xhigh);
-    let body = request::build_request("gpt-test", &options, false).unwrap();
+    let body = request::build_request("gpt-test", None, &options, false)
+        .unwrap()
+        .body;
     assert_eq!(body["reasoning_effort"], "xhigh");
 }

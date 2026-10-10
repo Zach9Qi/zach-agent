@@ -5,15 +5,25 @@ mod tools;
 
 use serde_json::{json, Value};
 use zach_ai_core::{
-    AssistantPart, CallOptions, Message, ModelError, ReasoningEffort, ResponseFormat, ToolPart,
-    UserPart,
+    AssistantPart, CallOptions, Message, ModelError, ModelProfile, ModelWarning, ReasoningEffort,
+    ResponseFormat, ToolPart, UserPart,
 };
+
+use crate::validate::{validate, Validated};
+
+/// 已构建的请求：正文与档案校验产生的警告。
+#[derive(Debug)]
+pub(super) struct BuiltRequest {
+    pub(super) body: Value,
+    pub(super) warnings: Vec<ModelWarning>,
+}
 
 pub(super) fn build_request(
     model_id: &str,
+    profile: Option<&ModelProfile>,
     options: &CallOptions,
     stream: bool,
-) -> Result<Value, ModelError> {
+) -> Result<BuiltRequest, ModelError> {
     if model_id.trim().is_empty() {
         return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
     }
@@ -23,6 +33,11 @@ pub(super) fn build_request(
             Some("Chat Completions 不支持此参数".into()),
         ));
     }
+    let Validated {
+        reasoning,
+        temperature,
+        warnings,
+    } = validate(profile, options, &[])?;
     let mut body = json!({
         "model": model_id,
         "messages": messages(&options.prompt.messages)?,
@@ -32,7 +47,7 @@ pub(super) fn build_request(
         body["max_completion_tokens"] = json!(value);
     }
     for (name, value) in [
-        ("temperature", options.temperature),
+        ("temperature", temperature),
         ("top_p", options.top_p),
         ("presence_penalty", options.presence_penalty),
         ("frequency_penalty", options.frequency_penalty),
@@ -50,7 +65,7 @@ pub(super) fn build_request(
     if let Some(seed) = options.seed {
         body["seed"] = json!(seed);
     }
-    if let Some(reasoning) = options.reasoning {
+    if let Some(reasoning) = reasoning {
         if reasoning == ReasoningEffort::Max {
             return Err(ModelError::unsupported(
                 "reasoning_effort.max",
@@ -74,7 +89,7 @@ pub(super) fn build_request(
         body["stream_options"] = json!({"include_usage": true});
     }
     apply_provider_options(&mut body, options)?;
-    Ok(body)
+    Ok(BuiltRequest { body, warnings })
 }
 
 /// 合并 `provider_options.openai`。

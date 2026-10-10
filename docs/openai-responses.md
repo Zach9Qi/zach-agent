@@ -72,6 +72,18 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
 显式启用严格模式以及使用 JSON Schema 输出时，调用方需提供满足 OpenAI 严格模式要求的 schema；
 适配器不自动修改 schema。模型的具体能力仍取决于所选模型和端点。
 
+## 档案校验与警告
+
+请求构建时会对照模型档案（内置目录或 `with_profile` 注入）校验通用参数，档案未知时跳过：
+
+- 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
+- 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
+- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
+- 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
+
+警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
+Agent 层会以 `model.warnings` 事件呈现。
+
 ## 历史、推理与扩展参数
 
 默认 `store: false`，并请求 `include: ["reasoning.encrypted_content"]`，方便 Agent 自行维护完整历史。

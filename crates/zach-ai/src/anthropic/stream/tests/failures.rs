@@ -53,7 +53,7 @@ async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
         )),
         Ok(Bytes::from(start_frame() + &stop_frames("end_turn"))),
     ]);
-    let parts = messages_stream(source, MessagesStreamParser::new(false))
+    let parts = messages_stream(source, MessagesStreamParser::new(false), vec![])
         .collect::<Vec<_>>()
         .await;
     assert_eq!(parts.len(), 2);

@@ -9,7 +9,7 @@ mod tests;
 
 use bytes::Bytes;
 use futures::Stream;
-use zach_ai_core::{LanguageModelStream, StreamPart};
+use zach_ai_core::{LanguageModelStream, ModelWarning, StreamPart};
 
 use crate::transport::{sse_stream, SseParser};
 
@@ -32,10 +32,11 @@ impl SseParser for ResponsesStreamParser {
 pub(super) fn responses_stream<S, E>(
     source: S,
     parser: ResponsesStreamParser,
+    warnings: Vec<ModelWarning>,
 ) -> LanguageModelStream
 where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    sse_stream(super::LABEL, source, parser)
+    sse_stream(super::LABEL, source, parser, warnings)
 }

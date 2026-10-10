@@ -192,6 +192,39 @@ fn reasoning_effort_maps_to_adaptive_thinking_and_effort() {
     assert_eq!(built.betas, vec!["example-beta".to_owned()]);
 }
 
+/// 档案已知时按其校验：minimal 降级为 low 并给出警告，未声明可关闭推理时不发 `thinking`，
+/// 不接受 temperature 的模型丢弃该参数；档案未知时原样发送。
+#[test]
+fn profile_downgrades_or_drops_settings_the_model_cannot_honor() {
+    use zach_ai_core::ModelWarning;
+    let fable = crate::ModelCatalog::builtin()
+        .get("anthropic", "claude-fable-5")
+        .unwrap();
+    let mut options = CallOptions::new(vec![Message::user("x")])
+        .with_reasoning(ReasoningEffort::Minimal)
+        .with_temperature(0.5);
+    let built = build_request(&fable.id, Some(fable), &options, false).unwrap();
+    assert_eq!(built.body["output_config"]["effort"], "low");
+    assert!(built.body.get("temperature").is_none());
+    assert_eq!(built.warnings.len(), 2);
+    assert!(matches!(
+        &built.warnings[0],
+        ModelWarning::Compatibility { feature, .. } if feature == "reasoning_effort.minimal"
+    ));
+    assert!(matches!(
+        &built.warnings[1],
+        ModelWarning::Unsupported { feature, .. } if feature == "temperature"
+    ));
+    options.reasoning = Some(ReasoningEffort::None);
+    options.temperature = None;
+    let built = build_request(&fable.id, Some(fable), &options, false).unwrap();
+    assert!(built.body.get("thinking").is_none());
+    assert_eq!(built.warnings.len(), 1);
+    let built = build_request("custom", None, &options, false).unwrap();
+    assert_eq!(built.body["thinking"], json!({"type": "disabled"}));
+    assert!(built.warnings.is_empty());
+}
+
 #[test]
 fn json_schema_output_and_unknown_provider_fields_are_handled() {
     let mut options = CallOptions::new(vec![Message::user("x")]);

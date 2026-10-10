@@ -209,13 +209,18 @@ impl LanguageModel for AnthropicMessagesModel {
         let mut result = parse_response(value)?;
         result.request_body = Some(built.body);
         result.response_headers = Some(headers);
+        result.warnings = built.warnings;
         Ok(result)
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
-        let (response, _) = self.send(&options, true).await?;
+        let (response, built) = self.send(&options, true).await?;
         transport::require_event_stream(&response, PROVIDER)?;
         let parser = MessagesStreamParser::new(options.include_raw_chunks);
-        Ok(messages_stream(response.bytes_stream(), parser))
+        Ok(messages_stream(
+            response.bytes_stream(),
+            parser,
+            built.warnings,
+        ))
     }
 }

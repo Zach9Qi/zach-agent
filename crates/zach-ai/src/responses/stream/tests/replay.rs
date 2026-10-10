@@ -90,7 +90,7 @@ async fn encrypted_reasoning_and_call_result_survive_a_second_request() {
             json!({"sum":3}),
         )]),
     ]);
-    let request = build_request("example", &options, true).unwrap();
+    let request = build_request("example", None, &options, true).unwrap().body;
     assert_eq!(request["input"][1], reasoning);
     assert_eq!(request["input"][2]["id"], "fc_1");
     assert_eq!(request["input"][2]["call_id"], "call_1");
