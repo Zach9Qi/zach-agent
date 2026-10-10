@@ -14,28 +14,28 @@ async fn interleaved_tool_calls_use_call_ids_and_emit_complete_calls_once() {
     for call in &calls {
         let mut start = call.clone();
         start["arguments"] = json!("");
-        wire.push_str(&frame(
+        wire.push_str(&event_frame(
             &json!({"type": "response.output_item.added", "item": start}),
         ));
     }
     for delta in ["{", "}"] {
         for call in &calls {
-            wire.push_str(&frame(
+            wire.push_str(&event_frame(
                 &json!({"type": "response.function_call_arguments.delta",
                 "item_id": call["id"], "delta": delta}),
             ));
         }
     }
     for call in &calls {
-        wire.push_str(&frame(
+        wire.push_str(&event_frame(
             &json!({"type": "response.function_call_arguments.done",
             "item_id": call["id"], "arguments": "{}"}),
         ));
-        wire.push_str(&frame(
+        wire.push_str(&event_frame(
             &json!({"type": "response.output_item.done", "item": call}),
         ));
     }
-    wire.push_str(&frame(
+    wire.push_str(&event_frame(
         &json!({"type": "response.completed", "response": response(calls.to_vec())}),
     ));
     let parts = parse_wire(wire).await;
@@ -77,7 +77,7 @@ async fn encrypted_reasoning_and_call_result_survive_a_second_request() {
         json!({"type": "response.output_item.done", "item": reasoning}),
         json!({"type": "response.output_item.done", "item": call}),
         json!({"type": "response.completed", "response": response}),
-    ].iter().map(frame).collect::<String>();
+    ].iter().map(event_frame).collect::<String>();
     let result = aggregate(parse_wire(wire).await);
     assert_eq!(result, parse_response(response).unwrap());
     assert_eq!(result.reasoning().as_deref(), Some("先计算"));
@@ -127,7 +127,7 @@ async fn multi_part_reasoning_summaries_are_separated_by_blank_lines() {
         json!({"type": "response.completed", "response": payload}),
     ]
     .iter()
-    .map(frame)
+    .map(event_frame)
     .collect::<String>();
     let result = aggregate(parse_wire(wire).await);
     assert_eq!(
@@ -153,7 +153,7 @@ async fn raw_reasoning_text_without_summary_is_exposed() {
         json!({"type": "response.completed", "response": payload}),
     ]
     .iter()
-    .map(frame)
+    .map(event_frame)
     .collect::<String>();
     let result = aggregate(parse_wire(wire).await);
     assert_eq!(result.reasoning().as_deref(), Some("原始推理"));
@@ -165,7 +165,7 @@ async fn raw_reasoning_text_without_summary_is_exposed() {
 async fn empty_reasoning_and_final_only_outputs_are_kept() {
     let reasoning = json!({"type": "reasoning", "id": "rs_empty", "summary": [], "encrypted_content": "opaque"});
     let response = response(vec![reasoning, message("答案")]);
-    let wire = frame(&json!({"type": "response.completed", "response": response}));
+    let wire = event_frame(&json!({"type": "response.completed", "response": response}));
     let result = aggregate(parse_wire(wire).await);
     assert_eq!(result.content.len(), 2);
     assert!(
@@ -179,7 +179,7 @@ async fn empty_reasoning_and_final_only_outputs_are_kept() {
 async fn reasoning_without_summary_field_is_kept_as_empty_not_an_error() {
     let reasoning = json!({"type": "reasoning", "id": "rs_ns", "encrypted_content": "opaque"});
     let payload = response(vec![reasoning, message("答案")]);
-    let wire = frame(&json!({"type": "response.completed", "response": payload.clone()}));
+    let wire = event_frame(&json!({"type": "response.completed", "response": payload.clone()}));
     let result = aggregate(parse_wire(wire).await);
     assert!(matches!(
         &result.content[0],

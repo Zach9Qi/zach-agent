@@ -21,7 +21,7 @@ async fn tool_input_deltas_are_joined_and_emitted_once_per_block() {
             "content_block": {"type": "tool_use", "id": "toolu_2", "name": "noop", "input": {}}}),
         json!({"type": "content_block_stop", "index": 1}),
     ] {
-        wire.push_str(&frame(&event));
+        wire.push_str(&event_frame(&event));
     }
     wire.push_str(&stop_frames("tool_use"));
     let parts = parse_wire(wire).await;
@@ -89,7 +89,7 @@ async fn thinking_signature_and_redacted_blocks_survive_a_second_request() {
             "delta": {"type": "input_json_delta", "partial_json": "{\"a\":1,\"b\":2}"}}),
         json!({"type": "content_block_stop", "index": 2}),
     ] {
-        wire.push_str(&frame(&event));
+        wire.push_str(&event_frame(&event));
     }
     wire.push_str(&stop_frames("tool_use"));
     let result = aggregate(parse_wire(wire).await);

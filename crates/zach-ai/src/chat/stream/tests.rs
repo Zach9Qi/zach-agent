@@ -4,9 +4,10 @@ mod failures;
 mod replay;
 
 use super::*;
+use crate::test_support::{aggregate, aggregate_lenient, byte_stream, data_frame};
 use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::{GenerateResult, ModelError, StreamAccumulator, UnifiedFinishReason};
+use zach_ai_core::{ModelError, UnifiedFinishReason};
 
 /// 一个带固定响应头字段的分块。
 fn chunk(choices: Vec<Value>) -> Value {
@@ -30,42 +31,7 @@ fn usage_chunk() -> Value {
     chunk
 }
 
-fn frame(value: &Value) -> String {
-    format!("data: {value}\n\n")
-}
-
 const DONE: &str = "data: [DONE]\n\n";
-
-/// 逐字节交付，确保 UTF-8 字符与帧边界都会跨越传输块。
-async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
-    let chunks = wire
-        .into_bytes()
-        .into_iter()
-        .map(|b| Ok::<_, std::io::Error>(Bytes::from(vec![b])))
-        .collect::<Vec<_>>();
-    chat_stream(
-        futures::stream::iter(chunks),
-        ChatStreamParser::new(false),
-        vec![],
-        None,
-    )
-    .collect()
-    .await
-}
-
-fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
-    assert!(accumulator.is_complete());
-    assert!(
-        accumulator.errors().is_empty(),
-        "{:?}",
-        accumulator.errors()
-    );
-    accumulator.finish()
-}
 
 /// 事件在序列中的位置，用于断言先后顺序。
 fn position(parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> bool) -> usize {
@@ -75,12 +41,23 @@ fn position(parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> b
         .unwrap()
 }
 
+async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
+    chat_stream(
+        byte_stream(wire),
+        ChatStreamParser::new(false),
+        vec![],
+        None,
+    )
+    .collect()
+    .await
+}
+
 #[tokio::test]
 async fn utf8_text_deltas_and_trailing_usage_produce_one_text_block() {
-    let wire = frame(&delta(json!({"role": "assistant", "content": "你"}), None))
-        + &frame(&delta(json!({"content": "好"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
-        + &frame(&usage_chunk())
+    let wire = data_frame(&delta(json!({"role": "assistant", "content": "你"}), None))
+        + &data_frame(&delta(json!({"content": "好"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
+        + &data_frame(&usage_chunk())
         + DONE;
     let parts = parse_wire(wire).await;
     assert_eq!(
@@ -112,12 +89,12 @@ async fn utf8_text_deltas_and_trailing_usage_produce_one_text_block() {
 /// 结构化取值（如推理明细数组）不是正文，忽略。
 #[tokio::test]
 async fn reasoning_field_is_treated_like_reasoning_content() {
-    let wire = frame(&delta(
+    let wire = data_frame(&delta(
         json!({"role": "assistant", "reasoning": "先", "reasoning_details": [{"type": "x"}]}),
         None,
-    )) + &frame(&delta(json!({"reasoning": "算"}), None))
-        + &frame(&delta(json!({"content": "3"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
+    )) + &data_frame(&delta(json!({"reasoning": "算"}), None))
+        + &data_frame(&delta(json!({"content": "3"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
         + DONE;
     let result = aggregate(parse_wire(wire).await);
     assert_eq!(result.reasoning().as_deref(), Some("先算"));
@@ -128,9 +105,9 @@ async fn reasoning_field_is_treated_like_reasoning_content() {
 /// 整段正文输出完毕后才收到"推理结束"。
 #[tokio::test]
 async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
-    let wire = frame(&delta(json!({"reasoning_content": "想"}), None))
-        + &frame(&delta(json!({"content": "答"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
+    let wire = data_frame(&delta(json!({"reasoning_content": "想"}), None))
+        + &data_frame(&delta(json!({"content": "答"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
         + DONE;
     let parts = parse_wire(wire).await;
     let end = position(&parts, |p| matches!(p, StreamPart::ReasoningEnd { .. }));
@@ -138,12 +115,12 @@ async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
     assert!(end < text, "ReasoningEnd 应早于首个 TextDelta");
     aggregate(parts);
 
-    let wire = frame(&delta(json!({"reasoning_content": "想"}), None))
-        + &frame(&delta(
+    let wire = data_frame(&delta(json!({"reasoning_content": "想"}), None))
+        + &data_frame(&delta(
             json!({"tool_calls": [{"index": 0, "id": "call_1", "function": {"name": "f", "arguments": "{}"}}]}),
             None,
         ))
-        + &frame(&delta(json!({}), Some("tool_calls")))
+        + &data_frame(&delta(json!({}), Some("tool_calls")))
         + DONE;
     let parts = parse_wire(wire).await;
     let end = position(&parts, |p| matches!(p, StreamPart::ReasoningEnd { .. }));
@@ -163,14 +140,14 @@ async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
 /// 也不能为占位开出空文本块（空块会带着元数据留在最终内容里）。
 #[tokio::test]
 async fn empty_content_placeholders_do_not_end_reasoning_or_open_text() {
-    let wire = frame(&delta(
+    let wire = data_frame(&delta(
         json!({"role": "assistant", "reasoning_content": "想", "content": ""}),
         None,
-    )) + &frame(&delta(
+    )) + &data_frame(&delta(
         json!({"reasoning_content": "着", "content": ""}),
         None,
-    )) + &frame(&delta(json!({"content": "答"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
+    )) + &data_frame(&delta(json!({"content": "答"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
         + DONE;
     let parts = parse_wire(wire).await;
     assert_eq!(
@@ -210,9 +187,9 @@ async fn late_chunks_after_finish_emit_nothing() {
         json!({"index": 1, "delta": {"role": "assistant", "content": "新块"},
             "finish_reason": null}),
     ]);
-    let wire = frame(&delta(json!({"content": "x"}), Some("stop")))
-        + &frame(&usage_chunk())
-        + &frame(&late)
+    let wire = data_frame(&delta(json!({"content": "x"}), Some("stop")))
+        + &data_frame(&usage_chunk())
+        + &data_frame(&late)
         + DONE;
     let parts = parse_wire(wire).await;
     assert!(
@@ -227,10 +204,10 @@ async fn late_chunks_after_finish_emit_nothing() {
 async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
     let mut with_null_error = delta(json!({"content": "好"}), None);
     with_null_error["error"] = Value::Null;
-    let wire = frame(&delta(json!({"role": "assistant", "content": "你"}), None))
-        + &frame(&with_null_error)
-        + &frame(&delta(json!({}), Some("stop")))
-        + &frame(&usage_chunk())
+    let wire = data_frame(&delta(json!({"role": "assistant", "content": "你"}), None))
+        + &data_frame(&with_null_error)
+        + &data_frame(&delta(json!({}), Some("stop")))
+        + &data_frame(&usage_chunk())
         + DONE;
     let parts = parse_wire(wire).await;
     assert_eq!(
@@ -252,7 +229,9 @@ async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
 /// 之后的 `[DONE]` 只是终止读取，不会重复收尾。
 #[tokio::test]
 async fn finish_is_emitted_with_usage_and_not_repeated_at_done() {
-    let wire = frame(&delta(json!({"content": "x"}), Some("stop"))) + &frame(&usage_chunk()) + DONE;
+    let wire = data_frame(&delta(json!({"content": "x"}), Some("stop")))
+        + &data_frame(&usage_chunk())
+        + DONE;
     let parts = parse_wire(wire).await;
     assert_eq!(
         parts

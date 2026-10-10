@@ -4,9 +4,10 @@ mod failures;
 mod replay;
 
 use super::*;
+use crate::test_support::{aggregate, aggregate_lenient, byte_stream, event_frame};
 use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::{GenerateResult, ModelError, StreamAccumulator};
+use zach_ai_core::ModelError;
 
 fn response(output: Vec<Value>) -> Value {
     json!({
@@ -24,42 +25,15 @@ fn message(text: &str) -> Value {
         "content": [{"type": "output_text", "text": text, "annotations": []}]})
 }
 
-fn frame(value: &Value) -> String {
-    format!(
-        "event: {}\r\ndata: {value}\r\n\r\n",
-        value["type"].as_str().unwrap()
-    )
-}
-
 async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
-    // 每次只交付一个字节，确保 UTF-8 字符和 CRLF 都会跨越传输边界。
-    let chunks = wire
-        .into_bytes()
-        .into_iter()
-        .map(|b| Ok::<_, std::io::Error>(Bytes::from(vec![b])))
-        .collect::<Vec<_>>();
     responses_stream(
-        futures::stream::iter(chunks),
+        byte_stream(wire),
         ResponsesStreamParser::new(false),
         vec![],
         None,
     )
     .collect()
     .await
-}
-
-fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
-    assert!(accumulator.is_complete());
-    assert!(
-        accumulator.errors().is_empty(),
-        "{:?}",
-        accumulator.errors()
-    );
-    accumulator.finish()
 }
 
 #[tokio::test]
@@ -79,7 +53,7 @@ async fn utf8_deltas_and_final_snapshots_produce_text_once() {
         json!({"type": "response.output_item.done", "item": message("你好")}),
         json!({"type": "response.completed", "response": response(vec![message("你好")])}),
     ] {
-        wire.push_str(&frame(&event));
+        wire.push_str(&event_frame(&event));
     }
     let parts = parse_wire(wire).await;
     assert_eq!(
@@ -105,8 +79,9 @@ async fn utf8_deltas_and_final_snapshots_produce_text_once() {
 
 #[tokio::test]
 async fn completed_response_stops_without_waiting_for_network_eof() {
-    let wire =
-        frame(&json!({"type": "response.completed", "response": response(vec![message("结束")])}));
+    let wire = event_frame(
+        &json!({"type": "response.completed", "response": response(vec![message("结束")])}),
+    );
     let source = futures::stream::iter(vec![Ok::<_, std::io::Error>(Bytes::from(wire))]).chain(
         futures::stream::poll_fn(
             |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {

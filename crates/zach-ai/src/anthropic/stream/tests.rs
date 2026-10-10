@@ -4,9 +4,10 @@ mod failures;
 mod replay;
 
 use super::*;
+use crate::test_support::{aggregate, aggregate_lenient, byte_stream, event_frame};
 use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::{GenerateResult, ModelError, StreamAccumulator};
+use zach_ai_core::ModelError;
 
 fn message(content: Vec<Value>, stop_reason: &str) -> Value {
     json!({
@@ -19,15 +20,8 @@ fn message(content: Vec<Value>, stop_reason: &str) -> Value {
     })
 }
 
-fn frame(value: &Value) -> String {
-    format!(
-        "event: {}\r\ndata: {value}\r\n\r\n",
-        value["type"].as_str().unwrap()
-    )
-}
-
 fn start_frame() -> String {
-    frame(&json!({"type": "message_start", "message": {
+    event_frame(&json!({"type": "message_start", "message": {
         "id": "msg_1", "type": "message", "role": "assistant", "model": "example",
         "content": [], "stop_reason": null, "stop_sequence": null,
         "usage": {"input_tokens": 60, "cache_read_input_tokens": 30,
@@ -36,41 +30,21 @@ fn start_frame() -> String {
 }
 
 fn stop_frames(stop_reason: &str) -> String {
-    frame(
+    event_frame(
         &json!({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": null},
         "usage": {"output_tokens": 20}}),
-    ) + &frame(&json!({"type": "message_stop"}))
+    ) + &event_frame(&json!({"type": "message_stop"}))
 }
 
 async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
-    // 每次只交付一个字节，确保 UTF-8 字符和 CRLF 都会跨越传输边界。
-    let chunks = wire
-        .into_bytes()
-        .into_iter()
-        .map(|b| Ok::<_, std::io::Error>(Bytes::from(vec![b])))
-        .collect::<Vec<_>>();
     messages_stream(
-        futures::stream::iter(chunks),
+        byte_stream(wire),
         MessagesStreamParser::new(false),
         vec![],
         None,
     )
     .collect()
     .await
-}
-
-fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
-    assert!(accumulator.is_complete());
-    assert!(
-        accumulator.errors().is_empty(),
-        "{:?}",
-        accumulator.errors()
-    );
-    accumulator.finish()
 }
 
 #[tokio::test]
@@ -83,7 +57,7 @@ async fn utf8_text_deltas_and_cumulative_usage_produce_one_text_block() {
         json!({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "好"}}),
         json!({"type": "content_block_stop", "index": 0}),
     ] {
-        wire.push_str(&frame(&event));
+        wire.push_str(&event_frame(&event));
     }
     wire.push_str(&stop_frames("end_turn"));
     let parts = parse_wire(wire).await;
@@ -120,9 +94,9 @@ async fn utf8_text_deltas_and_cumulative_usage_produce_one_text_block() {
 #[tokio::test]
 async fn message_stop_ends_the_stream_without_waiting_for_network_eof() {
     let wire = start_frame()
-        + &frame(&json!({"type": "content_block_start", "index": 0,
+        + &event_frame(&json!({"type": "content_block_start", "index": 0,
             "content_block": {"type": "text", "text": "结束"}}))
-        + &frame(&json!({"type": "content_block_stop", "index": 0}))
+        + &event_frame(&json!({"type": "content_block_stop", "index": 0}))
         + &stop_frames("end_turn");
     let source = futures::stream::iter(vec![Ok::<_, std::io::Error>(Bytes::from(wire))]).chain(
         futures::stream::poll_fn(

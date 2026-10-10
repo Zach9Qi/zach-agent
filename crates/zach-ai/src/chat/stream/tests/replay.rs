@@ -20,15 +20,15 @@ fn tool_call_delta(id: Option<&str>, name: Option<&str>, arguments: &str) -> Val
 #[tokio::test]
 async fn parallel_tool_calls_finish_in_index_order() {
     let calls = |items: Vec<Value>| delta(json!({"tool_calls": items}), None);
-    let wire = frame(&calls(vec![
+    let wire = data_frame(&calls(vec![
         json!({"index": 0, "id": "call_a", "type": "function", "function": {"name": "add", "arguments": ""}}),
         json!({"index": 1, "id": "call_b", "type": "function", "function": {"name": "sub", "arguments": ""}}),
         json!({"index": 2, "id": "call_c", "type": "function", "function": {"name": "mul", "arguments": ""}}),
-    ])) + &frame(&calls(vec![
+    ])) + &data_frame(&calls(vec![
         json!({"index": 2, "function": {"arguments": "{\"c\":3}"}}),
         json!({"index": 0, "function": {"arguments": "{\"a\":1}"}}),
         json!({"index": 1, "function": {"arguments": "{\"b\":2}"}}),
-    ])) + &frame(&delta(json!({}), Some("tool_calls")))
+    ])) + &data_frame(&delta(json!({}), Some("tool_calls")))
         + DONE;
     let parts = parse_wire(wire).await;
     let order: Vec<&str> = parts
@@ -53,10 +53,10 @@ async fn parallel_tool_calls_finish_in_index_order() {
 #[tokio::test]
 async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
     let call = tool_call_delta;
-    let wire = frame(&call(Some("call_a"), Some("add"), "{\"a\""))
-        + &frame(&call(None, None, ":1}"))
-        + &frame(&call(Some("call_b"), Some("sub"), "{\"b\":2}"))
-        + &frame(&delta(json!({}), Some("tool_calls")))
+    let wire = data_frame(&call(Some("call_a"), Some("add"), "{\"a\""))
+        + &data_frame(&call(None, None, ":1}"))
+        + &data_frame(&call(Some("call_b"), Some("sub"), "{\"b\":2}"))
+        + &data_frame(&delta(json!({}), Some("tool_calls")))
         + DONE;
     let parts = parse_wire(wire).await;
     let calls: Vec<(&str, &str, &str)> = parts
@@ -85,10 +85,10 @@ async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
 /// 任何事件都不能带着空 id 泄漏出去，否则累加器会为空 id 另开一个残缺的槽位。
 #[tokio::test]
 async fn arguments_arriving_before_the_id_are_buffered_until_the_id_is_known() {
-    let wire = frame(&tool_call_delta(None, Some("add"), "{\"a\""))
-        + &frame(&tool_call_delta(Some("call_a"), None, ":1"))
-        + &frame(&tool_call_delta(None, None, "}"))
-        + &frame(&delta(json!({}), Some("tool_calls")))
+    let wire = data_frame(&tool_call_delta(None, Some("add"), "{\"a\""))
+        + &data_frame(&tool_call_delta(Some("call_a"), None, ":1"))
+        + &data_frame(&tool_call_delta(None, None, "}"))
+        + &data_frame(&delta(json!({}), Some("tool_calls")))
         + DONE;
     let parts = parse_wire(wire).await;
     let tool_events: Vec<(&str, String)> = parts
@@ -128,8 +128,8 @@ async fn arguments_arriving_before_the_id_are_buffered_until_the_id_is_known() {
 /// finish_reason 仍是 `tool_calls`，上层会误以为模型什么都没调用。
 #[tokio::test]
 async fn tool_call_without_any_id_poisons_the_turn_instead_of_vanishing() {
-    let wire = frame(&tool_call_delta(None, Some("add"), "{\"a\":1}"))
-        + &frame(&delta(json!({}), Some("tool_calls")))
+    let wire = data_frame(&tool_call_delta(None, Some("add"), "{\"a\":1}"))
+        + &data_frame(&delta(json!({}), Some("tool_calls")))
         + DONE;
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok), "{parts:?}");
@@ -141,17 +141,13 @@ async fn tool_call_without_any_id_poisons_the_turn_instead_of_vanishing() {
         Ok(StreamPart::Error { message, raw: Some(raw) })
             if message.contains("缺少 id") && raw["name"] == "add"
     )));
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
     assert_eq!(
-        accumulator.finish().finish_reason.unified,
+        aggregate_lenient(parts).finish_reason.unified,
         UnifiedFinishReason::Error
     );
     // 只有 index 的占位增量不是调用，不报错。
-    let wire = frame(&delta(json!({"tool_calls": [{"index": 0}]}), None))
-        + &frame(&delta(json!({"content": "答"}), Some("stop")))
+    let wire = data_frame(&delta(json!({"tool_calls": [{"index": 0}]}), None))
+        + &data_frame(&delta(json!({"content": "答"}), Some("stop")))
         + DONE;
     assert_eq!(aggregate(parse_wire(wire).await).text(), "答");
 }
@@ -159,18 +155,18 @@ async fn tool_call_without_any_id_poisons_the_turn_instead_of_vanishing() {
 /// 流式拼接的工具调用与非流式响应得到同样的内容，并按 Chat 消息形状回放到下一轮。
 #[tokio::test]
 async fn tool_calls_match_the_non_stream_shape_and_replay_into_the_next_request() {
-    let wire = frame(&delta(
+    let wire = data_frame(&delta(
         json!({"role": "assistant", "content": "我来算"}),
         None,
-    )) + &frame(&delta(
+    )) + &data_frame(&delta(
         json!({"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
                 "function": {"name": "add", "arguments": "{\"a\":"}}]}),
         None,
-    )) + &frame(&delta(
+    )) + &data_frame(&delta(
         json!({"tool_calls": [{"index": 0, "function": {"arguments": "1}"}}]}),
         None,
-    )) + &frame(&delta(json!({}), Some("tool_calls")))
-        + &frame(&usage_chunk())
+    )) + &data_frame(&delta(json!({}), Some("tool_calls")))
+        + &data_frame(&usage_chunk())
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
     let generated = parse_response("openai", json!({
@@ -217,11 +213,11 @@ async fn tool_calls_match_the_non_stream_shape_and_replay_into_the_next_request(
 /// 拒绝文本以带 `refusal` 标记的文本块透出，并以 `refusal` 字段回放。
 #[tokio::test]
 async fn refusal_is_marked_in_metadata_and_replayed_as_refusal_field() {
-    let wire = frame(&delta(
+    let wire = data_frame(&delta(
         json!({"role": "assistant", "refusal": "无法"}),
         None,
-    )) + &frame(&delta(json!({"refusal": "回答"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
+    )) + &data_frame(&delta(json!({"refusal": "回答"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
     let generated = parse_response("openai", json!({
@@ -248,9 +244,9 @@ async fn refusal_is_marked_in_metadata_and_replayed_as_refusal_field() {
 /// 思考链在流式与非流式下得到相同内容；回放时不回传（兼容端点会拒绝该字段）。
 #[tokio::test]
 async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
-    let wire = frame(&delta(json!({"reasoning_content": "先算"}), None))
-        + &frame(&delta(json!({"content": "3"}), None))
-        + &frame(&delta(json!({}), Some("stop")))
+    let wire = data_frame(&delta(json!({"reasoning_content": "先算"}), None))
+        + &data_frame(&delta(json!({"content": "3"}), None))
+        + &data_frame(&delta(json!({}), Some("stop")))
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
     let generated = parse_response("openai", json!({

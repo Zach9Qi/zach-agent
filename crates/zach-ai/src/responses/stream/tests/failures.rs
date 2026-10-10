@@ -10,7 +10,7 @@ async fn eof_without_terminal_event_is_a_transport_error() {
         String::new(),
         "data: [DONE]\n\n".into(),
         "data: {\"type\":\"response.completed\"}".into(),
-        frame(
+        event_frame(
             &json!({"type": "response.output_text.delta", "item_id": "msg_1", "content_index": 0, "delta": "半截"}),
         ),
     ] {
@@ -40,7 +40,7 @@ async fn final_snapshot_mismatch_keeps_streamed_text_and_records_the_snapshot() 
         json!({"type": "response.completed", "response": response(vec![message("你好")])}),
     ]
     .iter()
-    .map(frame)
+    .map(event_frame)
     .collect::<String>();
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok), "{parts:?}");
@@ -66,14 +66,10 @@ async fn final_snapshot_mismatch_keeps_streamed_text_and_records_the_snapshot() 
 #[tokio::test]
 async fn malformed_events_cannot_be_rescued_by_a_later_completed_response() {
     let wire = "data: invalid\n\n".to_owned()
-        + &frame(
+        + &event_frame(
             &json!({"type": "response.completed", "response": response(vec![message("诊断")])}),
         );
-    let mut accumulator = StreamAccumulator::new();
-    for part in parse_wire(wire).await {
-        accumulator.process(part.unwrap());
-    }
-    let result = accumulator.finish();
+    let result = aggregate_lenient(parse_wire(wire).await);
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
     assert_eq!(result.usage.input_tokens.total, Some(100));
 }
@@ -84,7 +80,7 @@ async fn malformed_events_cannot_be_rescued_by_a_later_completed_response() {
 async fn unadapted_output_item_cannot_swallow_finish_and_usage() {
     let unknown = json!({"type": "web_search_call", "id": "ws_1", "status": "completed"});
     let payload = response(vec![unknown, message("答案")]);
-    let wire = frame(&json!({"type": "response.completed", "response": payload}));
+    let wire = event_frame(&json!({"type": "response.completed", "response": payload}));
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok));
     assert!(parts
@@ -94,11 +90,7 @@ async fn unadapted_output_item_cannot_swallow_finish_and_usage() {
         p,
         Ok(StreamPart::Finish { usage, .. }) if usage.input_tokens.total == Some(100)
     )));
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
-    let result = accumulator.finish();
+    let result = aggregate_lenient(parts);
     assert_eq!(result.text(), "答案");
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
     assert!(parse_response(payload).is_err());
@@ -110,7 +102,7 @@ async fn failed_and_incomplete_responses_have_distinct_outcomes() {
     failed["status"] = json!("failed");
     failed["error"] = json!({"message": "生成失败"});
     assert!(parse_response(failed.clone()).is_err());
-    let wire = frame(&json!({"type": "response.failed", "response": failed}));
+    let wire = event_frame(&json!({"type": "response.failed", "response": failed}));
     let parts = parse_wire(wire).await;
     assert!(parts
         .iter()
@@ -120,7 +112,7 @@ async fn failed_and_incomplete_responses_have_distinct_outcomes() {
     incomplete["incomplete_details"] = json!({"reason": "max_output_tokens"});
     let result = parse_response(incomplete.clone()).unwrap();
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Length);
-    let wire = frame(&json!({"type": "response.incomplete", "response": incomplete}));
+    let wire = event_frame(&json!({"type": "response.incomplete", "response": incomplete}));
     assert_eq!(aggregate(parse_wire(wire).await), result);
     incomplete["incomplete_details"]["reason"] = json!("content_filter");
     assert_eq!(
@@ -143,7 +135,7 @@ async fn unknown_incomplete_reason_keeps_finish_and_usage() {
         Some("brand_new_reason")
     );
     assert_eq!(generated.usage.input_tokens.total, Some(100));
-    let wire = frame(&json!({"type": "response.incomplete", "response": incomplete}));
+    let wire = event_frame(&json!({"type": "response.incomplete", "response": incomplete}));
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok));
     assert_eq!(aggregate(parts), generated);
