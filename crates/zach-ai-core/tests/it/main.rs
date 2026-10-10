@@ -5,10 +5,9 @@
 mod accumulator;
 mod accumulator_error;
 mod error;
-mod function_tool;
 mod model_profile;
-mod provider_tool;
 mod serde_naming;
+mod tool_definition;
 mod tool_input;
 mod tool_result;
 mod usage;

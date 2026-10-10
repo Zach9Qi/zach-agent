@@ -1,10 +1,10 @@
-//! 函数工具（FunctionTool）及延迟加载选项测试
+//! `ToolDefinition` 的两种来源：函数工具与厂商原生工具的序列化往返、可选字段与包装访问器
 
 use serde_json::json;
-use zach_ai_core::{FunctionTool, ToolDefinition};
+use zach_ai_core::{FunctionTool, ProviderTool, ToolDefinition};
 
 #[test]
-fn test_function_tool_with_defer_loading_serde() {
+fn function_tool_serializes_optional_fields_only_when_set_and_wraps_into_definition() {
     let tool = FunctionTool::new(
         "query_database",
         json!({
@@ -47,4 +47,37 @@ fn test_function_tool_with_defer_loading_serde() {
         tool_def.as_function().and_then(|f| f.defer_loading),
         Some(true)
     );
+}
+
+#[test]
+fn provider_tool_round_trips_and_wraps_into_a_tagged_definition() {
+    let tool = ProviderTool::new(
+        "openai.web_search",
+        "web_search",
+        json!({ "search_context_size": "medium" }),
+    );
+
+    let json_val = serde_json::to_value(&tool).expect("序列化 ProviderTool 失败");
+    assert_eq!(json_val["id"], "openai.web_search");
+    assert_eq!(json_val["name"], "web_search");
+    assert_eq!(json_val["args"]["search_context_size"], "medium");
+
+    let deserialized: ProviderTool =
+        serde_json::from_value(json_val).expect("反序列化 ProviderTool 失败");
+    assert_eq!(tool, deserialized);
+
+    let tool_def: ToolDefinition = tool.clone().into();
+    assert!(tool_def.is_provider());
+    assert!(!tool_def.is_function());
+    assert_eq!(tool_def.name(), "web_search");
+    assert_eq!(tool_def.description(), None);
+    assert_eq!(
+        tool_def.as_provider().map(|p| p.id.as_str()),
+        Some("openai.web_search")
+    );
+
+    // ToolDefinition 带 type tag
+    let def_json = serde_json::to_value(&tool_def).expect("序列化 ToolDefinition 失败");
+    assert_eq!(def_json["type"], "provider");
+    assert_eq!(def_json["id"], "openai.web_search");
 }
