@@ -108,6 +108,7 @@ options.provider_options = Some(provider);
 `with_client` 接收调用方构造的 `reqwest::Client`，用于配置连接池、代理与超时；
 默认构造器沿用 reqwest 默认超时行为，适配器内部不启动后台重试。
 `with_header` 设置默认头，`CallOptions.headers` 按调用覆盖。
+API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴权的网关。
 
 HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，其他非成功状态
 映射为保留原始错误 JSON 的 `ProviderError`。传输失败映射为 `StreamError` 并保留根因。

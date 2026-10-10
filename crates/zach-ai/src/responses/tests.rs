@@ -39,12 +39,19 @@ fn request_targets_responses_and_keeps_authorization_sensitive() {
     );
 }
 
+/// 无需鉴权的端点用空 Key 接入，不应被拒绝，也不应发送空的 Authorization。
+#[test]
+fn empty_api_key_sends_no_authorization_header() {
+    let options = CallOptions::new(vec![zach_ai_core::Message::user("你好")]);
+    let (request, _) = OpenAiResponsesModel::new("", "example")
+        .request(&options, false)
+        .unwrap();
+    assert!(request.headers().get(AUTHORIZATION).is_none());
+}
+
 #[test]
 fn invalid_credentials_headers_and_endpoint_fail_before_http_execution() {
     let options = CallOptions::default();
-    assert!(OpenAiResponsesModel::new("", "example")
-        .request(&options, false)
-        .is_err());
     assert!(OpenAiResponsesModel::new("bad\nkey", "example")
         .request(&options, false)
         .is_err());

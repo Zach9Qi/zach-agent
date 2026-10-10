@@ -113,14 +113,14 @@ impl AnthropicMessagesModel {
     }
 
     fn headers(&self, options: &CallOptions, betas: &[String]) -> Result<HeaderMap, ModelError> {
-        if self.api_key.trim().is_empty() {
-            return Err(ModelError::InvalidRequest("API Key 不能为空".into()));
-        }
         let mut headers = self.default_headers.clone();
-        headers.insert(
-            "x-api-key",
-            transport::sensitive_header(&self.api_key, "API Key")?,
-        );
+        // 空 Key 表示端点不需要鉴权（本地网关、代理等），此时不发送凭据头。
+        if !self.api_key.trim().is_empty() {
+            headers.insert(
+                "x-api-key",
+                transport::sensitive_header(&self.api_key, "API Key")?,
+            );
+        }
         headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         transport::extend_headers(&mut headers, options.headers.as_ref())?;

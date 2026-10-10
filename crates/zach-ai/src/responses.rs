@@ -110,14 +110,14 @@ impl OpenAiResponsesModel {
     }
 
     fn headers(&self, options: &CallOptions) -> Result<HeaderMap, ModelError> {
-        if self.api_key.trim().is_empty() {
-            return Err(ModelError::InvalidRequest("API Key 不能为空".into()));
-        }
         let mut headers = self.default_headers.clone();
-        headers.insert(
-            AUTHORIZATION,
-            transport::sensitive_header(&format!("Bearer {}", self.api_key), "API Key")?,
-        );
+        // 空 Key 表示端点不需要鉴权（Ollama、vLLM 等本地服务），此时不发送 Authorization。
+        if !self.api_key.trim().is_empty() {
+            headers.insert(
+                AUTHORIZATION,
+                transport::sensitive_header(&format!("Bearer {}", self.api_key), "API Key")?,
+            );
+        }
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         transport::extend_headers(&mut headers, options.headers.as_ref())?;
         Ok(headers)

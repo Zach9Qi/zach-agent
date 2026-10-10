@@ -59,12 +59,20 @@ fn requests_without_betas_do_not_add_the_beta_header() {
     assert_eq!(body(&request)["stream"], false);
 }
 
+/// 本地网关、代理等端点不需要鉴权，空 Key 不应阻止请求，也不应发送空凭据头。
+#[test]
+fn empty_api_key_sends_no_credential_header() {
+    let options = CallOptions::new(vec![zach_ai_core::Message::user("你好")]);
+    let (request, _) = AnthropicMessagesModel::new("  ", "example")
+        .request(&options, false)
+        .unwrap();
+    assert!(request.headers().get("x-api-key").is_none());
+    assert_eq!(request.headers()["anthropic-version"], API_VERSION);
+}
+
 #[test]
 fn invalid_credentials_headers_and_endpoint_fail_before_http_execution() {
     let options = CallOptions::default();
-    assert!(AnthropicMessagesModel::new("", "example")
-        .request(&options, false)
-        .is_err());
     assert!(AnthropicMessagesModel::new("bad\nkey", "example")
         .request(&options, false)
         .is_err());

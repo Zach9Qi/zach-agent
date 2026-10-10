@@ -2,7 +2,8 @@
 
 `zach-ai` 提供 `AnthropicMessagesModel`，实现 `zach_ai_core::LanguageModel`。请求发送到
 `{base_url}/v1/messages`，默认根地址为 `https://api.anthropic.com`（注意不含 `/v1`），
-认证使用 `x-api-key` 头，并固定携带 `anthropic-version: 2023-06-01`。
+认证使用 `x-api-key` 头（Key 为空时不发送，用于无需鉴权的网关），
+并固定携带 `anthropic-version: 2023-06-01`。
 
 ```toml
 [dependencies]

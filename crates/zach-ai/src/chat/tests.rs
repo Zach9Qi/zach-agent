@@ -45,6 +45,27 @@ fn non_stream_response_maps_text_tool_calls_and_usage() {
     assert!(result.content.iter().any(|item| matches!(item, zach_ai_core::OutputContent::ToolCall { tool_call_id, .. } if tool_call_id == "call_1")));
 }
 
+/// Ollama、vLLM 等本地端点不需要 Key，空 Key 不应被拒绝，也不应发送空的 Authorization。
+#[test]
+fn empty_api_key_sends_no_authorization_header() {
+    let options = CallOptions::new(vec![Message::user("你好")]);
+    let (request, _) = OpenAiChatCompletionsModel::new("", "llama3")
+        .with_base_url("http://localhost:11434/v1")
+        .request(&options, false)
+        .unwrap();
+    assert!(request.headers().get(AUTHORIZATION).is_none());
+    assert_eq!(
+        request.url().as_str(),
+        "http://localhost:11434/v1/chat/completions"
+    );
+    assert!(OpenAiChatCompletionsModel::new(
+        "bad
+key", "llama3"
+    )
+    .request(&options, false)
+    .is_err());
+}
+
 #[test]
 fn chat_model_identity_does_not_expose_api_key() {
     let model = OpenAiChatCompletionsModel::new("private", "custom-model");

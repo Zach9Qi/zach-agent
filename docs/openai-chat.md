@@ -26,6 +26,9 @@ while let Some(part) = stream.next().await {
 推理强度、非流式生成与 SSE 流式生成。流式请求自动设置 `stream_options.include_usage`，
 以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用。
 
+接入 Ollama、vLLM、LM Studio 等无需鉴权的兼容端点时 API Key 传空字符串即可，
+此时不发送 `Authorization` 头。
+
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
 
