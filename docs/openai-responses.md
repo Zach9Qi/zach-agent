@@ -125,9 +125,10 @@ options.provider_options = Some(provider);
 `with_profile` 注入模型档案，优先于内置目录中的同名条目，用于代理端点或目录未收录的模型。
 API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴权的网关。
 
-HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，其他非成功状态
-映射为保留原始错误 JSON 的 `ProviderError`。传输失败映射为 `StreamError` 并保留根因。
-沿用 core 的重试规则：限流和传输错误可由 Agent 重试，HTTP 5xx 目前仍作为厂商错误返回。
+HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为保留状态码
+与原始正文的 `ServerError`，其他非成功状态映射为保留原始错误 JSON 的 `ProviderError`。
+传输失败映射为 `StreamError` 并保留根因。沿用 core 的重试规则：限流、服务端暂时性故障
+和传输错误可由 Agent 重试，`ProviderError` 是对请求本身的拒绝，不重试。
 
 SSE JSON/协议错误产生 `StreamPart::Error`；之后可以继续收集诊断与 usage，
 但聚合器不会把本次调用重新判为成功。传输错误产生一次 `Err` 后流立即结束。

@@ -132,6 +132,9 @@ async fn http_error(provider: &str, label: &str, response: Response) -> ModelErr
 }
 
 /// 按状态码分类，错误正文优先取 `error.message` / `message`，非 JSON 正文原样保留。
+///
+/// 401/403 为鉴权失败；429 与 529（Anthropic 的 overloaded_error）为限流；
+/// 408 与其余 5xx 是服务端暂时性故障，可重试；其他状态是服务端对请求本身的明确拒绝。
 fn classify(provider: &str, status: u16, body: &[u8]) -> ModelError {
     let raw = serde_json::from_slice::<Value>(body).ok();
     let message = raw
@@ -152,8 +155,8 @@ fn classify(provider: &str, status: u16, body: &[u8]) -> ModelError {
         });
     match status {
         401 | 403 => ModelError::Authentication(message),
-        // 529 是 Anthropic 的 overloaded_error，与限流同属可重试的暂时性故障。
         429 | 529 => ModelError::RateLimit(message),
+        408 | 500..=599 => ModelError::server_error(provider, status, message, raw),
         _ => ModelError::provider_error(provider, message, raw),
     }
 }
@@ -164,7 +167,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn authentication_rate_limit_and_overload_have_stable_categories() {
+    fn authentication_rate_limit_overload_and_server_faults_have_stable_categories() {
         let body = br#"{"type":"error","error":{"type":"x","message":"failure"}}"#;
         assert!(matches!(
             classify("p", 401, body),
@@ -174,14 +177,27 @@ mod tests {
             classify("p", 403, body),
             ModelError::Authentication(_)
         ));
-        assert!(classify("p", 429, body).is_retryable());
-        assert!(classify("p", 529, body).is_retryable());
+        assert!(matches!(
+            classify("p", 429, body),
+            ModelError::RateLimit(message) if message == "failure"
+        ));
+        assert!(matches!(classify("p", 529, body), ModelError::RateLimit(_)));
+        // 5xx 与 408 是暂时性故障：保留状态码与原始正文，且可重试。
         assert!(matches!(
             classify("p", 500, body),
-            ModelError::ProviderError { raw: Some(_), provider, .. } if provider == "p"
+            ModelError::ServerError { status: 500, raw: Some(_), provider, .. } if provider == "p"
         ));
         assert!(matches!(classify("p", 502, b"proxy failure"),
-            ModelError::ProviderError { message, raw: None, .. } if message == "proxy failure"));
+            ModelError::ServerError { status: 502, message, raw: None, .. }
+                if message == "proxy failure"));
+        assert!(classify("p", 503, body).is_retryable());
+        assert!(classify("p", 408, body).is_retryable());
+        // 4xx（限流与鉴权之外）是对请求本身的拒绝，不可重试。
+        assert!(matches!(
+            classify("p", 404, body),
+            ModelError::ProviderError { raw: Some(_), provider, .. } if provider == "p"
+        ));
+        assert!(!classify("p", 404, body).is_retryable());
         assert!(classify("p", 400, b"").to_string().contains("HTTP 400"));
         assert!(matches!(classify("p", 400, br#"{"message":"flat"}"#),
             ModelError::ProviderError { message, .. } if message == "flat"));

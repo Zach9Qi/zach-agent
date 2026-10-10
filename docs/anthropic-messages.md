@@ -117,7 +117,7 @@ Agent 层会以 `model.warnings` 事件呈现。
 发出 `Finish`，`message_stop` 之后不再读取网络。`Finish` 之前连接断开视为传输错误；
 `Finish` 之后、`message_stop` 之前断开（代理省略终止符）不影响结果。流内 `error` 事件
 （如 `overloaded_error`）使本轮结果为 `Error`，其后的断开不再额外报告。
-HTTP 429 与 529 映射为可重试的限流错误。
+HTTP 429 与 529 映射为可重试的限流错误，408 与其余 5xx 映射为可重试的 `ServerError`。
 
 ## 联调
 

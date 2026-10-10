@@ -63,6 +63,9 @@ Agent 层会以 `model.warnings` 事件呈现。
 `with_client` 可传入自定义 `reqwest::Client`；默认客户端设置 30 秒连接超时与 300 秒读取超时
 （相邻两次收到字节的间隔），不设整体超时。
 
+HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为可重试的
+`ServerError`，其他非成功状态映射为 `ProviderError`；传输失败映射为 `StreamError`。
+
 ## 厂商扩展
 
 `CallOptions.provider_options` 的 `openai` 对象原样并入请求正文：Chat Completions 是众多

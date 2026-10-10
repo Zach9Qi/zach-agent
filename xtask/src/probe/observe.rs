@@ -124,7 +124,7 @@ impl LanguageModel for ObservedModel {
 
 fn report_error(reporter: &Reporter, error: &ModelError) {
     let raw = match error {
-        ModelError::ProviderError { raw, .. } => raw.as_ref(),
+        ModelError::ProviderError { raw, .. } | ModelError::ServerError { raw, .. } => raw.as_ref(),
         _ => None,
     };
     reporter.emit(
