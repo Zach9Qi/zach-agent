@@ -142,7 +142,8 @@ HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5x
 和传输错误可由 Agent 重试，`ProviderError` 是对请求本身的拒绝，不重试。
 
 SSE JSON/协议错误产生 `StreamPart::Error`；之后可以继续收集诊断与 usage，
-但聚合器不会把本次调用重新判为成功。传输错误产生一次 `Err` 后流立即结束。
+但聚合器不会把本次调用重新判为成功。`*.done` 快照与已收到的增量对不上（中间代理改写了文本）
+不算协议错误：保留流式正文，最终快照放在该块 End 事件的 `provider_metadata.openai.final_snapshot`。传输错误产生一次 `Err` 后流立即结束。
 没有收到 Responses 终止事件就结束连接时，也会报告传输错误。
 设置 `include_raw_chunks = true` 可额外观察原始 SSE JSON 事件。
 流按消费需求拉取，丢弃流会释放源流；Agent 的取消机制可以终止正在等待的网络调用。

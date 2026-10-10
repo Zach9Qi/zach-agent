@@ -49,6 +49,44 @@ async fn transport_errors_are_terminal_even_if_more_bytes_follow() {
     ));
 }
 
+/// 中间代理改写文本（如去掉尾部空白）会让 `done` 快照与已收增量对不上。已发出的增量无法撤回，
+/// 因此不判失败：保留流式正文，最终快照放进该块 End 的元数据，重复到达的快照不再产生事件。
+#[tokio::test]
+async fn final_snapshot_mismatch_keeps_streamed_text_and_records_the_snapshot() {
+    let wire = [
+        json!({"type": "response.output_item.added", "item": {"type": "message", "id": "msg_1", "role": "assistant", "content": []}}),
+        json!({"type": "response.content_part.added", "item_id": "msg_1", "content_index": 0, "part": {"type": "output_text", "text": ""}}),
+        json!({"type": "response.output_text.delta", "item_id": "msg_1", "content_index": 0, "delta": "你好 "}),
+        json!({"type": "response.output_text.done", "item_id": "msg_1", "content_index": 0, "text": "你好"}),
+        json!({"type": "response.content_part.done", "item_id": "msg_1", "content_index": 0,
+            "part": {"type": "output_text", "text": "你好", "annotations": []}}),
+        json!({"type": "response.output_item.done", "item": message("你好")}),
+        json!({"type": "response.completed", "response": response(vec![message("你好")])}),
+    ]
+    .iter()
+    .map(frame)
+    .collect::<String>();
+    let parts = parse_wire(wire).await;
+    assert!(parts.iter().all(Result::is_ok), "{parts:?}");
+    assert!(!parts
+        .iter()
+        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::TextDelta { .. })))
+            .count(),
+        1
+    );
+    assert!(parts.iter().any(|p| matches!(
+        p,
+        Ok(StreamPart::TextEnd { provider_metadata: Some(metadata), .. })
+            if metadata.get::<Value>("openai").unwrap()["final_snapshot"] == "你好"
+    )));
+    let result = aggregate(parts);
+    assert_eq!(result.text(), "你好 ");
+}
+
 #[tokio::test]
 async fn malformed_events_cannot_be_rescued_by_a_later_completed_response() {
     let wire = "data: invalid\n\n".to_owned()

@@ -1,4 +1,8 @@
 //! 文本与推理分块维护：补齐最终快照，并防止重复追加正文。
+//!
+//! `*.done` 事件携带的完整快照通常是已收增量的延长；中间代理改写文本（如去掉首尾空白）时两者
+//! 会对不上。已发出的增量无法撤回，因此不把这种不一致判为失败：保留流式正文，把最终快照放进
+//! 该块 End 事件的元数据（`openai.final_snapshot`）供调用方自行取舍。
 
 use serde_json::{json, Value};
 use zach_ai_core::{ModelError, ProviderMetadata, StreamPart};
@@ -9,6 +13,8 @@ use super::parser::ResponsesStreamParser;
 pub(super) struct Block {
     text: String,
     ended: bool,
+    /// `done` 快照与已收增量不一致时记下的最终文本，随 End 元数据透出。
+    final_snapshot: Option<String>,
 }
 
 impl ResponsesStreamParser {
@@ -35,6 +41,7 @@ impl ResponsesStreamParser {
             Block {
                 text: String::new(),
                 ended: false,
+                final_snapshot: None,
             },
         );
         parts.push(if reasoning {
@@ -86,6 +93,7 @@ impl ResponsesStreamParser {
         Ok(())
     }
 
+    /// 用完成快照补齐分块：快照是已收增量的延长时发出差额；对不上时记录快照而不判失败。
     pub(super) fn reconcile(
         &mut self,
         id: &str,
@@ -95,13 +103,11 @@ impl ResponsesStreamParser {
         parts: &mut Vec<StreamPart>,
     ) -> Result<(), ModelError> {
         self.start_block(id, reasoning, metadata, parts);
-        let block = &self.blocks[id];
-        let suffix = full
-            .strip_prefix(&block.text)
-            .ok_or_else(|| {
-                ModelError::provider_error("openai", "最终文本与已收到的增量不一致", None)
-            })?
-            .to_owned();
+        let block = self.blocks.get_mut(id).expect("分块已建立");
+        let Some(suffix) = full.strip_prefix(block.text.as_str()).map(str::to_owned) else {
+            block.final_snapshot = Some(full.to_owned());
+            return Ok(());
+        };
         if !suffix.is_empty() {
             self.delta(id, &suffix, reasoning, None, parts)?;
         }
@@ -120,6 +126,7 @@ impl ResponsesStreamParser {
         let block = self.blocks.get_mut(id).expect("分块已建立");
         if !block.ended {
             block.ended = true;
+            let metadata = with_final_snapshot(metadata, block.final_snapshot.take());
             parts.push(if reasoning {
                 StreamPart::ReasoningEnd {
                     id: id.into(),
@@ -133,5 +140,24 @@ impl ResponsesStreamParser {
             });
         }
         Ok(())
+    }
+}
+
+/// 把不一致的最终快照并入 End 事件的 `openai` 元数据。
+fn with_final_snapshot(
+    metadata: Option<ProviderMetadata>,
+    snapshot: Option<String>,
+) -> Option<ProviderMetadata> {
+    let Some(snapshot) = snapshot else {
+        return metadata;
+    };
+    let mut extra = ProviderMetadata::new();
+    extra.insert("openai", json!({"final_snapshot": snapshot}));
+    match metadata {
+        Some(mut existing) => {
+            existing.merge(extra);
+            Some(existing)
+        }
+        None => Some(extra),
     }
 }
