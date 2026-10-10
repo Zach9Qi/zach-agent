@@ -40,12 +40,6 @@ pub struct OpenAiChatCompletionsModel {
     profile: Option<Arc<ModelProfile>>,
 }
 
-/// `OpenAiChatModel` 是较短的兼容别名。
-pub type OpenAiChatModel = OpenAiChatCompletionsModel;
-
-/// `OpenAiChatCompletionModel` 是单数形式的兼容别名。
-pub type OpenAiChatCompletionModel = OpenAiChatCompletionsModel;
-
 impl fmt::Debug for OpenAiChatCompletionsModel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("OpenAiChatCompletionsModel")

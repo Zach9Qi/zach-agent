@@ -1,6 +1,6 @@
 # OpenAI Chat Completions API
 
-`zach-ai` 提供 `OpenAiChatCompletionsModel`（别名 `OpenAiChatModel`），实现
+`zach-ai` 提供 `OpenAiChatCompletionsModel`，实现
 `zach_ai_core::LanguageModel`。请求发送到 `{base_url}/chat/completions`，默认根地址为
 `https://api.openai.com/v1`。
 

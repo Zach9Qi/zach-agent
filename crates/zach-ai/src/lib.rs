@@ -25,7 +25,7 @@ pub use responses::OpenAiResponsesModel;
 #[cfg(feature = "openai-chat")]
 pub mod chat;
 #[cfg(feature = "openai-chat")]
-pub use chat::{OpenAiChatCompletionModel, OpenAiChatCompletionsModel, OpenAiChatModel};
+pub use chat::OpenAiChatCompletionsModel;
 
 #[cfg(feature = "anthropic")]
 pub mod anthropic;
