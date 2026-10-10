@@ -124,6 +124,15 @@ impl ChoiceState {
     /// 工具调用按 `index` 累积：`id` 与函数名通常只在首个增量出现，参数逐块拼接。
     fn tool_delta(&mut self, call: &Value, parts: &mut Vec<StreamPart>) {
         let tool_index = call["index"].as_u64().unwrap_or(0);
+        let incoming_id = call["id"].as_str().filter(|id| !id.is_empty());
+        // 部分兼容端点对先后发起的多次调用复用同一个 index（甚至不带 index），
+        // 只能靠 id 变化识别新调用：先把上一个按完整调用发出，再另起状态。
+        if let Some(previous) = self.tools.get_mut(&tool_index) {
+            if incoming_id.is_some_and(|id| !previous.id.is_empty() && previous.id != id) {
+                finish_tool(previous, parts);
+                self.tools.remove(&tool_index);
+            }
+        }
         let entry = self.tools.entry(tool_index).or_insert_with(|| ToolState {
             id: String::new(),
             name: String::new(),
@@ -131,7 +140,7 @@ impl ChoiceState {
             started: false,
             ended: false,
         });
-        if let Some(id) = call["id"].as_str() {
+        if let Some(id) = incoming_id {
             entry.id = id.into();
         }
         if let Some(name) = call.pointer("/function/name").and_then(Value::as_str) {
@@ -187,23 +196,31 @@ impl ChoiceState {
                 provider_metadata: None,
             });
         }
-        for state in self.tools.values_mut().filter(|state| !state.ended) {
-            state.ended = true;
-            if state.id.is_empty() {
-                continue;
-            }
-            parts.push(StreamPart::ToolInputEnd {
-                id: state.id.clone(),
-                provider_metadata: None,
-            });
-            parts.push(StreamPart::ToolCall {
-                tool_call_id: state.id.clone(),
-                tool_name: state.name.clone(),
-                input: state.arguments.clone(),
-                provider_executed: false,
-                dynamic: false,
-                provider_metadata: None,
-            });
+        for state in self.tools.values_mut() {
+            finish_tool(state, parts);
         }
     }
+}
+
+/// 结束一个工具调用：发出入参结束与完整调用；没有 id 的残缺调用无法配对结果，直接丢弃。
+fn finish_tool(state: &mut ToolState, parts: &mut Vec<StreamPart>) {
+    if state.ended {
+        return;
+    }
+    state.ended = true;
+    if state.id.is_empty() {
+        return;
+    }
+    parts.push(StreamPart::ToolInputEnd {
+        id: state.id.clone(),
+        provider_metadata: None,
+    });
+    parts.push(StreamPart::ToolCall {
+        tool_call_id: state.id.clone(),
+        tool_name: state.name.clone(),
+        input: state.arguments.clone(),
+        provider_executed: false,
+        dynamic: false,
+        provider_metadata: None,
+    });
 }

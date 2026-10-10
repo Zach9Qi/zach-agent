@@ -184,6 +184,49 @@ async fn parallel_tool_calls_finish_in_index_order() {
     ));
 }
 
+/// 部分兼容端点对先后发起的多次调用复用 index 0，只能靠 id 变化区分：
+/// 换 id 时上一个调用必须完整发出，参数不能串到新调用里。
+#[tokio::test]
+async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
+    let call = |id: Option<&str>, name: Option<&str>, arguments: &str| {
+        let mut call = json!({"index": 0, "function": {"arguments": arguments}});
+        if let Some(id) = id {
+            call["id"] = json!(id);
+        }
+        if let Some(name) = name {
+            call["function"]["name"] = json!(name);
+        }
+        delta(json!({"tool_calls": [call]}), None)
+    };
+    let wire = frame(&call(Some("call_a"), Some("add"), "{\"a\""))
+        + &frame(&call(None, None, ":1}"))
+        + &frame(&call(Some("call_b"), Some("sub"), "{\"b\":2}"))
+        + &frame(&delta(json!({}), Some("tool_calls")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    let calls: Vec<(&str, &str, &str)> = parts
+        .iter()
+        .filter_map(|part| match part {
+            Ok(StreamPart::ToolCall {
+                tool_call_id,
+                tool_name,
+                input,
+                ..
+            }) => Some((tool_call_id.as_str(), tool_name.as_str(), input.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        calls,
+        [
+            ("call_a", "add", "{\"a\":1}"),
+            ("call_b", "sub", "{\"b\":2}")
+        ]
+    );
+    let result = aggregate(parts);
+    assert_eq!(result.content.len(), 2);
+}
+
 /// 响应元数据在每个分块里都相同，只透出一次；代理固定附带的 `"error": null` 不是错误。
 #[tokio::test]
 async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
