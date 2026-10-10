@@ -62,13 +62,9 @@ pub(super) fn finish(value: &Value) -> Result<StreamPart, ModelError> {
         "incomplete" => match reason {
             Some("max_output_tokens") => UnifiedFinishReason::Length,
             Some("content_filter") => UnifiedFinishReason::ContentFilter,
-            _ => {
-                return Err(ModelError::provider_error(
-                    "openai",
-                    "Responses 返回未知的不完整状态",
-                    Some(value.clone()),
-                ))
-            }
+            // 厂商新增的不完整原因不能让整轮失败并丢掉用量：按 Other 透出，
+            // 原始原因保留在 `raw` 与 `incomplete_details` 元数据里。
+            _ => UnifiedFinishReason::Other,
         },
         "failed" | "cancelled" => UnifiedFinishReason::Error,
         _ => {

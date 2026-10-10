@@ -115,6 +115,32 @@ async fn failed_and_incomplete_responses_have_distinct_outcomes() {
     );
 }
 
+/// 厂商新增的 `incomplete_details.reason` 不能让整轮变成错误：`Finish`（含用量）必须照常
+/// 发出，原始原因保留在 `raw` 与元数据中。此前流式路径会因此丢失终止事件。
+#[tokio::test]
+async fn unknown_incomplete_reason_keeps_finish_and_usage() {
+    let mut incomplete = response(vec![message("半截")]);
+    incomplete["status"] = json!("incomplete");
+    incomplete["incomplete_details"] = json!({"reason": "brand_new_reason"});
+    let generated = parse_response(incomplete.clone()).unwrap();
+    assert_eq!(generated.finish_reason.unified, UnifiedFinishReason::Other);
+    assert_eq!(
+        generated.finish_reason.raw.as_deref(),
+        Some("brand_new_reason")
+    );
+    assert_eq!(generated.usage.input_tokens.total, Some(100));
+    let wire = frame(&json!({"type": "response.incomplete", "response": incomplete}));
+    let parts = parse_wire(wire).await;
+    assert!(parts.iter().all(Result::is_ok));
+    assert_eq!(aggregate(parts), generated);
+    let openai = generated
+        .provider_metadata
+        .unwrap()
+        .get::<Value>("openai")
+        .unwrap();
+    assert_eq!(openai["incomplete_details"]["reason"], "brand_new_reason");
+}
+
 #[test]
 fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
     for response in [
