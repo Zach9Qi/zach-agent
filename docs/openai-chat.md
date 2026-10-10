@@ -23,7 +23,8 @@ while let Some(part) = stream.next().await {
 ```
 
 适配器支持文本和图片输入、函数工具、JSON Object/JSON Schema 输出、停止词、采样参数、
-推理强度、非流式生成与 SSE 流式生成。流式请求自动设置 `stream_options.include_usage`，
+推理强度、非流式生成与 SSE 流式生成。`max_output_tokens` 在 `openai` 身份下发送为
+`max_completion_tokens`（o 系列起官方端点只认此字段），其他厂商身份下发送为 `max_tokens`。流式请求自动设置 `stream_options.include_usage`，
 以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用；
 `id` 晚于参数到达时参数先缓存，始终没有 `id` 的调用无法与结果配对，会以 `Error` 事件报告
 而不是静默丢弃。
@@ -84,8 +85,8 @@ HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5x
 
 `CallOptions.provider_options` 中声明厂商对应的对象（默认 `openai`，`with_provider` 声明后优先读
 该厂商键、缺省回退 `openai`）原样并入请求正文：Chat Completions 是众多
-兼容端点的通用协议，各家私有字段（如 Qwen 的 `enable_thinking`、vLLM 的 `chat_template_kwargs`、
-只认 `max_tokens` 的旧端点）无法穷举，因此采用透传。但已由通用参数写入的字段
+兼容端点的通用协议，各家私有字段（如 Qwen 的 `enable_thinking`、vLLM 的 `chat_template_kwargs`）
+无法穷举，因此采用透传。但已由通用参数写入的字段
 （`model`、`messages`、`stream`、`temperature`、`tools` 等）不允许覆盖，会在发送前以
 `UnsupportedFeature` 拒绝，避免 `CallOptions` 上的设置被悄悄改掉。
 

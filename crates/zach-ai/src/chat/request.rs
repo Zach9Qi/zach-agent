@@ -52,7 +52,7 @@ pub(super) fn build_request(
         "stream": stream,
     });
     if let Some(value) = options.max_output_tokens {
-        body["max_completion_tokens"] = json!(value);
+        body[max_tokens_field(provider)] = json!(value);
     }
     for (name, value) in [
         ("temperature", temperature),
@@ -92,6 +92,18 @@ pub(super) fn build_request(
     }
     apply_provider_options(&mut body, provider, options)?;
     Ok(BuiltRequest { body, warnings })
+}
+
+/// 输出上限的字段名。
+///
+/// OpenAI 官方端点自 o 系列起只认 `max_completion_tokens`；第三方兼容端点普遍只认 `max_tokens`，
+/// 少数两者都收。按声明的厂商身份选择，需要另一个字段名时可通过扩展参数补发。
+fn max_tokens_field(provider: &str) -> &'static str {
+    if provider == "openai" {
+        "max_completion_tokens"
+    } else {
+        "max_tokens"
+    }
 }
 
 /// 合并厂商扩展参数：优先读声明的厂商键，未提供时回退协议方 `openai` 的键。

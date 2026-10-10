@@ -190,6 +190,22 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
     );
 }
 
+/// OpenAI 官方端点只认 `max_completion_tokens`，第三方兼容端点普遍只认 `max_tokens`。
+#[test]
+fn output_limit_field_follows_the_declared_provider() {
+    let options = CallOptions::new(vec![Message::user("x")]).with_max_output_tokens(64);
+    let openai = request::build_request("gpt-test", "openai", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(openai["max_completion_tokens"], 64);
+    assert!(openai.get("max_tokens").is_none());
+    let deepseek = request::build_request("deepseek-chat", "deepseek", None, &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(deepseek["max_tokens"], 64);
+    assert!(deepseek.get("max_completion_tokens").is_none());
+}
+
 /// 兼容端点的私有字段透传，但已由通用参数写入的字段不能被扩展参数悄悄覆盖。
 #[test]
 fn provider_options_pass_through_but_cannot_override_adapter_fields() {
