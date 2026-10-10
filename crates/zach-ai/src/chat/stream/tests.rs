@@ -111,6 +111,47 @@ async fn reasoning_content_deltas_are_exposed_before_text() {
     ));
 }
 
+/// 推理块必须在首个正文或工具增量到达时关闭，而不是拖到流收尾，否则 UI 会在
+/// 整段正文输出完毕后才收到"推理结束"。
+#[tokio::test]
+async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
+    let position = |parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> bool| {
+        parts
+            .iter()
+            .position(|part| part.as_ref().is_ok_and(pick))
+            .unwrap()
+    };
+    let wire = frame(&delta(json!({"reasoning_content": "想"}), None))
+        + &frame(&delta(json!({"content": "答"}), None))
+        + &frame(&delta(json!({}), Some("stop")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    let end = position(&parts, |p| matches!(p, StreamPart::ReasoningEnd { .. }));
+    let text = position(&parts, |p| matches!(p, StreamPart::TextDelta { .. }));
+    assert!(end < text, "ReasoningEnd 应早于首个 TextDelta");
+    aggregate(parts);
+
+    let wire = frame(&delta(json!({"reasoning_content": "想"}), None))
+        + &frame(&delta(
+            json!({"tool_calls": [{"index": 0, "id": "call_1", "function": {"name": "f", "arguments": "{}"}}]}),
+            None,
+        ))
+        + &frame(&delta(json!({}), Some("tool_calls")))
+        + DONE;
+    let parts = parse_wire(wire).await;
+    let end = position(&parts, |p| matches!(p, StreamPart::ReasoningEnd { .. }));
+    let tool = position(&parts, |p| matches!(p, StreamPart::ToolInputStart { .. }));
+    assert!(end < tool, "ReasoningEnd 应早于 ToolInputStart");
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::ReasoningEnd { .. })))
+            .count(),
+        1
+    );
+    aggregate(parts);
+}
+
 /// 并行工具调用的收尾事件必须按厂商给出的 index 顺序发出，不能依赖哈希表遍历顺序。
 #[tokio::test]
 async fn parallel_tool_calls_finish_in_index_order() {

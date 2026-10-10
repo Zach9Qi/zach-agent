@@ -76,6 +76,14 @@ impl ChoiceState {
                 });
             }
         }
+        // 正文、拒绝或工具调用一旦开始，思考阶段即告结束；不等到流收尾再关闭，
+        // 否则消费方会在整段正文输出完之后才看到"推理结束"。
+        if delta["content"].is_string()
+            || delta["refusal"].is_string()
+            || delta["tool_calls"].is_array()
+        {
+            self.close_reasoning(parts);
+        }
         if let Some(text) = delta["content"].as_str() {
             if self.text == Block::Pending {
                 self.text = Block::Open;
@@ -152,8 +160,7 @@ impl ChoiceState {
         }
     }
 
-    /// 关闭仍打开的块：推理、正文、拒绝依次结束，工具调用按编号发出完整调用。
-    pub(super) fn finish(&mut self, parts: &mut Vec<StreamPart>) {
+    fn close_reasoning(&mut self, parts: &mut Vec<StreamPart>) {
         if self.reasoning == Block::Open {
             self.reasoning = Block::Closed;
             parts.push(StreamPart::ReasoningEnd {
@@ -161,6 +168,11 @@ impl ChoiceState {
                 provider_metadata: None,
             });
         }
+    }
+
+    /// 关闭仍打开的块：推理、正文、拒绝依次结束，工具调用按编号发出完整调用。
+    pub(super) fn finish(&mut self, parts: &mut Vec<StreamPart>) {
+        self.close_reasoning(parts);
         if self.text == Block::Open {
             self.text = Block::Closed;
             parts.push(StreamPart::TextEnd {
