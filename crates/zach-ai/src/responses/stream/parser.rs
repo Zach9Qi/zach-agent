@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use zach_ai_core::{ModelError, StreamPart};
 
 use super::super::response::{finish, response_metadata, string};
+use super::items::SUMMARY_SEPARATOR;
 use super::text::Block;
 
 pub(in crate::responses) struct ResponsesStreamParser {
@@ -13,6 +14,8 @@ pub(in crate::responses) struct ResponsesStreamParser {
     pub(super) calls_done: HashMap<String, String>,
     pub(super) blocks: HashMap<String, Block>,
     pub(super) sources: HashSet<String>,
+    /// 每个推理项最近一次增量的 `summary_index`，用于在换段时补分隔。
+    summary_index: HashMap<String, u64>,
     pub(super) terminal: bool,
     pub(super) failed: bool,
     raw: bool,
@@ -26,6 +29,7 @@ impl ResponsesStreamParser {
             calls_done: HashMap::new(),
             blocks: HashMap::new(),
             sources: HashSet::new(),
+            summary_index: HashMap::new(),
             terminal: false,
             failed: false,
             raw,
@@ -109,6 +113,17 @@ impl ResponsesStreamParser {
             }
             "response.reasoning_summary_text.delta" => {
                 let id = string(event, "item_id")?;
+                let index = event["summary_index"].as_u64().unwrap_or(0);
+                let delta = format!(
+                    "{}{}",
+                    self.summary_separator(id, index),
+                    string(event, "delta")?
+                );
+                self.delta(id, &delta, true, None, parts)?;
+            }
+            // gpt-oss 一类开源服务没有摘要，直接下发原始推理正文。
+            "response.reasoning_text.delta" => {
+                let id = string(event, "item_id")?;
                 self.delta(id, string(event, "delta")?, true, None, parts)?;
             }
             "response.function_call_arguments.delta" => {
@@ -166,6 +181,14 @@ impl ResponsesStreamParser {
             _ => {}
         }
         Ok(())
+    }
+
+    /// 推理摘要换到更大的 `summary_index` 时补一个分隔，与完成快照把多段按空行拼接一致。
+    fn summary_separator(&mut self, item_id: &str, index: u64) -> &'static str {
+        match self.summary_index.insert(item_id.to_owned(), index) {
+            Some(previous) if index > previous => SUMMARY_SEPARATOR,
+            _ => "",
+        }
     }
 
     pub(in crate::responses) fn complete(

@@ -98,6 +98,69 @@ async fn encrypted_reasoning_and_call_result_survive_a_second_request() {
     assert_eq!(request["input"][3]["call_id"], "call_1");
 }
 
+/// 多段摘要在流式与完成快照里都以空行分隔，否则各段标题与正文会黏成一行。
+#[tokio::test]
+async fn multi_part_reasoning_summaries_are_separated_by_blank_lines() {
+    let reasoning = json!({"type": "reasoning", "id": "rs_1", "summary": [
+        {"type": "summary_text", "text": "**第一段**正文"},
+        {"type": "summary_text", "text": "**第二段**正文"}
+    ], "encrypted_content": "opaque"});
+    let payload = response(vec![reasoning.clone(), message("答")]);
+    let summary_event = |kind: &str, index: u64, extra: Value| {
+        let mut event = json!({"type": kind, "item_id": "rs_1", "summary_index": index});
+        event
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        event
+    };
+    let wire = [
+        json!({"type": "response.output_item.added", "item": {"type": "reasoning", "id": "rs_1", "summary": []}}),
+        summary_event("response.reasoning_summary_part.added", 0, json!({"part": {"type": "summary_text", "text": ""}})),
+        summary_event("response.reasoning_summary_text.delta", 0, json!({"delta": "**第一段**"})),
+        summary_event("response.reasoning_summary_text.delta", 0, json!({"delta": "正文"})),
+        summary_event("response.reasoning_summary_text.done", 0, json!({"text": "**第一段**正文"})),
+        summary_event("response.reasoning_summary_part.added", 1, json!({"part": {"type": "summary_text", "text": ""}})),
+        summary_event("response.reasoning_summary_text.delta", 1, json!({"delta": "**第二段**正文"})),
+        json!({"type": "response.output_item.done", "item": reasoning}),
+        json!({"type": "response.output_item.done", "item": message("答")}),
+        json!({"type": "response.completed", "response": payload}),
+    ]
+    .iter()
+    .map(frame)
+    .collect::<String>();
+    let result = aggregate(parse_wire(wire).await);
+    assert_eq!(
+        result.reasoning().as_deref(),
+        Some("**第一段**正文\n\n**第二段**正文")
+    );
+    assert_eq!(result, parse_response(payload).unwrap());
+}
+
+/// gpt-oss 一类开源服务没有摘要，推理正文在 `content[].reasoning_text` 与
+/// `response.reasoning_text.delta` 里，不能被当作空推理丢掉。
+#[tokio::test]
+async fn raw_reasoning_text_without_summary_is_exposed() {
+    let reasoning = json!({"type": "reasoning", "id": "rs_raw", "summary": [],
+        "content": [{"type": "reasoning_text", "text": "原始推理"}]});
+    let payload = response(vec![reasoning.clone(), message("答")]);
+    let wire = [
+        json!({"type": "response.output_item.added", "item": {"type": "reasoning", "id": "rs_raw", "summary": [], "content": []}}),
+        json!({"type": "response.reasoning_text.delta", "item_id": "rs_raw", "content_index": 0, "delta": "原始"}),
+        json!({"type": "response.reasoning_text.delta", "item_id": "rs_raw", "content_index": 0, "delta": "推理"}),
+        json!({"type": "response.output_item.done", "item": reasoning}),
+        json!({"type": "response.output_item.done", "item": message("答")}),
+        json!({"type": "response.completed", "response": payload}),
+    ]
+    .iter()
+    .map(frame)
+    .collect::<String>();
+    let result = aggregate(parse_wire(wire).await);
+    assert_eq!(result.reasoning().as_deref(), Some("原始推理"));
+    assert_eq!(result.text(), "答");
+    assert_eq!(result, parse_response(payload).unwrap());
+}
+
 #[tokio::test]
 async fn empty_reasoning_and_final_only_outputs_are_kept() {
     let reasoning = json!({"type": "reasoning", "id": "rs_empty", "summary": [], "encrypted_content": "opaque"});

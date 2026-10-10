@@ -6,6 +6,28 @@ use zach_ai_core::{ModelError, SourceContent, StreamPart};
 use super::super::response::{metadata, string};
 use super::parser::ResponsesStreamParser;
 
+/// 多段推理摘要之间的分隔，流式换段与完成快照使用同一个值，保证两边文本一致。
+pub(super) const SUMMARY_SEPARATOR: &str = "\n\n";
+
+/// 推理项的可见正文：`summary[].text` 以空行拼接；没有摘要时（如 gpt-oss 一类开源服务只给
+/// 原始推理）退回 `content[].text`（`reasoning_text` 块）。两者都缺失按空正文处理。
+pub(super) fn reasoning_text(item: &Value) -> String {
+    let texts = |field: &str| -> Vec<&str> {
+        item[field]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|part| part["text"].as_str())
+            .collect()
+    };
+    let summary = texts("summary");
+    if summary.is_empty() {
+        texts("content").concat()
+    } else {
+        summary.join(SUMMARY_SEPARATOR)
+    }
+}
+
 impl ResponsesStreamParser {
     pub(super) fn start_item(
         &mut self,
@@ -47,16 +69,9 @@ impl ResponsesStreamParser {
         match string(item, "type")? {
             "function_call" => self.finish_call(item, parts)?,
             "reasoning" => {
-                // 部分模型（如 gpt-oss）的推理项可能没有 summary 字段，按空摘要处理。
-                let empty = Vec::new();
-                let summary = item["summary"].as_array().unwrap_or(&empty);
-                let mut text = String::new();
-                for part in summary {
-                    text.push_str(string(part, "text")?);
-                }
                 self.finish_block(
                     &id,
-                    &text,
+                    &reasoning_text(item),
                     true,
                     metadata(json!({"responses_item": item})),
                     parts,
