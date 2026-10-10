@@ -7,5 +7,8 @@ mod catalog;
 #[cfg(feature = "openai-responses")]
 mod responses;
 
+#[cfg(feature = "openai-chat")]
+mod chat;
+
 #[cfg(feature = "anthropic")]
 mod anthropic;

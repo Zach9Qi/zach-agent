@@ -1,4 +1,7 @@
-//! 离线验证 Chat Completions SSE 传输、choice 生命周期与收尾顺序。
+//! 离线验证 Chat Completions SSE 传输与 choice 生命周期；失败路径与回放见子模块。
+
+mod failures;
+mod replay;
 
 use super::*;
 use futures::StreamExt;
@@ -6,7 +9,7 @@ use serde_json::{json, Value};
 use zach_ai_core::{GenerateResult, ModelError, StreamAccumulator, UnifiedFinishReason};
 
 /// 一个带固定响应头字段的分块。
-pub(super) fn chunk(choices: Vec<Value>) -> Value {
+fn chunk(choices: Vec<Value>) -> Value {
     json!({
         "id": "chatcmpl-1", "object": "chat.completion.chunk", "created": 1700000000,
         "model": "example", "choices": choices
@@ -14,27 +17,27 @@ pub(super) fn chunk(choices: Vec<Value>) -> Value {
 }
 
 /// 单 choice 增量分块；`finish` 为 `Some` 时附带结束原因。
-pub(super) fn delta(delta: Value, finish: Option<&str>) -> Value {
+fn delta(delta: Value, finish: Option<&str>) -> Value {
     chunk(vec![
         json!({"index": 0, "delta": delta, "finish_reason": finish}),
     ])
 }
 
-pub(super) fn usage_chunk() -> Value {
+fn usage_chunk() -> Value {
     let mut chunk = chunk(vec![]);
     chunk["usage"] = json!({"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5,
         "prompt_tokens_details": {"cached_tokens": 1}});
     chunk
 }
 
-pub(super) fn frame(value: &Value) -> String {
+fn frame(value: &Value) -> String {
     format!("data: {value}\n\n")
 }
 
-pub(super) const DONE: &str = "data: [DONE]\n\n";
+const DONE: &str = "data: [DONE]\n\n";
 
 /// 逐字节交付，确保 UTF-8 字符与帧边界都会跨越传输块。
-pub(super) async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
+async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
     let chunks = wire
         .into_bytes()
         .into_iter()
@@ -49,7 +52,7 @@ pub(super) async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelErro
     .await
 }
 
-pub(super) fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {
+fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateResult {
     let mut accumulator = StreamAccumulator::new();
     for part in parts {
         accumulator.process(part.unwrap());
@@ -61,6 +64,14 @@ pub(super) fn aggregate(parts: Vec<Result<StreamPart, ModelError>>) -> GenerateR
         accumulator.errors()
     );
     accumulator.finish()
+}
+
+/// 事件在序列中的位置，用于断言先后顺序。
+fn position(parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> bool) -> usize {
+    parts
+        .iter()
+        .position(|part| part.as_ref().is_ok_and(pick))
+        .unwrap()
 }
 
 #[tokio::test]
@@ -119,12 +130,6 @@ async fn reasoning_content_deltas_are_exposed_before_text() {
 /// 整段正文输出完毕后才收到"推理结束"。
 #[tokio::test]
 async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
-    let position = |parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> bool| {
-        parts
-            .iter()
-            .position(|part| part.as_ref().is_ok_and(pick))
-            .unwrap()
-    };
     let wire = frame(&delta(json!({"reasoning_content": "想"}), None))
         + &frame(&delta(json!({"content": "答"}), None))
         + &frame(&delta(json!({}), Some("stop")))
@@ -156,81 +161,6 @@ async fn reasoning_block_closes_when_text_or_tool_calls_begin() {
     aggregate(parts);
 }
 
-/// 并行工具调用的收尾事件必须按厂商给出的 index 顺序发出，不能依赖哈希表遍历顺序。
-#[tokio::test]
-async fn parallel_tool_calls_finish_in_index_order() {
-    let calls = |items: Vec<Value>| delta(json!({"tool_calls": items}), None);
-    let wire = frame(&calls(vec![
-        json!({"index": 0, "id": "call_a", "type": "function", "function": {"name": "add", "arguments": ""}}),
-        json!({"index": 1, "id": "call_b", "type": "function", "function": {"name": "sub", "arguments": ""}}),
-        json!({"index": 2, "id": "call_c", "type": "function", "function": {"name": "mul", "arguments": ""}}),
-    ])) + &frame(&calls(vec![
-        json!({"index": 2, "function": {"arguments": "{\"c\":3}"}}),
-        json!({"index": 0, "function": {"arguments": "{\"a\":1}"}}),
-        json!({"index": 1, "function": {"arguments": "{\"b\":2}"}}),
-    ])) + &frame(&delta(json!({}), Some("tool_calls")))
-        + DONE;
-    let parts = parse_wire(wire).await;
-    let order: Vec<&str> = parts
-        .iter()
-        .filter_map(|part| match part {
-            Ok(StreamPart::ToolCall { tool_call_id, .. }) => Some(tool_call_id.as_str()),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(order, ["call_a", "call_b", "call_c"]);
-    let result = aggregate(parts);
-    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::ToolCalls);
-    assert!(matches!(
-        &result.content[1],
-        zach_ai_core::OutputContent::ToolCall { tool_call_id, tool_name, input, .. }
-            if tool_call_id == "call_b" && tool_name == "sub" && input == "{\"b\":2}"
-    ));
-}
-
-/// 部分兼容端点对先后发起的多次调用复用 index 0，只能靠 id 变化区分：
-/// 换 id 时上一个调用必须完整发出，参数不能串到新调用里。
-#[tokio::test]
-async fn sequential_tool_calls_reusing_the_same_index_are_split_by_id() {
-    let call = |id: Option<&str>, name: Option<&str>, arguments: &str| {
-        let mut call = json!({"index": 0, "function": {"arguments": arguments}});
-        if let Some(id) = id {
-            call["id"] = json!(id);
-        }
-        if let Some(name) = name {
-            call["function"]["name"] = json!(name);
-        }
-        delta(json!({"tool_calls": [call]}), None)
-    };
-    let wire = frame(&call(Some("call_a"), Some("add"), "{\"a\""))
-        + &frame(&call(None, None, ":1}"))
-        + &frame(&call(Some("call_b"), Some("sub"), "{\"b\":2}"))
-        + &frame(&delta(json!({}), Some("tool_calls")))
-        + DONE;
-    let parts = parse_wire(wire).await;
-    let calls: Vec<(&str, &str, &str)> = parts
-        .iter()
-        .filter_map(|part| match part {
-            Ok(StreamPart::ToolCall {
-                tool_call_id,
-                tool_name,
-                input,
-                ..
-            }) => Some((tool_call_id.as_str(), tool_name.as_str(), input.as_str())),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        calls,
-        [
-            ("call_a", "add", "{\"a\":1}"),
-            ("call_b", "sub", "{\"b\":2}")
-        ]
-    );
-    let result = aggregate(parts);
-    assert_eq!(result.content.len(), 2);
-}
-
 /// 响应元数据在每个分块里都相同，只透出一次；代理固定附带的 `"error": null` 不是错误。
 #[tokio::test]
 async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
@@ -257,24 +187,20 @@ async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
     assert_eq!(result.response.unwrap().id.as_deref(), Some("chatcmpl-1"));
 }
 
-/// 服务端在流中下发 `error` 后通常直接断开而不发 `[DONE]`，此时不能再叠加一个
-/// 可重试的传输错误，否则上层会把厂商错误误判为传输故障并反复重试。
+/// 收尾事件（含 `Finish`）在用量分块到达时就发出，不必等待 `[DONE]`；
+/// 之后的 `[DONE]` 只是终止读取，不会重复收尾。
 #[tokio::test]
-async fn in_band_error_followed_by_connection_close_is_not_a_transport_error() {
-    let wire =
-        frame(&json!({"error": {"message": "invalid request", "type": "invalid_request_error"}}));
+async fn finish_is_emitted_with_usage_and_not_repeated_at_done() {
+    let wire = frame(&delta(json!({"content": "x"}), Some("stop"))) + &frame(&usage_chunk()) + DONE;
     let parts = parse_wire(wire).await;
-    assert_eq!(parts.len(), 2);
-    assert!(matches!(
-        &parts[1],
-        Ok(StreamPart::Error { message, .. }) if message == "invalid request"
-    ));
-    let mut accumulator = StreamAccumulator::new();
-    for part in parts {
-        accumulator.process(part.unwrap());
-    }
     assert_eq!(
-        accumulator.finish().finish_reason.unified,
-        UnifiedFinishReason::Error
+        parts
+            .iter()
+            .filter(|p| matches!(p, Ok(StreamPart::Finish { .. })))
+            .count(),
+        1
     );
+    let finish = position(&parts, |p| matches!(p, StreamPart::Finish { .. }));
+    assert_eq!(finish, parts.len() - 1);
+    assert_eq!(aggregate(parts).usage.output_tokens.total, Some(2));
 }

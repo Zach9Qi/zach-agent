@@ -1,3 +1,5 @@
+//! 模型档案目录：内置数据一致性、文件与厂商名对应、覆盖与 JSON 构建。
+
 use std::fs;
 use std::path::Path;
 
