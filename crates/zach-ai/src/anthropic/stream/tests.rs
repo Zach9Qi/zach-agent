@@ -15,7 +15,7 @@ fn message(content: Vec<Value>, stop_reason: &str) -> Value {
         "content": content, "stop_reason": stop_reason, "stop_sequence": null,
         "usage": {
             "input_tokens": 60, "cache_read_input_tokens": 30, "cache_creation_input_tokens": 10,
-            "output_tokens": 20
+            "output_tokens": 20, "output_tokens_details": {"thinking_tokens": 5}
         }
     })
 }
@@ -32,7 +32,7 @@ fn start_frame() -> String {
 fn stop_frames(stop_reason: &str) -> String {
     event_frame(
         &json!({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": null},
-        "usage": {"output_tokens": 20}}),
+        "usage": {"output_tokens": 20, "output_tokens_details": {"thinking_tokens": 5}}}),
     ) + &event_frame(&json!({"type": "message_stop"}))
 }
 
@@ -82,6 +82,7 @@ async fn utf8_text_deltas_and_cumulative_usage_produce_one_text_block() {
     assert_eq!(result.usage.input_tokens.cache_read, Some(30));
     assert_eq!(result.usage.input_tokens.cache_write, Some(10));
     assert_eq!(result.usage.output_tokens.total, Some(20));
+    assert_eq!(result.usage.output_tokens.reasoning, Some(5));
     assert_eq!(
         result.finish_reason.unified,
         zach_ai_core::UnifiedFinishReason::Stop

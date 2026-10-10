@@ -111,7 +111,9 @@ Agent 层会以 `model.warnings` 事件呈现。
 ## 响应映射
 
 - 用量：`input_tokens` 为未缓存部分，总量为其与 `cache_read_input_tokens`、
-  `cache_creation_input_tokens` 之和，后两者分别映射为 `cache_read` / `cache_write`。
+  `cache_creation_input_tokens` 之和，后两者分别映射为 `cache_read` / `cache_write`；
+  `output_tokens_details.thinking_tokens` 映射为 `output_tokens.reasoning`（流式只在最终的
+  `message_delta` 上给出）。
 - 结束原因：`end_turn` / `stop_sequence` → `stop`，`max_tokens` → `length`，`tool_use` →
   `tool_calls`，`refusal` → `content_filter`，`pause_turn` 等 → `other`；原始值保留在 `raw`，
   `stop_sequence` 与 `stop_details`（拒绝类别与说明）在 `provider_metadata.anthropic` 中。

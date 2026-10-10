@@ -71,8 +71,11 @@ pub(super) fn usage(value: &Value) -> Usage {
         output_tokens: OutputTokenUsage {
             total: value["output_tokens"].as_u64(),
             text: None,
-            // 思考 token 计入 output_tokens，厂商不单独报告。
-            reasoning: None,
+            // 思考 token 计入 output_tokens；`output_tokens_details.thinking_tokens` 单独给出其中的
+            // 思考部分，流式时只出现在最终的 message_delta 上。
+            reasoning: value
+                .pointer("/output_tokens_details/thinking_tokens")
+                .and_then(Value::as_u64),
         },
         raw: value.is_object().then(|| value.clone()),
     }
