@@ -1,16 +1,13 @@
-//! Chat Completions SSE 解码和增量事件转换。
-
-mod sse;
+//! Chat Completions 增量事件转换：解析器接入共用 SSE 驱动。
 
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::pin::Pin;
-use zach_ai_core::{LanguageModelStream, ModelError, StreamPart};
+use std::collections::{HashMap, HashSet};
+use zach_ai_core::{LanguageModelStream, StreamPart};
 
 use super::response::{finish_reason, metadata, response_metadata, usage};
-use sse::SseDecoder;
+use crate::transport::{sse_stream, SseParser};
 
 struct ToolState {
     id: String,
@@ -269,12 +266,18 @@ impl ChatStreamParser {
     }
 }
 
-struct State<S> {
-    source: Pin<Box<S>>,
-    decoder: SseDecoder,
-    parser: ChatStreamParser,
-    queue: VecDeque<Result<StreamPart, ModelError>>,
-    ended: bool,
+impl SseParser for ChatStreamParser {
+    fn data(&mut self, data: &str) -> Vec<StreamPart> {
+        ChatStreamParser::data(self, data)
+    }
+
+    fn terminal(&self) -> bool {
+        self.terminal
+    }
+
+    fn failed(&self) -> bool {
+        self.failed
+    }
 }
 
 pub(super) fn chat_stream<S, E>(source: S, parser: ChatStreamParser) -> LanguageModelStream
@@ -282,56 +285,5 @@ where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: std::error::Error + Send + Sync + 'static,
 {
-    let state = State {
-        source: Box::pin(source),
-        decoder: SseDecoder::default(),
-        parser,
-        queue: VecDeque::from([Ok(StreamPart::StreamStart { warnings: vec![] })]),
-        ended: false,
-    };
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(part) = state.queue.pop_front() {
-                return Some((part, state));
-            }
-            if state.ended {
-                return None;
-            }
-            match state.source.next().await {
-                Some(Ok(bytes)) => match state.decoder.push(&bytes) {
-                    Ok(frames) => {
-                        for frame in frames {
-                            state
-                                .queue
-                                .extend(state.parser.data(&frame).into_iter().map(Ok));
-                            if state.parser.terminal {
-                                state.ended = true;
-                                break;
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        state.queue.push_back(Err(error));
-                        state.ended = true;
-                    }
-                },
-                Some(Err(error)) => {
-                    state.queue.push_back(Err(ModelError::stream_error(
-                        "读取 Chat Completions SSE 字节流失败",
-                        error,
-                    )));
-                    state.ended = true;
-                }
-                None => {
-                    state.ended = true;
-                    if !state.parser.terminal {
-                        state.queue.push_back(Err(ModelError::StreamError {
-                            message: "Chat Completions SSE 在 [DONE] 前结束".into(),
-                            source: None,
-                        }));
-                    }
-                }
-            }
-        }
-    }))
+    sse_stream(super::LABEL, source, parser)
 }

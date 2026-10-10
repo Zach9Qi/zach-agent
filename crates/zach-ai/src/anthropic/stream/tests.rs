@@ -4,8 +4,9 @@ mod failures;
 mod replay;
 
 use super::*;
+use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::{GenerateResult, StreamAccumulator};
+use zach_ai_core::{GenerateResult, ModelError, StreamAccumulator};
 
 fn message(content: Vec<Value>, stop_reason: &str) -> Value {
     json!({
@@ -112,16 +113,6 @@ async fn utf8_text_deltas_and_cumulative_usage_produce_one_text_block() {
     let response = result.response.unwrap();
     assert_eq!(response.id.as_deref(), Some("msg_1"));
     assert_eq!(response.model_id.as_deref(), Some("example"));
-}
-
-#[test]
-fn decoder_supports_multiline_data_comments_and_all_line_endings() {
-    let mut decoder = SseDecoder::default();
-    let frames = decoder
-        .push(b"event: ping\r: heartbeat\rdata: {\"a\":\rdata: 1}\r\rdata: next\n\n")
-        .unwrap();
-    assert_eq!(frames, vec!["{\"a\":\n1}", "next"]);
-    assert!(decoder.push(b"data: partial").unwrap().is_empty());
 }
 
 #[tokio::test]

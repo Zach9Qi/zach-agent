@@ -27,7 +27,6 @@
 //! # }
 //! ```
 
-mod error;
 mod request;
 mod response;
 mod stream;
@@ -44,13 +43,17 @@ use zach_ai_core::{
     CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
 };
 
-use error::http_error;
+use crate::transport;
 use request::{build_request, BuiltRequest};
 use response::parse_response;
 use stream::{messages_stream, MessagesStreamParser};
 
 /// 请求头 `anthropic-version` 的固定值。
 const API_VERSION: &str = "2023-06-01";
+
+/// 厂商标识与错误信息中的协议名称。
+const PROVIDER: &str = "anthropic";
+const LABEL: &str = "Anthropic Messages";
 
 /// Anthropic Messages API 的模型客户端。
 #[derive(Clone)]
@@ -114,26 +117,13 @@ impl AnthropicMessagesModel {
             return Err(ModelError::InvalidRequest("API Key 不能为空".into()));
         }
         let mut headers = self.default_headers.clone();
-        let mut key = HeaderValue::from_str(&self.api_key)
-            .map_err(|_| ModelError::InvalidRequest("API Key 包含非法 HTTP 字符".into()))?;
-        key.set_sensitive(true);
-        headers.insert("x-api-key", key);
+        headers.insert(
+            "x-api-key",
+            transport::sensitive_header(&self.api_key, "API Key")?,
+        );
         headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        if let Some(extra) = &options.headers {
-            for (name, value) in extra {
-                let name = HeaderName::try_from(name.as_str()).map_err(|_| {
-                    ModelError::InvalidRequest(format!("非法 HTTP 请求头名称: {name}"))
-                })?;
-                let mut value = HeaderValue::from_str(value).map_err(|_| {
-                    ModelError::InvalidRequest(format!("非法 HTTP 请求头值: {name}"))
-                })?;
-                if name == "x-api-key" || name == reqwest::header::AUTHORIZATION {
-                    value.set_sensitive(true);
-                }
-                headers.insert(name, value);
-            }
-        }
+        transport::extend_headers(&mut headers, options.headers.as_ref())?;
         if !betas.is_empty() {
             // 请求派生的 beta 标记与调用方显式配置的标记合并为一个逗号分隔的请求头。
             let mut all: Vec<String> = headers
@@ -163,17 +153,10 @@ impl AnthropicMessagesModel {
             .client
             .post(self.endpoint())
             .headers(self.headers(options, &built.betas)?)
-            .header(
-                ACCEPT,
-                if stream {
-                    "text/event-stream"
-                } else {
-                    "application/json"
-                },
-            )
+            .header(ACCEPT, transport::accept(stream))
             .json(&built.body)
             .build()
-            .map_err(|err| ModelError::InvalidRequest(format!("构建 Messages 请求失败: {err}")))?;
+            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
         Ok((request, built))
     }
 
@@ -183,23 +166,15 @@ impl AnthropicMessagesModel {
         stream: bool,
     ) -> Result<(reqwest::Response, BuiltRequest), ModelError> {
         let (request, built) = self.request(options, stream)?;
-        let response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(|err| ModelError::stream_error("请求 Anthropic Messages API 失败", err))?;
-        if response.status().is_success() {
-            Ok((response, built))
-        } else {
-            Err(http_error(response).await)
-        }
+        let response = transport::execute(&self.client, PROVIDER, LABEL, request).await?;
+        Ok((response, built))
     }
 }
 
 #[async_trait]
 impl LanguageModel for AnthropicMessagesModel {
     fn provider(&self) -> &str {
-        "anthropic"
+        PROVIDER
     }
 
     fn model_id(&self) -> &str {
@@ -217,48 +192,16 @@ impl LanguageModel for AnthropicMessagesModel {
 
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
         let (response, built) = self.send(&options, false).await?;
-        let headers = response.headers().clone();
-        let body = response
-            .bytes()
-            .await
-            .map_err(|err| ModelError::stream_error("读取 Anthropic Messages API 响应失败", err))?;
-        let value: serde_json::Value = serde_json::from_slice(&body)?;
+        let (value, headers) = transport::read_json(response, LABEL).await?;
         let mut result = parse_response(value)?;
         result.request_body = Some(built.body);
-        result.response_headers = Some(
-            headers
-                .iter()
-                .filter_map(|(name, value)| {
-                    value
-                        .to_str()
-                        .ok()
-                        .map(|value| (name.to_string(), value.to_owned()))
-                })
-                .collect(),
-        );
+        result.response_headers = Some(headers);
         Ok(result)
     }
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         let (response, _) = self.send(&options, true).await?;
-        let content_type = response
-            .headers()
-            .get(CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default();
-        if !content_type
-            .split(';')
-            .next()
-            .unwrap_or_default()
-            .trim()
-            .eq_ignore_ascii_case("text/event-stream")
-        {
-            return Err(ModelError::provider_error(
-                "anthropic",
-                format!("期望 text/event-stream，收到 {content_type}"),
-                None,
-            ));
-        }
+        transport::require_event_stream(&response, PROVIDER)?;
         let parser = MessagesStreamParser::new(options.include_raw_chunks);
         Ok(messages_stream(response.bytes_stream(), parser))
     }

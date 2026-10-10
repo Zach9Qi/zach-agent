@@ -132,11 +132,3 @@ fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
     );
     assert!(matches!(&parts[0], StreamPart::Error { .. }));
 }
-
-#[test]
-fn invalid_utf8_and_oversized_frames_fail_explicitly() {
-    let mut decoder = SseDecoder::default();
-    assert!(decoder.push(b"data: \xff\n\n").is_err());
-    let mut decoder = SseDecoder::default();
-    assert!(decoder.push(&vec![b'x'; 8 * 1024 * 1024 + 1]).is_err());
-}

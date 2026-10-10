@@ -187,3 +187,29 @@ fn reasoning_max_level_is_rejected_before_sending() {
     let body = request::build_request("gpt-test", &options, false).unwrap();
     assert_eq!(body["reasoning_effort"], "xhigh");
 }
+
+/// 服务端在流中下发 `error` 后通常直接断开而不发 `[DONE]`，此时不能再叠加一个
+/// 可重试的传输错误，否则上层会把厂商错误误判为传输故障并反复重试。
+#[tokio::test]
+async fn in_band_error_followed_by_connection_close_is_not_a_transport_error() {
+    let chunks = "data: {\"error\":{\"message\":\"invalid request\",\"type\":\"invalid_request_error\"}}\n\n";
+    let parts: Vec<_> = chat_stream(
+        stream::iter(vec![Ok::<_, std::io::Error>(Bytes::from(chunks))]),
+        ChatStreamParser::new(false),
+    )
+    .collect()
+    .await;
+    assert_eq!(parts.len(), 2);
+    assert!(matches!(
+        &parts[1],
+        Ok(zach_ai_core::StreamPart::Error { message, .. }) if message == "invalid request"
+    ));
+    let mut accumulator = StreamAccumulator::new();
+    for part in parts {
+        accumulator.process(part.unwrap());
+    }
+    assert_eq!(
+        accumulator.finish().finish_reason.unified,
+        zach_ai_core::UnifiedFinishReason::Error
+    );
+}

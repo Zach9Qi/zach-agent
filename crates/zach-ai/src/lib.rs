@@ -4,6 +4,13 @@ pub mod catalog;
 
 pub use catalog::ModelCatalog;
 
+#[cfg(any(
+    feature = "openai-responses",
+    feature = "openai-chat",
+    feature = "anthropic"
+))]
+mod transport;
+
 #[cfg(feature = "openai-responses")]
 pub mod responses;
 #[cfg(feature = "openai-responses")]

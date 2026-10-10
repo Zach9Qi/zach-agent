@@ -159,14 +159,6 @@ fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
     assert_eq!(paused.finish_reason.raw.as_deref(), Some("pause_turn"));
 }
 
-#[test]
-fn invalid_utf8_and_oversized_frames_fail_explicitly() {
-    let mut decoder = SseDecoder::default();
-    assert!(decoder.push(b"data: \xff\n\n").is_err());
-    let mut decoder = SseDecoder::default();
-    assert!(decoder.push(&vec![b'x'; 8 * 1024 * 1024 + 1]).is_err());
-}
-
 /// 安全分类器拒绝时内容为空，`stop_details` 是唯一的诊断信息，流式与非流式都必须透出。
 #[tokio::test]
 async fn refusal_details_are_exposed_in_finish_metadata() {
