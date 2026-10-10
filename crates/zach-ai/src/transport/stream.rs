@@ -35,6 +35,14 @@ pub(crate) trait SseParser: Send + 'static {
 
     /// 是否已发出 `Finish`（响应已语义完整），之后连接关闭不再视为传输故障。
     fn finished(&self) -> bool;
+
+    /// 源流在终止事件之前结束（EOF、传输错误或空闲超时）时的收尾机会。
+    ///
+    /// 返回的事件先于可能补上的传输错误入队；解析器若在此发出 `Finish`，断开就不再算故障。
+    /// 典型用途：Chat Completions 在 `finish_reason` 已到、只差用量块或 `[DONE]` 时按完成收尾。
+    fn eof(&mut self) -> Vec<StreamPart> {
+        Vec::new()
+    }
 }
 
 struct State<S, P> {
@@ -133,9 +141,10 @@ where
         }
     }
 
-    /// 源流在终止事件之前结束：结果尚未由事件决定时才补一个传输错误。
+    /// 源流在终止事件之前结束：先给解析器收尾机会，结果仍未由事件决定时才补一个传输错误。
     fn end(&mut self, error: ModelError) {
         self.ended = true;
+        self.queue.extend(self.parser.eof().into_iter().map(Ok));
         if !self.settled() {
             self.queue.push_back(Err(error));
         }

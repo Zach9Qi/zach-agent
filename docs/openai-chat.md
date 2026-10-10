@@ -67,9 +67,10 @@ Agent 层会以 `model.warnings` 事件呈现。
 
 ## 流的收尾
 
-`finish_reason` 到达后等用量块（或 `[DONE]`）再发出 `Finish`；`Finish` 之前连接断开视为
-传输错误，之后省略 `[DONE]` 直接断开不影响结果。流内 `error` 分块使本轮结果为 `Error`，
-其后的断开不再额外报告为传输错误。
+`finish_reason` 到达后等用量块（或 `[DONE]`）再发出 `Finish`；不支持 `include_usage` 又省掉
+`[DONE]` 直接断开的端点，在 `finish_reason` 已到时同样按完成收尾（用量为空）。`finish_reason`
+之前连接断开视为传输错误。流内 `error` 分块使本轮结果为 `Error`，其后的断开不再额外报告为
+传输错误。
 
 ## HTTP 配置
 

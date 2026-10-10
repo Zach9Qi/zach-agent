@@ -23,7 +23,7 @@ pub(super) struct ChatStreamParser {
     raw: bool,
     /// 按 `choice.index` 排序，收尾事件因此有确定的顺序。
     choices: BTreeMap<u64, ChoiceState>,
-    /// 已收到的 `finish_reason`，等用量到达或 `[DONE]` 时再发 `Finish`。
+    /// 已收到的 `finish_reason`，等用量到达、`[DONE]` 或连接结束时再发 `Finish`。
     pending_finish: Option<FinishReason>,
     pending_usage: Option<Usage>,
     /// 响应 id / 模型 / 时间戳在所有分块里相同，只在首个分块透出一次。
@@ -162,6 +162,12 @@ impl SseParser for ChatStreamParser {
 
     fn finished(&self) -> bool {
         self.finished
+    }
+
+    /// 不支持 `stream_options.include_usage` 又省掉 `[DONE]` 直接断开的端点：
+    /// `finish_reason` 已到就按完成收尾（用量为空），内容完整的响应不能被判为传输错误。
+    fn eof(&mut self) -> Vec<StreamPart> {
+        self.finish_pending()
     }
 }
 

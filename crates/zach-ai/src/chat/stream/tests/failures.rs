@@ -25,14 +25,12 @@ async fn in_band_error_followed_by_connection_close_is_not_a_transport_error() {
     );
 }
 
-/// `Finish` 发出之前（没有 finish_reason，或有 finish_reason 但用量与 `[DONE]` 都没到）
-/// 断开视为传输错误。
+/// `finish_reason` 到达之前断开视为传输错误。
 #[tokio::test]
-async fn eof_before_finish_is_a_transport_error() {
+async fn eof_before_finish_reason_is_a_transport_error() {
     for wire in [
         String::new(),
         frame(&delta(json!({"content": "半截"}), None)),
-        frame(&delta(json!({"content": "x"}), Some("stop"))),
     ] {
         let parts = parse_wire(wire).await;
         assert!(
@@ -40,6 +38,28 @@ async fn eof_before_finish_is_a_transport_error() {
             "{parts:?}"
         );
     }
+}
+
+/// 不支持 `include_usage` 又省掉 `[DONE]` 直接断开（FIN 或 RST）的端点：`finish_reason`
+/// 已到说明生成已完成，按完成收尾而不是把完整响应判为传输错误；用量缺失保持为空。
+#[tokio::test]
+async fn eof_after_finish_reason_without_usage_or_done_completes_the_turn() {
+    let wire = frame(&delta(json!({"content": "完整"}), Some("tool_calls")));
+    let parts = parse_wire(wire.clone()).await;
+    assert!(parts.iter().all(Result::is_ok), "{parts:?}");
+    let result = aggregate(parts);
+    assert_eq!(result.text(), "完整");
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::ToolCalls);
+    assert_eq!(result.usage, Default::default());
+    let source = futures::stream::iter(vec![
+        Ok(Bytes::from(wire)),
+        Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
+    ]);
+    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
+        .collect::<Vec<_>>()
+        .await;
+    assert!(parts.iter().all(Result::is_ok), "{parts:?}");
+    assert_eq!(aggregate(parts).text(), "完整");
 }
 
 /// 用量块到达即发 `Finish`，之后只剩 `[DONE]`；省掉 `[DONE]` 就断开的代理不应让
