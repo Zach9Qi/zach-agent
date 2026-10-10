@@ -183,3 +183,45 @@ fn empty_text_blocks_are_dropped_but_raw_events_are_observable() {
     assert!(result.content.is_empty());
     assert_eq!(result.usage.output_tokens.total, Some(1));
 }
+
+/// `display: "omitted"` 是 5.x 模型的默认值：思考块只流出一个空 `thinking_delta` 与 `signature_delta`，
+/// 正文为空而只有签名。该块必须作为只带元数据的空推理块保留，并带签名原样回放。
+#[tokio::test]
+async fn omitted_display_thinking_keeps_only_the_signature_and_replays() {
+    let mut wire = start_frame();
+    for event in [
+        json!({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}}),
+        json!({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": ""}}),
+        json!({"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig"}}),
+        json!({"type": "content_block_stop", "index": 0}),
+        json!({"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": "答"}}),
+        json!({"type": "content_block_stop", "index": 1}),
+    ] {
+        wire.push_str(&event_frame(&event));
+    }
+    wire.push_str(&stop_frames("end_turn"));
+    let parts = parse_wire(wire).await;
+    assert!(!parts
+        .iter()
+        .any(|p| matches!(p, Ok(StreamPart::ReasoningDelta { .. }))));
+    let result = aggregate(parts);
+    assert_eq!(result.content.len(), 2);
+    assert!(matches!(
+        &result.content[0],
+        OutputContent::Reasoning { text, provider_metadata: Some(_) } if text.is_empty()
+    ));
+    let request = build_request(
+        "example",
+        None,
+        &CallOptions::new(vec![Message::user("x"), result.into_assistant_message()]),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        request.body["messages"][1]["content"],
+        json!([
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": "答"}
+        ])
+    );
+}
