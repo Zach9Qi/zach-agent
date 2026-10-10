@@ -140,6 +140,12 @@ fn non_stream_response_surfaces_reasoning_content() {
         result.content[0],
         zach_ai_core::OutputContent::Reasoning { .. }
     ));
+    let via_reasoning = json!({
+        "id":"chatcmpl-2", "object":"chat.completion", "created":1700000000, "model":"r1",
+        "choices":[{"index":0,"message":{"role":"assistant","reasoning":"换个字段","content":"3"},"finish_reason":"stop"}]
+    });
+    let result = response::parse_response("openai", via_reasoning).unwrap();
+    assert_eq!(result.reasoning().as_deref(), Some("换个字段"));
 }
 
 /// URL 支持声明必须与请求构建的实际能力一致，防止宿主跳过下载后构建失败。

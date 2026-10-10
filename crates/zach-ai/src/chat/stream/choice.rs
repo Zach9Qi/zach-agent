@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use zach_ai_core::StreamPart;
 
-use super::super::response::metadata;
+use super::super::response::{metadata, reasoning_text};
 
 /// 文本类块的生命周期。
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -65,11 +65,7 @@ impl ChoiceState {
     /// 空字符串占位，照单全收会产生空块与误判的生命周期）；已结束的块不再接受
     /// 增量——End 之后不能再有 Delta，迟到内容只能丢弃。
     pub(super) fn delta(&mut self, delta: &Value, parts: &mut Vec<StreamPart>) {
-        // DeepSeek、Qwen 等兼容端点通过 reasoning_content 下发思考链增量。
-        if let Some(reasoning) = delta["reasoning_content"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-        {
+        if let Some(reasoning) = reasoning_text(delta).filter(|s| !s.is_empty()) {
             if self.reasoning == Block::Pending {
                 self.reasoning = Block::Open;
                 parts.push(StreamPart::ReasoningStart {

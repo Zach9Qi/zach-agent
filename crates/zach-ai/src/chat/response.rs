@@ -24,8 +24,7 @@ pub(super) fn parse_response(provider: &str, value: Value) -> Result<GenerateRes
     accumulator.process(StreamPart::StreamStart { warnings: vec![] });
     accumulator.process(StreamPart::ResponseMetadata(response_metadata(&value)));
     let text_id = format!("choice:{}", choice["index"].as_u64().unwrap_or(0));
-    // DeepSeek、Qwen 等兼容端点在 message.reasoning_content 返回思考链。
-    if let Some(reasoning) = message.get("reasoning_content").and_then(Value::as_str) {
+    if let Some(reasoning) = reasoning_text(&choice["message"]) {
         let id = format!("{text_id}/reasoning");
         accumulator.process(StreamPart::ReasoningStart {
             id: id.clone(),
@@ -113,6 +112,14 @@ pub(super) fn parse_response(provider: &str, value: Value) -> Result<GenerateRes
         provider_metadata: metadata(json!({"object": value["object"]})),
     });
     Ok(accumulator.finish())
+}
+
+/// 思考链字段：DeepSeek、Qwen、xAI 等用 `reasoning_content`，OpenRouter、Ollama、Groq 等用
+/// `reasoning`；两者都识别，非字符串取值（如结构化的推理明细）忽略。
+pub(super) fn reasoning_text(container: &Value) -> Option<&str> {
+    ["reasoning_content", "reasoning"]
+        .into_iter()
+        .find_map(|field| container[field].as_str())
 }
 
 pub(super) fn response_metadata(value: &Value) -> ResponseMetadata {

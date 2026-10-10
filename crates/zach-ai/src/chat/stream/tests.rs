@@ -127,6 +127,22 @@ async fn reasoning_content_deltas_are_exposed_before_text() {
     ));
 }
 
+/// OpenRouter、Ollama、Groq 等端点用 `reasoning` 字段下发思考链，与 `reasoning_content` 同等对待；
+/// 结构化取值（如推理明细数组）不是正文，忽略。
+#[tokio::test]
+async fn reasoning_field_is_treated_like_reasoning_content() {
+    let wire = frame(&delta(
+        json!({"role": "assistant", "reasoning": "先", "reasoning_details": [{"type": "x"}]}),
+        None,
+    )) + &frame(&delta(json!({"reasoning": "算"}), None))
+        + &frame(&delta(json!({"content": "3"}), None))
+        + &frame(&delta(json!({}), Some("stop")))
+        + DONE;
+    let result = aggregate(parse_wire(wire).await);
+    assert_eq!(result.reasoning().as_deref(), Some("先算"));
+    assert_eq!(result.text(), "3");
+}
+
 /// 推理块必须在首个正文或工具增量到达时关闭，而不是拖到流收尾，否则 UI 会在
 /// 整段正文输出完毕后才收到"推理结束"。
 #[tokio::test]

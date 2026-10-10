@@ -43,8 +43,8 @@ while let Some(part) = stream.next().await {
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
 
-DeepSeek、Qwen 等兼容端点通过 `reasoning_content` 字段返回思考链，适配器会将其以
-`Reasoning` 事件透出（流式与非流式一致）。思考阶段伴发的空 `content` 占位不会提前
+DeepSeek、Qwen、xAI 等端点通过 `reasoning_content` 字段、OpenRouter、Ollama、Groq 等通过
+`reasoning` 字段返回思考链，适配器都会将其以 `Reasoning` 事件透出（流式与非流式一致）。思考阶段伴发的空 `content` 占位不会提前
 结束推理块；推理块在首个非空正文、拒绝或工具调用增量到达时关闭，收尾后迟到的增量
 一律忽略。由于 Chat Completions 的输入消息不接受
 思考链字段（部分端点收到会直接报错），历史中的推理块不会回传。
