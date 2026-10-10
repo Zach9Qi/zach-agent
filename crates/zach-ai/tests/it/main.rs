@@ -10,5 +10,10 @@ mod responses;
 #[cfg(feature = "openai-chat")]
 mod chat;
 
+#[cfg(feature = "openai-chat")]
+mod http;
+#[cfg(feature = "openai-chat")]
+mod support;
+
 #[cfg(feature = "anthropic")]
 mod anthropic;
