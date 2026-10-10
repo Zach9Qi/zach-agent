@@ -1,9 +1,9 @@
-//! Chat Completions 的 HTTP 请求契约与非流式结果；模型身份等公开契约见 `tests/it/chat.rs`，
-//! 请求参数映射见 `tests/params.rs`，流式生命周期见 `stream/tests.rs`。
-
-mod params;
+//! Chat Completions 的 HTTP 请求契约、超时策略与注入档案的接线；模型身份等公开契约见
+//! `tests/it/chat.rs`，请求参数映射见 `request/tests.rs`，非流式解析见 `response/tests.rs`，
+//! 流式生命周期见 `stream/tests.rs`。
 
 use super::*;
+use crate::test_support::profile;
 use serde_json::{json, Value};
 use zach_ai_core::{CallOptions, Message};
 
@@ -28,24 +28,6 @@ fn request_uses_chat_endpoint_and_openai_message_shapes() {
         json!({"role":"user", "content":"你好"})
     );
     assert_eq!(body["stream_options"]["include_usage"], true);
-}
-
-#[test]
-fn non_stream_response_maps_text_tool_calls_and_usage() {
-    let value = json!({
-        "id":"chatcmpl-1", "object":"chat.completion", "created":1700000000, "model":"gpt-test",
-        "choices":[{"index":0,"message":{"role":"assistant","content":"你好","tool_calls":[{"id":"call_1","type":"function","function":{"name":"sum","arguments":"{\"a\":1}"}}]},"finish_reason":"tool_calls"}],
-        "usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_tokens_details":{"cached_tokens":2}}
-    });
-    let result = response::parse_response("openai", value).unwrap();
-    assert_eq!(result.text(), "你好");
-    assert_eq!(result.usage.input_tokens.total, Some(10));
-    assert_eq!(result.usage.input_tokens.cache_read, Some(2));
-    assert!(matches!(
-        result.finish_reason.unified,
-        zach_ai_core::UnifiedFinishReason::ToolCalls
-    ));
-    assert!(result.content.iter().any(|item| matches!(item, zach_ai_core::OutputContent::ToolCall { tool_call_id, .. } if tool_call_id == "call_1")));
 }
 
 /// Ollama、vLLM 等本地端点不需要 Key，空 Key 不应被拒绝，也不应发送空的 Authorization。
@@ -84,44 +66,17 @@ fn generate_requests_carry_a_total_timeout_and_stream_requests_do_not() {
     assert_eq!(generate.timeout(), None);
 }
 
-/// 扩展参数优先读声明厂商的键，未提供时回退协议方 `openai` 的键。
+/// 注入的档案参与请求校验：不支持推理的模型丢弃档位并给出警告。
 #[test]
-fn provider_options_read_the_declared_provider_key_and_fall_back_to_openai() {
-    use zach_ai_core::ProviderOptions;
-    let mut options = CallOptions::new(vec![Message::user("x")]);
-    let mut provider = ProviderOptions::new();
-    provider.insert("deepseek", json!({"thinking": {"type": "disabled"}}));
-    provider.insert("openai", json!({"ignored": true}));
-    options.provider_options = Some(provider);
-    let built = request::build_request("deepseek-chat", "deepseek", None, &options, false).unwrap();
-    assert_eq!(built.body["thinking"], json!({"type": "disabled"}));
-    assert!(built.body.get("ignored").is_none());
-    let mut provider = ProviderOptions::new();
-    provider.insert("openai", json!({"enable_thinking": false}));
-    options.provider_options = Some(provider);
-    let built = request::build_request("deepseek-chat", "deepseek", None, &options, false).unwrap();
-    assert_eq!(built.body["enable_thinking"], false);
-}
-
-/// 兼容端点（DeepSeek/Qwen）在 message.reasoning_content 返回思考链，不能被静默丢弃。
-#[test]
-fn non_stream_response_surfaces_reasoning_content() {
-    let value = json!({
-        "id":"chatcmpl-1", "object":"chat.completion", "created":1700000000, "model":"r1",
-        "choices":[{"index":0,"message":{"role":"assistant","reasoning_content":"先算加法","content":"结果是 3"},"finish_reason":"stop"}],
-        "usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}
-    });
-    let result = response::parse_response("openai", value).unwrap();
-    assert_eq!(result.reasoning().as_deref(), Some("先算加法"));
-    assert_eq!(result.text(), "结果是 3");
+fn injected_profile_drives_request_validation() {
+    let gpt41 = profile("openai", "gpt-4.1", None, true);
+    let model = OpenAiChatCompletionsModel::new("k", "proxy-model").with_profile(gpt41);
+    let options = CallOptions::new(vec![Message::user("x")])
+        .with_reasoning(zach_ai_core::ReasoningEffort::High);
+    let (_, built) = model.request(&options, false).unwrap();
+    assert!(built.body.get("reasoning_effort").is_none());
     assert!(matches!(
-        result.content[0],
-        zach_ai_core::OutputContent::Reasoning { .. }
+        &built.warnings[0],
+        zach_ai_core::ModelWarning::Unsupported { feature, .. } if feature == "reasoning"
     ));
-    let via_reasoning = json!({
-        "id":"chatcmpl-2", "object":"chat.completion", "created":1700000000, "model":"r1",
-        "choices":[{"index":0,"message":{"role":"assistant","reasoning":"换个字段","content":"3"},"finish_reason":"stop"}]
-    });
-    let result = response::parse_response("openai", via_reasoning).unwrap();
-    assert_eq!(result.reasoning().as_deref(), Some("换个字段"));
 }

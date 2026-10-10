@@ -1,7 +1,6 @@
-//! 截断、损坏分块、流内错误与非法响应不得被解析成成功结果。
+//! 截断、损坏分块与流内错误不得被解析成成功结果。
 
 use super::*;
-use crate::chat::response::parse_response;
 
 /// 服务端在流中下发 `error` 后通常直接断开而不发 `[DONE]`，此时不能再叠加一个
 /// 可重试的传输错误，否则上层会把厂商错误误判为传输故障并反复重试。
@@ -116,43 +115,4 @@ async fn malformed_chunks_poison_the_turn_but_later_data_is_still_collected() {
     assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
     assert_eq!(result.text(), "诊断");
     assert_eq!(result.usage.input_tokens.total, Some(3));
-}
-
-#[test]
-fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
-    for response in [
-        json!({}),
-        json!({"choices": []}),
-        json!({"choices": [{"index": 0}]}),
-        json!({"choices": [{"index": 0, "message": {"tool_calls": [{"id": "c"}]}}]}),
-    ] {
-        assert!(
-            parse_response("openai", response.clone()).is_err(),
-            "{response}"
-        );
-    }
-    // 兼容端点可能省略 finish_reason，按正常结束处理但 raw 为空。
-    let lenient = parse_response(
-        "openai",
-        json!({
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]
-        }),
-    )
-    .unwrap();
-    assert_eq!(lenient.finish_reason.unified, UnifiedFinishReason::Stop);
-    assert_eq!(lenient.finish_reason.raw, None);
-    assert_eq!(lenient.text(), "ok");
-    let filtered = parse_response(
-        "openai",
-        json!({
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": null},
-                "finish_reason": "content_filter"}]
-        }),
-    )
-    .unwrap();
-    assert_eq!(
-        filtered.finish_reason.unified,
-        UnifiedFinishReason::ContentFilter
-    );
-    assert!(filtered.content.is_empty());
 }

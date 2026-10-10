@@ -4,6 +4,9 @@ mod media;
 mod messages;
 mod tools;
 
+#[cfg(test)]
+mod tests;
+
 use serde_json::{json, Value};
 use zach_ai_core::{
     CallOptions, ModelError, ModelProfile, ModelWarning, ReasoningEffort, ResponseFormat,

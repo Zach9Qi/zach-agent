@@ -1,5 +1,8 @@
 //! Chat Completions 非流式响应转换。
 
+#[cfg(test)]
+mod tests;
+
 use serde_json::{json, Value};
 use zach_ai_core::{
     FinishReason, GenerateResult, InputTokenUsage, ModelError, OutputTokenUsage, ProviderMetadata,
