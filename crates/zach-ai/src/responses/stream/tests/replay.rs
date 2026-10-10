@@ -111,6 +111,21 @@ async fn empty_reasoning_and_final_only_outputs_are_kept() {
     assert_eq!(result, parse_response(response).unwrap());
 }
 
+/// 部分模型的推理项没有 summary 字段，必须按空摘要处理而非让整轮失败。
+#[tokio::test]
+async fn reasoning_without_summary_field_is_kept_as_empty_not_an_error() {
+    let reasoning = json!({"type": "reasoning", "id": "rs_ns", "encrypted_content": "opaque"});
+    let payload = response(vec![reasoning, message("答案")]);
+    let wire = frame(&json!({"type": "response.completed", "response": payload.clone()}));
+    let result = aggregate(parse_wire(wire).await);
+    assert!(matches!(
+        &result.content[0],
+        OutputContent::Reasoning { text, provider_metadata: Some(_) } if text.is_empty()
+    ));
+    assert_eq!(result.text(), "答案");
+    assert_eq!(result, parse_response(payload).unwrap());
+}
+
 #[test]
 fn refusal_and_citations_are_preserved_without_duplicating_output_items() {
     let mut item = message("答案");

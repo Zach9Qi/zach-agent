@@ -186,7 +186,15 @@ impl ResponsesStreamParser {
             });
         } else {
             for item in response["output"].as_array().expect("finish 已校验 output") {
-                self.finish_item(item, &mut parts)?;
+                // 单个输出项解析失败不能吞掉终止事件：降级为 Error 并继续
+                // 处理其余项，保证末尾的 Finish（用量与停止原因）始终发出。
+                if let Err(error) = self.finish_item(item, &mut parts) {
+                    self.failed = true;
+                    parts.push(StreamPart::Error {
+                        message: error.to_string(),
+                        raw: Some(item.clone()),
+                    });
+                }
             }
         }
         parts.push(terminal);

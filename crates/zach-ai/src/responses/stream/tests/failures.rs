@@ -64,6 +64,32 @@ async fn malformed_events_cannot_be_rescued_by_a_later_completed_response() {
     assert_eq!(result.usage.input_tokens.total, Some(100));
 }
 
+/// 终止事件中出现未适配的输出项时，Finish（用量与停止原因）不能被整体吞掉，
+/// 其余输出项也要继续解析；非流式路径保持整体报错语义不变。
+#[tokio::test]
+async fn unadapted_output_item_cannot_swallow_finish_and_usage() {
+    let unknown = json!({"type": "web_search_call", "id": "ws_1", "status": "completed"});
+    let payload = response(vec![unknown, message("答案")]);
+    let wire = frame(&json!({"type": "response.completed", "response": payload}));
+    let parts = parse_wire(wire).await;
+    assert!(parts.iter().all(Result::is_ok));
+    assert!(parts
+        .iter()
+        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(parts.iter().any(|p| matches!(
+        p,
+        Ok(StreamPart::Finish { usage, .. }) if usage.input_tokens.total == Some(100)
+    )));
+    let mut accumulator = StreamAccumulator::new();
+    for part in parts {
+        accumulator.process(part.unwrap());
+    }
+    let result = accumulator.finish();
+    assert_eq!(result.text(), "答案");
+    assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);
+    assert!(parse_response(payload).is_err());
+}
+
 #[tokio::test]
 async fn failed_and_incomplete_responses_have_distinct_outcomes() {
     let mut failed = response(vec![]);

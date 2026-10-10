@@ -47,9 +47,9 @@ impl ResponsesStreamParser {
         match string(item, "type")? {
             "function_call" => self.finish_call(item, parts)?,
             "reasoning" => {
-                let summary = item["summary"].as_array().ok_or_else(|| {
-                    ModelError::provider_error("openai", "推理项缺少 summary 数组", None)
-                })?;
+                // 部分模型（如 gpt-oss）的推理项可能没有 summary 字段，按空摘要处理。
+                let empty = Vec::new();
+                let summary = item["summary"].as_array().unwrap_or(&empty);
                 let mut text = String::new();
                 for part in summary {
                     text.push_str(string(part, "text")?);
