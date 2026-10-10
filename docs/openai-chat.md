@@ -29,8 +29,13 @@ while let Some(part) = stream.next().await {
 而不是静默丢弃。
 
 接入 Ollama、vLLM、LM Studio 等无需鉴权的兼容端点时 API Key 传空字符串即可，
-此时不发送 `Authorization` 头。兼容端点上的模型不在内置目录中，可用
-`with_profile(ModelProfile)` 注入档案（例如从 `ModelCatalog::builtin().get("deepseek", ...)` 复制）。
+此时不发送 `Authorization` 头。
+
+接入 DeepSeek、Qwen 等第三方兼容端点时用 `with_provider("deepseek")` 声明厂商身份：
+`provider()` 与错误中的厂商名随之变化，模型档案改按该厂商在内置目录中查询
+（`("deepseek", "deepseek-v4-pro")` 这类条目无需再手动注入），`provider_options` 也改读该厂商键
+（未提供时回退 `openai` 键）。响应元数据与回放标记（如 `refusal`）属于协议层，固定使用 `openai` 键。
+内置目录未收录的模型仍可用 `with_profile(ModelProfile)` 注入档案。
 
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
@@ -77,7 +82,8 @@ HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5x
 
 ## 厂商扩展
 
-`CallOptions.provider_options` 的 `openai` 对象原样并入请求正文：Chat Completions 是众多
+`CallOptions.provider_options` 中声明厂商对应的对象（默认 `openai`，`with_provider` 声明后优先读
+该厂商键、缺省回退 `openai`）原样并入请求正文：Chat Completions 是众多
 兼容端点的通用协议，各家私有字段（如 Qwen 的 `enable_thinking`、vLLM 的 `chat_template_kwargs`、
 只认 `max_tokens` 的旧端点）无法穷举，因此采用透传。但已由通用参数写入的字段
 （`model`、`messages`、`stream`、`temperature`、`tools` 等）不允许覆盖，会在发送前以

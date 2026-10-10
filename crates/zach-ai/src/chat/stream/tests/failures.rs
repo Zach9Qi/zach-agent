@@ -128,20 +128,29 @@ fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
         json!({"choices": [{"index": 0}]}),
         json!({"choices": [{"index": 0, "message": {"tool_calls": [{"id": "c"}]}}]}),
     ] {
-        assert!(parse_response(response.clone()).is_err(), "{response}");
+        assert!(
+            parse_response("openai", response.clone()).is_err(),
+            "{response}"
+        );
     }
     // 兼容端点可能省略 finish_reason，按正常结束处理但 raw 为空。
-    let lenient = parse_response(json!({
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]
-    }))
+    let lenient = parse_response(
+        "openai",
+        json!({
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}]
+        }),
+    )
     .unwrap();
     assert_eq!(lenient.finish_reason.unified, UnifiedFinishReason::Stop);
     assert_eq!(lenient.finish_reason.raw, None);
     assert_eq!(lenient.text(), "ok");
-    let filtered = parse_response(json!({
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": null},
-            "finish_reason": "content_filter"}]
-    }))
+    let filtered = parse_response(
+        "openai",
+        json!({
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": null},
+                "finish_reason": "content_filter"}]
+        }),
+    )
     .unwrap();
     assert_eq!(
         filtered.finish_reason.unified,

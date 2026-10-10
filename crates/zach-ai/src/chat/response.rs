@@ -6,7 +6,11 @@ use zach_ai_core::{
     ResponseMetadata, StreamAccumulator, StreamPart, UnifiedFinishReason, Usage,
 };
 
-pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError> {
+/// `provider` 只用于错误归属；响应元数据固定使用协议方 `openai` 的键。
+pub(super) fn parse_response(provider: &str, value: Value) -> Result<GenerateResult, ModelError> {
+    let error = |message: &str, raw: &Value| {
+        ModelError::provider_error(provider, message, Some(raw.clone()))
+    };
     let choices = value["choices"]
         .as_array()
         .ok_or_else(|| error("响应缺少 choices 数组", &value))?;
@@ -70,12 +74,12 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
     }
     if let Some(calls) = message.get("tool_calls").and_then(Value::as_array) {
         for call in calls {
-            let id = string(call, "/id")?;
+            let id = string(provider, call, "/id")?;
             let function = call
                 .get("function")
                 .ok_or_else(|| error("工具调用缺少 function", call))?;
-            let name = string(function, "/name")?;
-            let arguments = string(function, "/arguments")?;
+            let name = string(provider, function, "/name")?;
+            let arguments = string(provider, function, "/arguments")?;
             accumulator.process(StreamPart::ToolInputStart {
                 id: id.clone(),
                 tool_name: name.clone(),
@@ -166,7 +170,7 @@ pub(super) fn finish_reason(value: Option<&str>) -> FinishReason {
     }
 }
 
-fn string(value: &Value, path: &str) -> Result<String, ModelError> {
+fn string(provider: &str, value: &Value, path: &str) -> Result<String, ModelError> {
     let target = if path.starts_with('/') {
         value.pointer(path)
     } else {
@@ -175,8 +179,11 @@ fn string(value: &Value, path: &str) -> Result<String, ModelError> {
     target
         .and_then(Value::as_str)
         .map(str::to_owned)
-        .ok_or_else(|| error(&format!("响应缺少字符串字段 {path}"), value))
-}
-fn error(message: &str, raw: &Value) -> ModelError {
-    ModelError::provider_error("openai", message, Some(raw.clone()))
+        .ok_or_else(|| {
+            ModelError::provider_error(
+                provider,
+                format!("响应缺少字符串字段 {path}"),
+                Some(value.clone()),
+            )
+        })
 }

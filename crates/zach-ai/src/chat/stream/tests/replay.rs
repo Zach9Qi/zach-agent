@@ -173,7 +173,7 @@ async fn tool_calls_match_the_non_stream_shape_and_replay_into_the_next_request(
         + &frame(&usage_chunk())
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
-    let generated = parse_response(json!({
+    let generated = parse_response("openai", json!({
         "id": "chatcmpl-1", "object": "chat.completion", "created": 1700000000, "model": "example",
         "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
             "role": "assistant", "content": "我来算",
@@ -198,7 +198,7 @@ async fn tool_calls_match_the_non_stream_shape_and_replay_into_the_next_request(
             json!({"sum": 2}),
         )]),
     ]);
-    let body = build_request("example", None, &options, false)
+    let body = build_request("example", "openai", None, &options, false)
         .unwrap()
         .body;
     assert_eq!(
@@ -224,7 +224,7 @@ async fn refusal_is_marked_in_metadata_and_replayed_as_refusal_field() {
         + &frame(&delta(json!({}), Some("stop")))
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
-    let generated = parse_response(json!({
+    let generated = parse_response("openai", json!({
         "id": "chatcmpl-1", "object": "chat.completion", "created": 1700000000, "model": "example",
         "choices": [{"index": 0, "finish_reason": "stop",
             "message": {"role": "assistant", "content": null, "refusal": "无法回答"}}]
@@ -238,7 +238,7 @@ async fn refusal_is_marked_in_metadata_and_replayed_as_refusal_field() {
                 && metadata.get::<Value>("openai").unwrap()["refusal"] == true
     ));
     let options = CallOptions::new(vec![Message::user("x"), streamed.into_assistant_message()]);
-    let body = build_request("example", None, &options, false)
+    let body = build_request("example", "openai", None, &options, false)
         .unwrap()
         .body;
     assert_eq!(body["messages"][1]["refusal"], "无法回答");
@@ -253,7 +253,7 @@ async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
         + &frame(&delta(json!({}), Some("stop")))
         + DONE;
     let streamed = aggregate(parse_wire(wire).await);
-    let generated = parse_response(json!({
+    let generated = parse_response("openai", json!({
         "id": "chatcmpl-1", "object": "chat.completion", "created": 1700000000, "model": "example",
         "choices": [{"index": 0, "finish_reason": "stop",
             "message": {"role": "assistant", "reasoning_content": "先算", "content": "3"}}]
@@ -261,7 +261,7 @@ async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
     .unwrap();
     assert_eq!(streamed.content, generated.content);
     let options = CallOptions::new(vec![Message::user("x"), streamed.into_assistant_message()]);
-    let body = build_request("example", None, &options, false)
+    let body = build_request("example", "openai", None, &options, false)
         .unwrap()
         .body;
     assert_eq!(

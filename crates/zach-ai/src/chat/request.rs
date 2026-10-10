@@ -18,8 +18,10 @@ pub(super) struct BuiltRequest {
     pub(super) warnings: Vec<ModelWarning>,
 }
 
+/// `provider` 是模型声明的厂商身份，决定 `provider_options` 读取的键。
 pub(super) fn build_request(
     model_id: &str,
+    provider: &str,
     profile: Option<&ModelProfile>,
     options: &CallOptions,
     stream: bool,
@@ -88,26 +90,30 @@ pub(super) fn build_request(
     if stream {
         body["stream_options"] = json!({"include_usage": true});
     }
-    apply_provider_options(&mut body, options)?;
+    apply_provider_options(&mut body, provider, options)?;
     Ok(BuiltRequest { body, warnings })
 }
 
-/// 合并 `provider_options.openai`。
+/// 合并厂商扩展参数：优先读声明的厂商键，未提供时回退协议方 `openai` 的键。
 ///
 /// Chat Completions 是众多兼容端点的通用协议，各家私有字段（Qwen 的 `enable_thinking`、
 /// vLLM 的 `chat_template_kwargs` 等）无法穷举，因此采用透传策略；但已由通用参数写入
 /// 正文的字段不允许被悄悄覆盖，否则 `CallOptions` 上的设置会在不知情的情况下失效。
-fn apply_provider_options(body: &mut Value, options: &CallOptions) -> Result<(), ModelError> {
-    let Some(extra) = options
-        .provider_options
-        .as_ref()
-        .and_then(|p| p.inner.get("openai"))
-    else {
+fn apply_provider_options(
+    body: &mut Value,
+    provider: &str,
+    options: &CallOptions,
+) -> Result<(), ModelError> {
+    let Some((key, extra)) = options.provider_options.as_ref().and_then(|p| {
+        [provider, "openai"]
+            .into_iter()
+            .find_map(|key| p.inner.get(key).map(|extra| (key, extra)))
+    }) else {
         return Ok(());
     };
     let fields = extra
         .as_object()
-        .ok_or_else(|| ModelError::InvalidRequest("provider_options.openai 必须是对象".into()))?;
+        .ok_or_else(|| ModelError::InvalidRequest(format!("provider_options.{key} 必须是对象")))?;
     for (key, value) in fields {
         if body.get(key).is_some() {
             return Err(ModelError::unsupported(

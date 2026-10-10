@@ -25,7 +25,7 @@ use request::{build_request, BuiltRequest};
 use response::parse_response;
 use stream::{chat_stream, ChatStreamParser};
 
-/// 厂商标识与错误信息中的协议名称。
+/// 默认厂商标识与错误信息中的协议名称。
 const PROVIDER: &str = "openai";
 const LABEL: &str = "OpenAI Chat Completions";
 
@@ -36,6 +36,9 @@ pub struct OpenAiChatCompletionsModel {
     api_key: Arc<str>,
     base_url: Arc<str>,
     model_id: Arc<str>,
+    /// 厂商标识，默认 `openai`；接入兼容端点时可声明为 `deepseek`、`alibaba` 等，
+    /// 决定档案查询、错误归属与 `provider_options` 的键。
+    provider: Arc<str>,
     default_headers: HeaderMap,
     /// 调用方注入的档案，优先于内置目录。
     profile: Option<Arc<ModelProfile>>,
@@ -45,6 +48,7 @@ pub struct OpenAiChatCompletionsModel {
 impl fmt::Debug for OpenAiChatCompletionsModel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("OpenAiChatCompletionsModel")
+            .field("provider", &self.provider)
             .field("base_url", &self.base_url)
             .field("model_id", &self.model_id)
             .finish_non_exhaustive()
@@ -68,6 +72,7 @@ impl OpenAiChatCompletionsModel {
             api_key: Arc::from(api_key.into()),
             base_url: Arc::from("https://api.openai.com/v1"),
             model_id: Arc::from(model_id.into()),
+            provider: Arc::from(PROVIDER),
             default_headers: HeaderMap::new(),
             profile: None,
             timeouts: transport::Timeouts::default(),
@@ -96,6 +101,16 @@ impl OpenAiChatCompletionsModel {
     /// 自定义端点、代理或内置目录尚未收录的模型据此获得 `max_tokens` 默认值等档案信息。
     pub fn with_profile(mut self, profile: ModelProfile) -> Self {
         self.profile = Some(Arc::new(profile));
+        self
+    }
+
+    /// 声明厂商身份（如 `deepseek`、`alibaba`），用于接入第三方的 Chat Completions 兼容端点。
+    ///
+    /// 影响 [`LanguageModel::provider`]、错误中的厂商名、内置目录的档案查询，以及
+    /// `provider_options` 读取的键（未提供该厂商键时回退 `openai` 键）。
+    /// 响应元数据与回放标记属于协议层，始终使用 `openai` 键。
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = Arc::from(provider.into());
         self
     }
 
@@ -135,7 +150,13 @@ impl OpenAiChatCompletionsModel {
         options: &CallOptions,
         stream: bool,
     ) -> Result<(reqwest::Request, BuiltRequest), ModelError> {
-        let built = build_request(&self.model_id, self.profile(), options, stream)?;
+        let built = build_request(
+            &self.model_id,
+            &self.provider,
+            self.profile(),
+            options,
+            stream,
+        )?;
         let mut request = self
             .client
             .post(self.endpoint())
@@ -156,7 +177,7 @@ impl OpenAiChatCompletionsModel {
         let (request, built) = self.request(options, stream)?;
         let response = transport::execute(
             &self.client,
-            PROVIDER,
+            &self.provider,
             LABEL,
             request,
             self.timeouts.guard(stream),
@@ -169,7 +190,7 @@ impl OpenAiChatCompletionsModel {
 #[async_trait]
 impl LanguageModel for OpenAiChatCompletionsModel {
     fn provider(&self) -> &str {
-        PROVIDER
+        &self.provider
     }
 
     fn model_id(&self) -> &str {
@@ -192,7 +213,7 @@ impl LanguageModel for OpenAiChatCompletionsModel {
     async fn do_generate(&self, options: CallOptions) -> Result<GenerateResult, ModelError> {
         let (response, built) = self.send(&options, false).await?;
         let (value, headers) = transport::read_json(response, LABEL).await?;
-        let mut result = parse_response(value)?;
+        let mut result = parse_response(&self.provider, value)?;
         result.request_body = Some(built.body);
         result.response_headers = Some(headers);
         result.warnings = built.warnings;
@@ -201,7 +222,7 @@ impl LanguageModel for OpenAiChatCompletionsModel {
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         let (response, built) = self.send(&options, true).await?;
-        transport::require_event_stream(&response, PROVIDER)?;
+        transport::require_event_stream(&response, &self.provider)?;
         Ok(chat_stream(
             response.bytes_stream(),
             ChatStreamParser::new(options.include_raw_chunks),

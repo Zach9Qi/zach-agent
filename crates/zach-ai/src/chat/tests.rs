@@ -34,7 +34,7 @@ fn non_stream_response_maps_text_tool_calls_and_usage() {
         "choices":[{"index":0,"message":{"role":"assistant","content":"你好","tool_calls":[{"id":"call_1","type":"function","function":{"name":"sum","arguments":"{\"a\":1}"}}]},"finish_reason":"tool_calls"}],
         "usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_tokens_details":{"cached_tokens":2}}
     });
-    let result = response::parse_response(value).unwrap();
+    let result = response::parse_response("openai", value).unwrap();
     assert_eq!(result.text(), "你好");
     assert_eq!(result.usage.input_tokens.total, Some(10));
     assert_eq!(result.usage.input_tokens.cache_read, Some(2));
@@ -95,6 +95,36 @@ fn chat_model_identity_does_not_expose_api_key() {
     assert!(!format!("{model:?}").contains("private"));
 }
 
+/// 接入 DeepSeek、Qwen 等兼容端点时声明厂商身份：档案改按该厂商查内置目录，
+/// 扩展参数改读该厂商键（未提供时回退 openai 键），回放标记仍是协议层的 openai 键。
+#[test]
+fn declared_provider_drives_catalog_lookup_and_provider_options_key() {
+    use zach_ai_core::ProviderOptions;
+    let catalog = crate::ModelCatalog::builtin();
+    let deepseek = catalog.provider_models("deepseek")[0];
+    let model = OpenAiChatCompletionsModel::new("k", &deepseek.id)
+        .with_base_url("https://api.deepseek.com/v1")
+        .with_provider("deepseek");
+    assert_eq!(model.provider(), "deepseek");
+    assert_eq!(model.profile(), Some(deepseek));
+    assert!(OpenAiChatCompletionsModel::new("k", &deepseek.id)
+        .profile()
+        .is_none());
+    let mut options = CallOptions::new(vec![Message::user("x")]);
+    let mut provider = ProviderOptions::new();
+    provider.insert("deepseek", json!({"thinking": {"type": "disabled"}}));
+    provider.insert("openai", json!({"ignored": true}));
+    options.provider_options = Some(provider);
+    let (_, built) = model.request(&options, false).unwrap();
+    assert_eq!(built.body["thinking"], json!({"type": "disabled"}));
+    assert!(built.body.get("ignored").is_none());
+    let mut provider = ProviderOptions::new();
+    provider.insert("openai", json!({"enable_thinking": false}));
+    options.provider_options = Some(provider);
+    let (_, built) = model.request(&options, false).unwrap();
+    assert_eq!(built.body["enable_thinking"], false);
+}
+
 /// 兼容端点（DeepSeek/Qwen）在 message.reasoning_content 返回思考链，不能被静默丢弃。
 #[test]
 fn non_stream_response_surfaces_reasoning_content() {
@@ -103,7 +133,7 @@ fn non_stream_response_surfaces_reasoning_content() {
         "choices":[{"index":0,"message":{"role":"assistant","reasoning_content":"先算加法","content":"结果是 3"},"finish_reason":"stop"}],
         "usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}
     });
-    let result = response::parse_response(value).unwrap();
+    let result = response::parse_response("openai", value).unwrap();
     assert_eq!(result.reasoning().as_deref(), Some("先算加法"));
     assert_eq!(result.text(), "结果是 3");
     assert!(matches!(
@@ -140,7 +170,7 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
         provider_options: None,
     }])]);
     assert!(matches!(
-        request::build_request("gpt-test", None, &image, false),
+        request::build_request("gpt-test", "openai", None, &image, false),
         Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
     ));
     let text = CallOptions::new(vec![result(vec![ToolResultContentBlock::File {
@@ -151,7 +181,7 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
         filename: None,
         provider_options: None,
     }])]);
-    let body = request::build_request("gpt-test", None, &text, false)
+    let body = request::build_request("gpt-test", "openai", None, &text, false)
         .unwrap()
         .body;
     assert_eq!(
@@ -170,7 +200,7 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
         json!({"enable_thinking": true, "chat_template_kwargs": {"x": 1}, "max_tokens": 64}),
     );
     options.provider_options = Some(provider);
-    let body = request::build_request("qwen", None, &options, false)
+    let body = request::build_request("qwen", "openai", None, &options, false)
         .unwrap()
         .body;
     assert_eq!(body["enable_thinking"], true);
@@ -188,7 +218,7 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
         options.provider_options = Some(provider);
         assert!(
             matches!(
-                request::build_request("qwen", None, &options, false),
+                request::build_request("qwen", "openai", None, &options, false),
                 Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. }) if feature == key
             ),
             "{key} 不应被覆盖"
@@ -222,11 +252,13 @@ fn max_effort_follows_the_profile_instead_of_a_blanket_rejection() {
     let mut options = CallOptions::new(vec![Message::user("你好")]);
     options.reasoning = Some(zach_ai_core::ReasoningEffort::Max);
     let newest = catalog.get("openai", "gpt-5.6").unwrap();
-    let built = request::build_request(&newest.id, Some(newest), &options, false).unwrap();
+    let built =
+        request::build_request(&newest.id, "openai", Some(newest), &options, false).unwrap();
     assert_eq!(built.body["reasoning_effort"], "max");
     assert!(built.warnings.is_empty());
     let xhigh_only = catalog.get("openai", "gpt-5.2").unwrap();
-    let built = request::build_request(&xhigh_only.id, Some(xhigh_only), &options, false).unwrap();
+    let built = request::build_request(&xhigh_only.id, "openai", Some(xhigh_only), &options, false)
+        .unwrap();
     assert_eq!(built.body["reasoning_effort"], "xhigh");
     assert!(matches!(
         &built.warnings[0],
@@ -235,10 +267,10 @@ fn max_effort_follows_the_profile_instead_of_a_blanket_rejection() {
     ));
     let no_xhigh = catalog.get("openai", "gpt-5").unwrap();
     assert!(matches!(
-        request::build_request(&no_xhigh.id, Some(no_xhigh), &options, false),
+        request::build_request(&no_xhigh.id, "openai", Some(no_xhigh), &options, false),
         Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. })
             if feature == "reasoning_effort.max"
     ));
-    let unknown = request::build_request("proxy-model", None, &options, false).unwrap();
+    let unknown = request::build_request("proxy-model", "openai", None, &options, false).unwrap();
     assert_eq!(unknown.body["reasoning_effort"], "max");
 }
