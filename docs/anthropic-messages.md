@@ -39,8 +39,9 @@ while let Some(part) = stream.next().await {
 | 推理档位 | 见下文 |
 | 提示缓存 | 任意内容块、系统提示与工具定义的 `provider_options.anthropic.cache_control` |
 
-`max_tokens` 是 Messages API 的必填项：未设置 `max_output_tokens` 时取内置模型档案的
-`max_output_tokens`，未知模型使用 8192。
+`max_tokens` 是 Messages API 的必填项：未设置 `max_output_tokens` 时取模型档案的
+`max_output_tokens`，未知模型使用 8192。档案默认来自内置目录，自定义端点或目录未收录的
+模型可用 `with_profile(ModelProfile)` 注入，注入值优先。
 
 同角色相邻消息会合并为一条（例如工具结果消息之后紧跟的用户消息），以满足
 user/assistant 交替的要求；末尾助手预填充文本会去掉结尾空白。

@@ -63,6 +63,8 @@ pub struct AnthropicMessagesModel {
     base_url: Arc<str>,
     model_id: Arc<str>,
     default_headers: HeaderMap,
+    /// 调用方注入的档案，优先于内置目录。
+    profile: Option<Arc<ModelProfile>>,
 }
 
 impl fmt::Debug for AnthropicMessagesModel {
@@ -92,7 +94,16 @@ impl AnthropicMessagesModel {
             base_url: Arc::from("https://api.anthropic.com"),
             model_id: Arc::from(model_id.into()),
             default_headers: HeaderMap::new(),
+            profile: None,
         }
+    }
+
+    /// 注入模型档案（能力、限制与计费），覆盖内置目录中的同名条目。
+    ///
+    /// 自定义端点、代理或内置目录尚未收录的模型据此获得 `max_tokens` 默认值等档案信息。
+    pub fn with_profile(mut self, profile: ModelProfile) -> Self {
+        self.profile = Some(Arc::new(profile));
+        self
     }
 
     /// 设置根地址，例如 `https://api.anthropic.com`；适配器会自动追加 `/v1/messages`。
@@ -148,7 +159,7 @@ impl AnthropicMessagesModel {
         options: &CallOptions,
         stream: bool,
     ) -> Result<(reqwest::Request, BuiltRequest), ModelError> {
-        let built = build_request(&self.model_id, options, stream)?;
+        let built = build_request(&self.model_id, self.profile(), options, stream)?;
         let request = self
             .client
             .post(self.endpoint())
@@ -182,7 +193,9 @@ impl LanguageModel for AnthropicMessagesModel {
     }
 
     fn profile(&self) -> Option<&ModelProfile> {
-        crate::ModelCatalog::builtin().get(self.provider(), self.model_id())
+        self.profile
+            .as_deref()
+            .or_else(|| crate::ModelCatalog::builtin().get(self.provider(), self.model_id()))
     }
 
     fn is_url_supported(&self, media_type: &str, url: &str) -> bool {

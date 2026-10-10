@@ -149,7 +149,7 @@ fn attachments_map_to_image_and_document_blocks() {
             content: vec![part],
             provider_options: None,
         }]);
-        let error = build_request("example", &options, false).unwrap_err();
+        let error = build_request("example", None, &options, false).unwrap_err();
         assert!(
             matches!(
                 error,

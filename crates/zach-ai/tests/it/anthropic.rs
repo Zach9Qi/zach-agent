@@ -19,6 +19,19 @@ fn messages_model_exposes_identity_and_catalog_profile_without_credentials_in_de
     assert!(!custom.is_url_supported("image/png", "file:///a.png"));
 }
 
+/// 自定义端点或目录未收录的模型可注入档案；注入值优先于内置目录中的同名条目。
+#[test]
+fn injected_profile_overrides_the_builtin_catalog() {
+    use zach_ai_core::ModelProfile;
+    let builtin = ModelCatalog::builtin().provider_models("anthropic")[0];
+    let custom = ModelProfile::new("anthropic", &builtin.id, 1_000, 100);
+    let model = AnthropicMessagesModel::new("secret", &builtin.id).with_profile(custom.clone());
+    assert_eq!(model.profile(), Some(&custom));
+    let unknown = AnthropicMessagesModel::new("secret", "proxy-model")
+        .with_profile(ModelProfile::new("anthropic", "proxy-model", 8_000, 2_000));
+    assert_eq!(unknown.profile().unwrap().limits.max_output_tokens, 2_000);
+}
+
 #[tokio::test]
 async fn unsupported_options_fail_without_accessing_the_endpoint() {
     let model =

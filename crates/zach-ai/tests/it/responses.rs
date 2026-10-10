@@ -19,6 +19,16 @@ fn responses_model_exposes_identity_and_catalog_profile_without_credentials_in_d
     assert!(!custom.is_url_supported("image/png", "file:///a.png"));
 }
 
+/// 自定义端点或目录未收录的模型可注入档案；注入值优先于内置目录中的同名条目。
+#[test]
+fn injected_profile_overrides_the_builtin_catalog() {
+    use zach_ai_core::ModelProfile;
+    let builtin = ModelCatalog::builtin().provider_models("openai")[0];
+    let custom = ModelProfile::new("openai", &builtin.id, 1_000, 100);
+    let model = OpenAiResponsesModel::new("secret", &builtin.id).with_profile(custom.clone());
+    assert_eq!(model.profile(), Some(&custom));
+}
+
 #[tokio::test]
 async fn unsupported_options_fail_without_accessing_the_endpoint() {
     let model =

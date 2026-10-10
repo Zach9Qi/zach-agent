@@ -53,6 +53,7 @@ async fn tool_input_deltas_are_joined_and_emitted_once_per_block() {
     let replay = result.into_assistant_message();
     let request = build_request(
         "example",
+        None,
         &CallOptions::new(vec![Message::user("x"), replay]),
         false,
     )
@@ -104,7 +105,7 @@ async fn thinking_signature_and_redacted_blocks_survive_a_second_request() {
             json!({"sum":3}),
         )]),
     ]);
-    let request = build_request("example", &options, true).unwrap();
+    let request = build_request("example", None, &options, true).unwrap();
     assert_eq!(
         request.body["messages"][1]["content"],
         json!([
@@ -151,6 +152,7 @@ fn server_tool_blocks_and_citations_are_preserved_and_replayed() {
     assert_eq!(result.text(), "晴");
     let request = build_request(
         "example",
+        None,
         &CallOptions::new(vec![Message::user("x"), result.into_assistant_message()]),
         false,
     )

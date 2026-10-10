@@ -27,7 +27,8 @@ while let Some(part) = stream.next().await {
 以便在末尾返回完整用量。工具调用参数会按增量事件拼接，并在结束时发出完整调用。
 
 接入 Ollama、vLLM、LM Studio 等无需鉴权的兼容端点时 API Key 传空字符串即可，
-此时不发送 `Authorization` 头。
+此时不发送 `Authorization` 头。兼容端点上的模型不在内置目录中，可用
+`with_profile(ModelProfile)` 注入档案（例如从 `ModelCatalog::builtin().get("deepseek", ...)` 复制）。
 
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
 PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。

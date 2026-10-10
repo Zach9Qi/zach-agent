@@ -7,7 +7,7 @@ use serde_json::json;
 use zach_ai_core::{FunctionTool, Message, ProviderTool, ToolChoice, ToolDefinition};
 
 fn build(options: &CallOptions) -> Value {
-    build_request("example", options, false).unwrap().body
+    build_request("example", None, options, false).unwrap().body
 }
 
 fn anthropic_options(value: Value) -> Option<ProviderOptions> {
@@ -48,6 +48,7 @@ fn known_models_default_max_tokens_from_the_catalog() {
     let profile = crate::ModelCatalog::builtin().provider_models("anthropic")[0];
     let body = build_request(
         &profile.id,
+        Some(profile),
         &CallOptions::new(vec![Message::user("你好")]),
         true,
     )
@@ -74,7 +75,7 @@ fn unsupported_generic_parameters_fail_before_sending() {
         },
     ] {
         assert!(matches!(
-            build_request("example", &options, false),
+            build_request("example", None, &options, false),
             Err(ModelError::UnsupportedFeature { .. })
         ));
     }
@@ -83,10 +84,10 @@ fn unsupported_generic_parameters_fail_before_sending() {
         ..Default::default()
     };
     assert!(matches!(
-        build_request("example", &nan, false),
+        build_request("example", None, &nan, false),
         Err(ModelError::InvalidRequest(_))
     ));
-    assert!(build_request(" ", &CallOptions::default(), false).is_err());
+    assert!(build_request(" ", None, &CallOptions::default(), false).is_err());
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn system_messages_are_hoisted_and_only_allowed_at_the_start() {
     );
     let late = CallOptions::new(vec![Message::user("你好"), Message::system("规则")]);
     assert!(matches!(
-        build_request("example", &late, false),
+        build_request("example", None, &late, false),
         Err(ModelError::InvalidRequest(_))
     ));
 }
@@ -180,7 +181,7 @@ fn reasoning_effort_maps_to_adaptive_thinking_and_effort() {
         "betas": ["example-beta"],
         "metadata": {"user_id": "u1"}
     }));
-    let built = build_request("example", &explicit, false).unwrap();
+    let built = build_request("example", None, &explicit, false).unwrap();
     assert_eq!(
         built.body["thinking"],
         json!({"type": "enabled", "budget_tokens": 2048})
@@ -205,19 +206,19 @@ fn json_schema_output_and_unknown_provider_fields_are_handled() {
         description: None,
     });
     assert!(matches!(
-        build_request("example", &options, false),
+        build_request("example", None, &options, false),
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.response_format = Some(ResponseFormat::Text);
     assert!(build(&options).get("output_config").is_none());
     options.provider_options = anthropic_options(json!({"messages": []}));
     assert!(matches!(
-        build_request("example", &options, false),
+        build_request("example", None, &options, false),
         Err(ModelError::UnsupportedFeature { .. })
     ));
     options.provider_options = anthropic_options(json!({"betas": "not-a-list"}));
     assert!(matches!(
-        build_request("example", &options, false),
+        build_request("example", None, &options, false),
         Err(ModelError::InvalidRequest(_))
     ));
 }

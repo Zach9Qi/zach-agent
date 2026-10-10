@@ -8,7 +8,9 @@ mod tools;
 mod tests;
 
 use serde_json::{json, Value};
-use zach_ai_core::{CallOptions, ModelError, ProviderOptions, ReasoningEffort, ResponseFormat};
+use zach_ai_core::{
+    CallOptions, ModelError, ModelProfile, ProviderOptions, ReasoningEffort, ResponseFormat,
+};
 
 /// 模型档案未知时使用的 `max_tokens` 默认值（Messages API 要求必填）。
 const DEFAULT_MAX_TOKENS: u64 = 8192;
@@ -22,6 +24,7 @@ pub(super) struct BuiltRequest {
 
 pub(super) fn build_request(
     model_id: &str,
+    profile: Option<&ModelProfile>,
     options: &CallOptions,
     stream: bool,
 ) -> Result<BuiltRequest, ModelError> {
@@ -35,7 +38,7 @@ pub(super) fn build_request(
         "max_tokens": options
             .max_output_tokens
             .map(u64::from)
-            .unwrap_or_else(|| default_max_tokens(model_id)),
+            .unwrap_or_else(|| default_max_tokens(profile)),
         "messages": converted.messages,
         "stream": stream,
     });
@@ -77,9 +80,8 @@ pub(super) fn build_request(
     Ok(BuiltRequest { body, betas })
 }
 
-fn default_max_tokens(model_id: &str) -> u64 {
-    crate::ModelCatalog::builtin()
-        .get("anthropic", model_id)
+fn default_max_tokens(profile: Option<&ModelProfile>) -> u64 {
+    profile
         .map(|profile| profile.limits.max_output_tokens)
         .unwrap_or(DEFAULT_MAX_TOKENS)
 }
