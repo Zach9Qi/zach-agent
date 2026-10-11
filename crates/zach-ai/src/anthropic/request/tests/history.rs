@@ -152,8 +152,8 @@ fn attachments_map_to_image_and_document_blocks() {
         let error = build_request("example", None, &options, false).unwrap_err();
         assert!(
             matches!(
-                error,
-                ModelError::UnsupportedFeature { .. } | ModelError::InvalidRequest(_)
+                error.kind(),
+                ErrorKind::Unsupported | ErrorKind::InvalidRequest
             ),
             "{error:?}"
         );

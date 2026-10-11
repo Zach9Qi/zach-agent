@@ -5,8 +5,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
-use zach_agent::{typed_tool, ToolContext, ToolError, ToolOutcome, TypedTool};
-use zach_ai_core::ToolResultOutput;
+use zach_agent::{typed_tool, ToolContext, ToolError, ToolErrorKind, ToolOutcome, TypedTool};
+use zach_ai_core::{ModelError, ToolResultOutput};
 
 #[derive(Deserialize, JsonSchema)]
 struct AddInput {
@@ -58,7 +58,24 @@ fn typed_tool_rejects_invalid_input_before_execution() {
     let tool = typed_tool(Add);
     assert!(tool.prepare_input(json!({ "a": 1, "b": 2 })).is_ok());
     let err = tool.prepare_input(json!({ "a": "x" })).unwrap_err();
-    assert!(matches!(err, ToolError::InvalidInput(_)));
+    assert_eq!(err.kind(), ToolErrorKind::InvalidInput);
+    assert!(err.to_string().starts_with("工具入参无效: "));
+}
+
+/// 工具实现里直接用 `?`：回传给模型的文本带着完整原因链，而不只是最外层的一句话
+#[test]
+fn question_mark_converts_any_error_and_keeps_its_cause_chain() {
+    fn fetch() -> Result<ToolOutcome, ToolError> {
+        let error = ModelError::transport("请求天气服务失败")
+            .with_source(std::io::Error::other("connection refused"));
+        Err(error)?
+    }
+    let err = fetch().unwrap_err();
+    assert_eq!(err.kind(), ToolErrorKind::Failed);
+    assert_eq!(
+        err.to_string(),
+        "传输失败: 请求天气服务失败: connection refused"
+    );
 }
 
 #[test]

@@ -13,7 +13,10 @@ async fn in_band_error_followed_by_connection_close_is_not_a_transport_error() {
     assert_eq!(parts.len(), 2);
     assert!(matches!(
         &parts[1],
-        Ok(StreamPart::Error { message, .. }) if message == "invalid request"
+        Ok(StreamPart::Error(error))
+            if error.message == "invalid request"
+                && error.kind == ErrorKind::Rejected
+                && error.code.as_deref() == Some("invalid_request_error")
     ));
     assert_eq!(
         aggregate_lenient(parts).finish_reason.unified,
@@ -30,7 +33,7 @@ async fn eof_before_finish_reason_is_a_transport_error() {
     ] {
         let parts = parse_wire(wire).await;
         assert!(
-            matches!(parts.last(), Some(Err(ModelError::StreamError { .. }))),
+            matches!(parts.last(), Some(Err(error)) if error.kind() == ErrorKind::Transport),
             "{parts:?}"
         );
     }
@@ -51,9 +54,14 @@ async fn eof_after_finish_reason_without_usage_or_done_completes_the_turn() {
         Ok(Bytes::from(wire)),
         Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
     ]);
-    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
-        .collect::<Vec<_>>()
-        .await;
+    let parts = chat_stream(
+        source,
+        ChatStreamParser::new("openai".into(), false),
+        vec![],
+        None,
+    )
+    .collect::<Vec<_>>()
+    .await;
     assert!(parts.iter().all(Result::is_ok), "{parts:?}");
     assert_eq!(aggregate(parts).text(), "完整");
 }
@@ -71,9 +79,14 @@ async fn connection_loss_after_finish_without_done_keeps_the_response() {
         Ok(Bytes::from(wire)),
         Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
     ]);
-    let parts = chat_stream(source, ChatStreamParser::new(false), vec![], None)
-        .collect::<Vec<_>>()
-        .await;
+    let parts = chat_stream(
+        source,
+        ChatStreamParser::new("openai".into(), false),
+        vec![],
+        None,
+    )
+    .collect::<Vec<_>>()
+    .await;
     assert!(parts.iter().all(Result::is_ok));
     assert_eq!(aggregate(parts).text(), "完整");
 }
@@ -83,9 +96,7 @@ async fn done_without_finish_reason_is_an_error_event_not_a_success() {
     let wire = data_frame(&delta(json!({"content": "x"}), None)) + DONE;
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok));
-    assert!(parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(parts.iter().any(|p| matches!(p, Ok(StreamPart::Error(_)))));
     assert!(!parts
         .iter()
         .any(|p| matches!(p, Ok(StreamPart::Finish { .. }))));

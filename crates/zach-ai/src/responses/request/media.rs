@@ -25,7 +25,7 @@ pub(super) fn file(
             let id = reference
                 .get("openai")
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| ModelError::InvalidRequest("缺少 openai 文件引用".into()))?;
+                .ok_or_else(|| ModelError::invalid_request("缺少 openai 文件引用"))?;
             part["file_id"] = json!(id);
         }
         FileData::Url { url } => {

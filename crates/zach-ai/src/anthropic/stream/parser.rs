@@ -2,9 +2,12 @@
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use zach_ai_core::{ModelError, StreamPart};
+use zach_ai_core::{ErrorInfo, ModelError, StreamPart};
 
-use super::super::response::{error, finish_reason, metadata, response_metadata, string, usage};
+use super::super::error::DIALECT;
+use super::super::response::{
+    finish_reason, invalid_response, metadata, response_metadata, string, usage,
+};
 use super::blocks::Block;
 
 pub(in crate::anthropic) struct MessagesStreamParser {
@@ -40,18 +43,16 @@ impl MessagesStreamParser {
                 }
                 if let Err(error) = self.event(&event, &mut parts) {
                     self.failed = true;
-                    parts.push(StreamPart::Error {
-                        message: error.to_string(),
-                        raw: Some(event),
-                    });
+                    let mut error = ErrorInfo::from(error);
+                    error.raw.get_or_insert(event);
+                    parts.push(StreamPart::Error(error));
                 }
             }
             Err(error) => {
                 self.failed = true;
-                parts.push(StreamPart::Error {
-                    message: format!("Messages SSE JSON 解析失败: {error}"),
-                    raw: Some(json!(data)),
-                });
+                let error = invalid_response("Messages SSE JSON 解析失败", Some(json!(data)))
+                    .with_source(error);
+                parts.push(StreamPart::Error(error.into()));
             }
         }
         parts
@@ -80,18 +81,18 @@ impl MessagesStreamParser {
             "message_stop" => {
                 self.terminal = true;
                 if !self.finished {
-                    return Err(error("message_stop 之前没有收到 stop_reason", None));
+                    return Err(invalid_response(
+                        "message_stop 之前没有收到 stop_reason",
+                        None,
+                    ));
                 }
             }
             "error" => {
                 self.failed = true;
-                parts.push(StreamPart::Error {
-                    message: event["error"]["message"]
-                        .as_str()
-                        .unwrap_or("Messages 服务端错误")
-                        .into(),
-                    raw: Some(event.clone()),
-                });
+                let error = DIALECT
+                    .error("anthropic", &event["error"])
+                    .with_raw(event.clone());
+                parts.push(StreamPart::Error(error.into()));
             }
             // ping 与未来新增事件按版本策略忽略，开启 Raw 时仍可观察。
             _ => {}
@@ -105,19 +106,16 @@ impl MessagesStreamParser {
         message: &Value,
     ) -> Result<Vec<StreamPart>, ModelError> {
         if message["type"] == "error" {
-            return Err(error(
-                message["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Messages 服务端错误"),
-                Some(message.clone()),
-            ));
+            return Err(DIALECT
+                .error("anthropic", &message["error"])
+                .with_raw(message.clone()));
         }
-        let content = message["content"]
-            .as_array()
-            .ok_or_else(|| error("Messages 响应缺少 content 数组", Some(message.clone())))?;
-        let stop_reason = message["stop_reason"]
-            .as_str()
-            .ok_or_else(|| error("Messages 响应缺少 stop_reason", Some(message.clone())))?;
+        let content = message["content"].as_array().ok_or_else(|| {
+            invalid_response("Messages 响应缺少 content 数组", Some(message.clone()))
+        })?;
+        let stop_reason = message["stop_reason"].as_str().ok_or_else(|| {
+            invalid_response("Messages 响应缺少 stop_reason", Some(message.clone()))
+        })?;
         let mut parts = vec![StreamPart::ResponseMetadata(response_metadata(message))];
         for (index, block) in content.iter().enumerate() {
             let index = index as u64;
@@ -139,7 +137,7 @@ impl MessagesStreamParser {
         parts: &mut Vec<StreamPart>,
     ) -> Result<(), ModelError> {
         if self.finished {
-            return Err(error("收到重复的 stop_reason", None));
+            return Err(invalid_response("收到重复的 stop_reason", None));
         }
         // 厂商总会先关闭所有内容块；这里兜底补齐，避免丢失已完整到达的工具调用。
         let mut open: Vec<u64> = self
@@ -184,5 +182,5 @@ impl MessagesStreamParser {
 fn index(event: &Value) -> Result<u64, ModelError> {
     event["index"]
         .as_u64()
-        .ok_or_else(|| error("内容块事件缺少 index", Some(event.clone())))
+        .ok_or_else(|| invalid_response("内容块事件缺少 index", Some(event.clone())))
 }

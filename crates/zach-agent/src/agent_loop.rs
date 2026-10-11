@@ -8,7 +8,7 @@ mod tools;
 
 use crate::config::LoopConfig;
 use crate::context::{AgentContext, RequestState};
-use crate::error::AgentError;
+use crate::error::{AgentError, RunError};
 use crate::event::AgentEvent;
 use crate::hooks::{AgentHooks, TurnDecision, TurnInfo};
 use crate::host::LoopHost;
@@ -18,7 +18,7 @@ use std::sync::Arc;
 use step::{partial_assistant, run_step, StepInput, StepOutcome};
 use tokio_util::sync::CancellationToken;
 use tools::{run_tool_batch, BatchInput};
-use zach_ai_core::{FinishReason, Message, UnifiedFinishReason, Usage};
+use zach_ai_core::{ErrorInfo, FinishReason, Message, ModelError, UnifiedFinishReason, Usage};
 
 /// 一次运行的结果
 #[derive(Debug, Clone, PartialEq)]
@@ -39,15 +39,16 @@ pub struct RunOutput {
 
 /// 以新的提示消息开始一次运行
 ///
-/// 模型失败（重试用尽）时发出 `RunError` 并返回 `Err`；中止时发出 `RunAbort` 并返回
-/// `aborted = true` 的结果。失败那一轮的半成品助手消息不会写入对话记录。
+/// 模型失败（重试用尽）时发出 `RunError` 事件并返回 [`RunError::Model`]，其中带有失败前
+/// 已完成的部分；中止时发出 `RunAbort` 并返回 `aborted = true` 的结果。
+/// 失败那一轮的半成品助手消息不会写入对话记录。
 pub async fn run_agent_loop(
     prompts: Vec<Message>,
     context: AgentContext,
     config: LoopConfig,
     host: &dyn LoopHost,
     cancel: CancellationToken,
-) -> Result<RunOutput, AgentError> {
+) -> Result<RunOutput, RunError> {
     Runner::new(context, config, host, cancel)
         .run(prompts)
         .await
@@ -55,19 +56,19 @@ pub async fn run_agent_loop(
 
 /// 从现有对话记录继续，不追加新消息（常用于失败后重试）
 ///
-/// 最后一条消息必须是用户或工具消息。
+/// 最后一条消息必须是用户或工具消息，否则返回 [`RunError::NotStarted`]。
 pub async fn continue_agent_loop(
     context: AgentContext,
     config: LoopConfig,
     host: &dyn LoopHost,
     cancel: CancellationToken,
-) -> Result<RunOutput, AgentError> {
-    match context.messages.last() {
-        None => return Err(AgentError::NoMessages),
-        Some(Message::Assistant { .. }) => return Err(AgentError::CannotContinueFromAssistant),
-        Some(_) => {}
-    }
-    run_agent_loop(Vec::new(), context, config, host, cancel).await
+) -> Result<RunOutput, RunError> {
+    let error = match context.messages.last() {
+        None => AgentError::NoMessages,
+        Some(Message::Assistant { .. }) => AgentError::CannotContinueFromAssistant,
+        Some(_) => return run_agent_loop(Vec::new(), context, config, host, cancel).await,
+    };
+    Err(RunError::NotStarted(error))
 }
 
 struct Runner<'a> {
@@ -111,7 +112,7 @@ impl<'a> Runner<'a> {
         }
     }
 
-    async fn run(mut self, prompts: Vec<Message>) -> Result<RunOutput, AgentError> {
+    async fn run(mut self, prompts: Vec<Message>) -> Result<RunOutput, RunError> {
         self.host
             .emit(AgentEvent::RunStart {
                 run_id: self.run_id.clone(),
@@ -171,11 +172,7 @@ impl<'a> Runner<'a> {
                         }
                         return self.abort(true).await;
                     }
-                    StepOutcome::Failed(error) => {
-                        let error_text = error.to_string();
-                        self.host.emit(AgentEvent::RunError { error_text }).await;
-                        return Err(error.into());
-                    }
+                    StepOutcome::Failed(error) => return self.fail(error).await,
                 };
 
                 self.usage.add(&result.usage);
@@ -251,7 +248,7 @@ impl<'a> Runner<'a> {
         self.messages.push(message);
     }
 
-    async fn abort(self, step_open: bool) -> Result<RunOutput, AgentError> {
+    async fn abort(self, step_open: bool) -> Result<RunOutput, RunError> {
         if step_open {
             let step_index = self.step_index;
             self.host.emit(AgentEvent::StepFinish { step_index }).await;
@@ -264,7 +261,19 @@ impl<'a> Runner<'a> {
         Ok(self.into_output(true))
     }
 
-    async fn finish(self) -> Result<RunOutput, AgentError> {
+    async fn fail(self, error: ModelError) -> Result<RunOutput, RunError> {
+        self.host
+            .emit(AgentEvent::RunError {
+                error: ErrorInfo::from(&error),
+            })
+            .await;
+        Err(RunError::Model {
+            error,
+            partial: Box::new(self.into_output(false)),
+        })
+    }
+
+    async fn finish(self) -> Result<RunOutput, RunError> {
         // 最后一个 StepFinish 的发送也可能因取消而恢复，不能随后误报成功。
         if self.cancel.is_cancelled() {
             return self.abort(false).await;

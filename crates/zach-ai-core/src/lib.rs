@@ -19,7 +19,7 @@ pub mod tool;
 
 // 门面精选重导出（Façade Re-exports）
 pub use call_options::{CallOptions, ReasoningEffort, ResponseFormat};
-pub use error::ModelError;
+pub use error::{ErrorInfo, ErrorKind, ModelError};
 pub use file::FileData;
 pub use model::{LanguageModel, LanguageModelStream};
 pub use model_profile::{
@@ -32,7 +32,7 @@ pub use response::{
     FinishReason, GenerateResult, InputTokenUsage, OutputContent, OutputTokenUsage,
     ResponseMetadata, SourceContent, UnifiedFinishReason, Usage,
 };
-pub use stream::{StreamAccumulator, StreamPart, StreamPartError};
+pub use stream::{StreamAccumulator, StreamPart};
 pub use tool::{
     FunctionTool, ProviderTool, ToolChoice, ToolDefinition, ToolInputError, ToolResultContentBlock,
     ToolResultOutput,

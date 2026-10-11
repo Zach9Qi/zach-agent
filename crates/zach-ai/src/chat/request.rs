@@ -30,7 +30,7 @@ pub(super) fn build_request(
     stream: bool,
 ) -> Result<BuiltRequest, ModelError> {
     if model_id.trim().is_empty() {
-        return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
+        return Err(ModelError::invalid_request("模型 ID 不能为空"));
     }
     if options.top_k.is_some() {
         return Err(ModelError::unsupported(
@@ -66,7 +66,9 @@ pub(super) fn build_request(
     ] {
         if let Some(value) = value {
             if !value.is_finite() {
-                return Err(ModelError::InvalidRequest(format!("{name} 必须是有限数值")));
+                return Err(ModelError::invalid_request(format!(
+                    "{name} 必须是有限数值"
+                )));
             }
             body[name] = json!(value);
         }
@@ -152,7 +154,7 @@ fn apply_provider_options(
     };
     let fields = extra
         .as_object()
-        .ok_or_else(|| ModelError::InvalidRequest(format!("provider_options.{key} 必须是对象")))?;
+        .ok_or_else(|| ModelError::invalid_request(format!("provider_options.{key} 必须是对象")))?;
     for (key, value) in fields {
         if body.get(key).is_some() {
             return Err(ModelError::unsupported(

@@ -3,7 +3,10 @@
 use serde_json::json;
 use zach_agent::event::{map_stream_part, tool_output_event};
 use zach_agent::AgentEvent;
-use zach_ai_core::{FileData, FinishReason, SourceContent, StreamPart, ToolResultOutput, Usage};
+use zach_ai_core::{
+    ErrorInfo, ErrorKind, FileData, FinishReason, SourceContent, StreamPart, ToolResultOutput,
+    Usage,
+};
 
 #[test]
 fn text_and_reasoning_parts_map_one_to_one() {
@@ -122,11 +125,17 @@ fn files_sources_and_diagnostics_are_mapped() {
     }));
     assert!(matches!(source, Some(AgentEvent::SourceUrl { source_id, .. }) if source_id == "s1"));
 
-    let error = map_stream_part(&StreamPart::Error {
-        message: "坏分块".into(),
-        raw: None,
-    });
-    assert!(matches!(error, Some(AgentEvent::Custom { kind, .. }) if kind == "model.stream_error"));
+    let error = map_stream_part(&StreamPart::Error(ErrorInfo::new(
+        ErrorKind::InvalidResponse,
+        "坏分块",
+    )));
+    assert!(matches!(
+        error,
+        Some(AgentEvent::Custom { kind, data, .. })
+            if kind == "model.stream_error"
+                && data["kind"] == "invalid_response"
+                && data["message"] == "坏分块"
+    ));
 }
 
 #[test]

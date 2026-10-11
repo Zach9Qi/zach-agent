@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use zach_ai_core::{ModelError, SourceContent, StreamPart};
 
-use super::super::response::{metadata, string};
+use super::super::response::{invalid_response, metadata, string};
 use super::parser::ResponsesStreamParser;
 
 /// 多段推理摘要之间的分隔，流式换段与完成快照使用同一个值，保证两边文本一致。
@@ -78,9 +78,9 @@ impl ResponsesStreamParser {
                 )?;
             }
             "message" => {
-                let content = item["content"].as_array().ok_or_else(|| {
-                    ModelError::provider_error("openai", "助手消息缺少 content 数组", None)
-                })?;
+                let content = item["content"]
+                    .as_array()
+                    .ok_or_else(|| invalid_response("助手消息缺少 content 数组", None))?;
                 for (index, part) in content.iter().enumerate() {
                     self.finish_content(item, index as u64, part, parts)?;
                 }
@@ -110,11 +110,7 @@ impl ResponsesStreamParser {
         let arguments = string(item, "arguments")?;
         if let Some(previous) = self.calls_done.get(id) {
             if previous != arguments {
-                return Err(ModelError::provider_error(
-                    "openai",
-                    "工具调用的完成快照不一致",
-                    None,
-                ));
+                return Err(invalid_response("工具调用的完成快照不一致", None));
             }
             return Ok(());
         }

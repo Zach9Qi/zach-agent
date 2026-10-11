@@ -28,7 +28,7 @@ pub(super) fn build_request(
     stream: bool,
 ) -> Result<BuiltRequest, ModelError> {
     if model_id.trim().is_empty() {
-        return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
+        return Err(ModelError::invalid_request("模型 ID 不能为空"));
     }
     reject_unsupported(options)?;
     // 线上多数端点的最高档位是 xhigh（gpt-5.6 起档案才声明 max），把 max 降级为最接近的 xhigh。
@@ -56,7 +56,9 @@ pub(super) fn build_request(
     for (name, value) in [("temperature", temperature), ("top_p", options.top_p)] {
         if let Some(value) = value {
             if !value.is_finite() {
-                return Err(ModelError::InvalidRequest(format!("{name} 必须是有限数值")));
+                return Err(ModelError::invalid_request(format!(
+                    "{name} 必须是有限数值"
+                )));
             }
             body[name] = json!(value);
         }
@@ -80,9 +82,9 @@ pub(super) fn build_request(
         .as_ref()
         .and_then(|p| p.inner.get("openai"))
     {
-        let fields = extra.as_object().ok_or_else(|| {
-            ModelError::InvalidRequest("provider_options.openai 必须是对象".into())
-        })?;
+        let fields = extra
+            .as_object()
+            .ok_or_else(|| ModelError::invalid_request("provider_options.openai 必须是对象"))?;
         // 仅接受不改变本适配器运行方式的扩展。状态续接和后台任务需独立契约。
         for (key, value) in fields {
             if !matches!(
@@ -111,11 +113,9 @@ pub(super) fn build_request(
     if let Some(include) = body.get_mut("include") {
         let values = include
             .as_array_mut()
-            .ok_or_else(|| ModelError::InvalidRequest("include 必须是字符串数组".into()))?;
+            .ok_or_else(|| ModelError::invalid_request("include 必须是字符串数组"))?;
         if values.iter().any(|v| !v.is_string()) {
-            return Err(ModelError::InvalidRequest(
-                "include 必须是字符串数组".into(),
-            ));
+            return Err(ModelError::invalid_request("include 必须是字符串数组"));
         }
         let encrypted = json!("reasoning.encrypted_content");
         if !values.contains(&encrypted) {

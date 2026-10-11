@@ -17,7 +17,7 @@ pub use run::AgentRun;
 
 use crate::agent_loop::run_agent_loop;
 use crate::approval::ApprovalDecision;
-use crate::error::AgentError;
+use crate::error::{AgentError, RunError};
 use crate::utils::panic_message;
 use futures::FutureExt;
 use host::RunHost;
@@ -187,10 +187,11 @@ impl Agent {
             match AssertUnwindSafe(run).catch_unwind().await {
                 Ok(result) => result,
                 Err(payload) => {
-                    let error_text = format!("运行任务 panic: {}", panic_message(payload.as_ref()));
-                    tracing::error!(%error_text, "运行任务异常退出");
-                    host.recover_from_panic(error_text.clone()).await;
-                    Err(AgentError::Internal(error_text))
+                    let panic = panic_message(payload.as_ref());
+                    tracing::error!(%panic, "运行任务异常退出");
+                    let error = RunError::Internal(format!("panic: {panic}"));
+                    host.recover_from_panic(error.info()).await;
+                    Err(error)
                 }
             }
         });

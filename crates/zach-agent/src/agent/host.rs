@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};
+use zach_ai_core::{AssistantPart, ErrorInfo, Message, ToolPart, ToolResultOutput};
 
 #[cfg(test)]
 mod tests;
@@ -71,9 +71,9 @@ impl RunHost {
 
     /// 运行任务 panic 后的善后：发出 `RunError`，并为悬空的工具调用补齐带有实际错误原因的结果，
     /// 保证对话记录仍能作为下一次请求的历史使用，模型也能知道调用为何没有结果
-    pub(super) async fn recover_from_panic(&self, error_text: String) {
-        let reason = format!("运行异常中断，工具未得出结果：{error_text}");
-        self.emit(AgentEvent::RunError { error_text }).await;
+    pub(super) async fn recover_from_panic(&self, error: ErrorInfo) {
+        let reason = format!("运行异常中断，工具未得出结果：{}", error.message);
+        self.emit(AgentEvent::RunError { error }).await;
         if let Some(repair) = self.dangling_tool_results(&reason) {
             self.on_message(&repair).await;
         }

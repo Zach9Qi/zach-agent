@@ -16,7 +16,7 @@ async fn eof_before_finish_is_a_transport_error() {
         let parts = parse_wire(wire).await;
         assert!(matches!(
             parts.last(),
-            Some(Err(ModelError::StreamError { .. }))
+            Some(Err(error)) if error.kind() == ErrorKind::Transport
         ));
     }
 }
@@ -51,9 +51,7 @@ async fn connection_loss_after_finish_without_message_stop_keeps_the_response() 
 async fn message_stop_without_stop_reason_is_an_error_event() {
     let wire = start_frame() + &event_frame(&json!({"type": "message_stop"}));
     let parts = parse_wire(wire).await;
-    assert!(parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(parts.iter().any(|p| matches!(p, Ok(StreamPart::Error(_)))));
     assert!(!parts.iter().any(|p| p.is_err()));
     assert_eq!(
         aggregate_lenient(parts).finish_reason.unified,
@@ -79,9 +77,15 @@ async fn malformed_events_and_error_events_poison_the_turn() {
             &json!({"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}),
         );
     let parts = parse_wire(wire).await;
-    assert!(parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { message, .. }) if message == "Overloaded")));
+    // 过载以流内事件到达时与 HTTP 529 同为可重试的服务端故障
+    assert!(parts.iter().any(|p| matches!(
+        p,
+        Ok(StreamPart::Error(error))
+            if error.message == "Overloaded"
+                && error.kind == ErrorKind::Unavailable
+                && error.code.as_deref() == Some("overloaded_error")
+                && error.provider.as_deref() == Some("anthropic")
+    )));
     // 服务端已报告错误，连接随后关闭不再额外视为传输故障。
     assert!(!parts.iter().any(|p| p.is_err()));
 }
@@ -94,7 +98,7 @@ fn mismatched_or_duplicate_block_events_are_rejected() {
     assert!(!parser
         .data(&start.to_string())
         .iter()
-        .any(|p| matches!(p, StreamPart::Error { .. })));
+        .any(|p| matches!(p, StreamPart::Error(_))));
     for event in [
         start,
         json!({"type": "content_block_delta", "index": 0,
@@ -105,7 +109,7 @@ fn mismatched_or_duplicate_block_events_are_rejected() {
     ] {
         let parts = parser.data(&event.to_string());
         assert!(
-            matches!(parts.last(), Some(StreamPart::Error { .. })),
+            matches!(parts.last(), Some(StreamPart::Error(_))),
             "{event}"
         );
     }
@@ -121,7 +125,7 @@ fn mismatched_or_duplicate_block_events_are_rejected() {
             "delta": {"type": "text_delta", "text": "迟到"}})
         .to_string(),
     );
-    assert!(matches!(parts.last(), Some(StreamPart::Error { .. })));
+    assert!(matches!(parts.last(), Some(StreamPart::Error(_))));
 }
 
 #[test]

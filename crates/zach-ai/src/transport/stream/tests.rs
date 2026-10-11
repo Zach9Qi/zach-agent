@@ -1,8 +1,10 @@
 //! 驱动循环的终止语义：终止事件、错误事件、连接断开与空闲超时的组合。
 
 use super::*;
+use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use zach_ai_core::{ErrorInfo, ErrorKind};
 
 /// 脚本化解析器：`done` 帧置位 terminal，`fail` 帧发 Error 并置位 failed，
 /// `finish` 帧发 Finish 并置位 finished，其余原样透出。
@@ -21,10 +23,10 @@ impl SseParser for Scripted {
             }
             "fail" => {
                 self.failed = true;
-                vec![StreamPart::Error {
-                    message: "服务端错误".into(),
-                    raw: None,
-                }]
+                vec![StreamPart::Error(ErrorInfo::new(
+                    ErrorKind::Rejected,
+                    "服务端错误",
+                ))]
             }
             "finish" => {
                 self.finished = true;
@@ -76,7 +78,7 @@ async fn eof_before_terminal_without_error_event_is_a_transport_error() {
     assert!(matches!(&parts[1], Ok(StreamPart::TextDelta { delta, .. }) if delta == "a"));
     assert!(matches!(
         &parts[2],
-        Err(ModelError::StreamError { message, .. }) if message.contains("终止事件")
+        Err(error) if error.kind() == ErrorKind::Transport && error.message().contains("终止事件")
     ));
 }
 
@@ -86,14 +88,14 @@ async fn eof_before_terminal_without_error_event_is_a_transport_error() {
 async fn connection_loss_after_error_event_is_not_reported_again() {
     let parts = run(vec![Ok("data: fail\n\n")]).await;
     assert_eq!(parts.len(), 2);
-    assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
+    assert!(matches!(&parts[1], Ok(StreamPart::Error(_))));
     let parts = run(vec![
         Ok("data: fail\n\n"),
         Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
     ])
     .await;
     assert_eq!(parts.len(), 2);
-    assert!(matches!(&parts[1], Ok(StreamPart::Error { .. })));
+    assert!(matches!(&parts[1], Ok(StreamPart::Error(_))));
 }
 
 /// `Finish` 已发出后响应即语义完整，终止符之前的断开（FIN 或 RST）不改变结果。
@@ -136,10 +138,7 @@ async fn transport_errors_end_the_stream_immediately() {
     assert_eq!(parts.len(), 2);
     assert!(matches!(
         &parts[1],
-        Err(ModelError::StreamError {
-            source: Some(_),
-            ..
-        })
+        Err(error) if error.kind() == ErrorKind::Transport && error.source().is_some()
     ));
 }
 
@@ -197,7 +196,7 @@ async fn idle_timeout_before_finish_is_a_transport_error_and_resets_per_chunk() 
         .all(|p| matches!(p, Ok(StreamPart::TextDelta { .. }))));
     assert!(matches!(
         &parts[4],
-        Err(ModelError::StreamError { message, source: None }) if message.contains("300 秒")
+        Err(error) if error.kind() == ErrorKind::Transport && error.message().contains("300 秒")
     ));
 }
 
@@ -217,9 +216,6 @@ async fn idle_after_finish_or_error_ends_the_stream_quietly() {
         .collect()
         .await;
         assert_eq!(parts.len(), 2, "{parts:?}");
-        assert_eq!(
-            matches!(&parts[1], Ok(StreamPart::Error { .. })),
-            expect_error
-        );
+        assert_eq!(matches!(&parts[1], Ok(StreamPart::Error(_))), expect_error);
     }
 }

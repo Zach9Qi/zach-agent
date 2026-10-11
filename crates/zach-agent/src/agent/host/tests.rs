@@ -4,7 +4,10 @@ use super::*;
 use crate::agent::Agent;
 use futures::poll;
 use tokio::time::timeout;
-use zach_ai_core::{CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError};
+use zach_ai_core::{
+    CallOptions, ErrorInfo, ErrorKind, GenerateResult, LanguageModel, LanguageModelStream,
+    ModelError,
+};
 
 const WAIT: Duration = Duration::from_secs(2);
 
@@ -99,7 +102,7 @@ async fn every_terminal_event_bypasses_a_full_queue_without_cancellation() {
     for event in [
         AgentEvent::RunAbort { reason: None },
         AgentEvent::RunError {
-            error_text: "运行失败".into(),
+            error: ErrorInfo::new(ErrorKind::Internal, "运行失败"),
         },
         AgentEvent::RunFinish {
             finish_reason: None,
@@ -112,7 +115,11 @@ async fn every_terminal_event_bypasses_a_full_queue_without_cancellation() {
             .await
             .expect("最终事件不能受普通队列背压影响");
         if matches!(event, AgentEvent::RunError { .. }) {
-            assert_eq!(host.inner.lock().last_error.as_deref(), Some("运行失败"));
+            let last_error = host.inner.lock().last_error.clone();
+            assert_eq!(
+                last_error.map(|error| error.message),
+                Some("运行失败".into())
+            );
         }
         assert_eq!(terminal.recv().await, Some(event));
         assert!(matches!(

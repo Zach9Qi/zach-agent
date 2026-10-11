@@ -1,7 +1,7 @@
 //! 一次运行的句柄：事件流、中止与最终结果
 
 use crate::agent_loop::RunOutput;
-use crate::error::AgentError;
+use crate::error::RunError;
 use crate::event::AgentEvent;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 pub struct AgentRun {
     events: mpsc::Receiver<AgentEvent>,
     terminal: mpsc::Receiver<AgentEvent>,
-    handle: JoinHandle<Result<RunOutput, AgentError>>,
+    handle: JoinHandle<Result<RunOutput, RunError>>,
     cancel: CancellationToken,
 }
 
@@ -30,7 +30,7 @@ impl AgentRun {
     pub(super) fn new(
         events: mpsc::Receiver<AgentEvent>,
         terminal: mpsc::Receiver<AgentEvent>,
-        handle: JoinHandle<Result<RunOutput, AgentError>>,
+        handle: JoinHandle<Result<RunOutput, RunError>>,
         cancel: CancellationToken,
     ) -> Self {
         Self {
@@ -54,7 +54,7 @@ impl AgentRun {
     /// 放弃剩余事件，等待运行结束并返回结果
     ///
     /// 之后产生的交互式审批请求将无人答复而被自动拒绝，见 [`crate::ApprovalHandler`]。
-    pub async fn outcome(self) -> Result<RunOutput, AgentError> {
+    pub async fn outcome(self) -> Result<RunOutput, RunError> {
         let Self {
             events,
             terminal,
@@ -67,7 +67,7 @@ impl AgentRun {
     }
 
     /// 收集全部事件并返回结果
-    pub async fn collect(mut self) -> (Vec<AgentEvent>, Result<RunOutput, AgentError>) {
+    pub async fn collect(mut self) -> (Vec<AgentEvent>, Result<RunOutput, RunError>) {
         let mut events = Vec::new();
         while let Some(event) = self.next().await {
             events.push(event);
@@ -76,10 +76,10 @@ impl AgentRun {
     }
 }
 
-async fn join(handle: JoinHandle<Result<RunOutput, AgentError>>) -> Result<RunOutput, AgentError> {
+async fn join(handle: JoinHandle<Result<RunOutput, RunError>>) -> Result<RunOutput, RunError> {
     handle
         .await
-        .map_err(|error| AgentError::Internal(format!("运行任务异常退出: {error}")))?
+        .map_err(|error| RunError::Internal(error.to_string()))?
 }
 
 impl Stream for AgentRun {

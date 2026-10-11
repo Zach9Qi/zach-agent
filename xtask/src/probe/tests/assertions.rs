@@ -2,7 +2,7 @@
 
 use super::{super::runner::run, support::*};
 use serde_json::{json, Value};
-use zach_ai_core::{StreamPart, Usage};
+use zach_ai_core::{ErrorInfo, ErrorKind, StreamPart, Usage};
 
 async fn check(mode: &str, expect: Value, parts: Vec<StreamPart>) -> (bool, Buffer) {
     let scenario = parse_scenario(
@@ -168,10 +168,10 @@ async fn tool_only_responses_can_be_checked_without_requiring_text() {
 
 #[tokio::test]
 async fn protocol_errors_cannot_pass_even_when_expected_text_is_present() {
-    let mut parts = vec![StreamPart::Error {
-        message: "错误".into(),
-        raw: None,
-    }];
+    let mut parts = vec![StreamPart::Error(ErrorInfo::new(
+        ErrorKind::InvalidResponse,
+        "错误",
+    ))];
     parts.extend(text_reply("答案"));
     assert!(
         !check(

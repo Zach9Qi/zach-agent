@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
-use zach_ai_core::{CallOptions, LanguageModel, Message, ProviderTool};
+use zach_ai_core::{CallOptions, ErrorInfo, LanguageModel, Message, ProviderTool};
 
 /// 受互斥锁保护的全部可变状态；锁从不跨越 `await`
 pub(super) struct State {
@@ -30,7 +30,7 @@ pub(super) struct State {
     pub(super) active: Option<CancellationToken>,
     pub(super) pending_tool_calls: Vec<String>,
     pub(super) approvals: HashMap<String, oneshot::Sender<ApprovalDecision>>,
-    pub(super) last_error: Option<String>,
+    pub(super) last_error: Option<ErrorInfo>,
 }
 
 impl State {
@@ -69,7 +69,7 @@ impl State {
                 preliminary: false,
                 ..
             } => self.pending_tool_calls.retain(|id| id != tool_call_id),
-            AgentEvent::RunError { error_text } => self.last_error = Some(error_text.clone()),
+            AgentEvent::RunError { error } => self.last_error = Some(error.clone()),
             _ => {}
         }
     }

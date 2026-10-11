@@ -17,6 +17,9 @@ mod transport;
 ))]
 mod validate;
 
+#[cfg(any(feature = "openai-responses", feature = "openai-chat"))]
+mod openai;
+
 #[cfg(all(
     test,
     any(

@@ -141,10 +141,7 @@ impl LanguageModel for Model {
                 Ok(accumulator.finish())
             }
             Script::Pending => futures::future::pending().await,
-            Script::TransportFailure => Err(ModelError::StreamError {
-                message: "传输失败".into(),
-                source: None,
-            }),
+            Script::TransportFailure => Err(ModelError::transport("传输失败")),
         }
     }
 
@@ -159,10 +156,7 @@ impl LanguageModel for Model {
                     delta: "半截".into(),
                     provider_metadata: None,
                 }),
-                Err(ModelError::StreamError {
-                    message: "传输失败".into(),
-                    source: None,
-                }),
+                Err(ModelError::transport("传输失败")),
             ])),
         })
     }

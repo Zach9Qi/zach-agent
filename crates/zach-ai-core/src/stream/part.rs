@@ -1,5 +1,6 @@
 //! 流式事件切片（StreamPart）定义
 
+use crate::error::ErrorInfo;
 use crate::file::FileData;
 use crate::options::{ModelWarning, ProviderMetadata};
 use crate::response::{FinishReason, ResponseMetadata, SourceContent, Usage};
@@ -235,15 +236,11 @@ pub enum StreamPart {
     },
     /// 厂商下发的错误事件或单个分块解析失败（不终止流，可多次出现）
     ///
+    /// 与流外的 [`crate::ModelError`] 携带同样的类别与上下文：上层据此决定是否重试，
+    /// 同一个故障不会因为以 HTTP 状态码还是流内事件到达而得到不同处理。
     /// 任一错误都会使本轮生成的最终状态为 `Error`；后续内容仅保留作诊断，
     /// 后续 `Finish` 仍可携带用量和元数据，但不能将本轮恢复为成功。
-    Error {
-        /// 格式化后的错误可读描述信息
-        message: String,
-        /// 厂商返回的原始错误信息 JSON 载荷（供深度排错使用）
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        raw: Option<Value>,
-    },
+    Error(ErrorInfo),
     /// 开启 `include_raw_chunks` 时透出的厂商底层原始 SSE 数据块
     Raw {
         /// 厂商原始未加工的数据载荷

@@ -5,7 +5,7 @@ mod history;
 use super::*;
 use crate::test_support::{profile, reasoning_profile};
 use serde_json::json;
-use zach_ai_core::{FunctionTool, Message, ProviderTool, ToolChoice, ToolDefinition};
+use zach_ai_core::{ErrorKind, FunctionTool, Message, ProviderTool, ToolChoice, ToolDefinition};
 
 fn build(options: &CallOptions) -> Value {
     build_request("example", None, options, false).unwrap().body
@@ -75,19 +75,15 @@ fn unsupported_generic_parameters_fail_before_sending() {
             ..Default::default()
         },
     ] {
-        assert!(matches!(
-            build_request("example", None, &options, false),
-            Err(ModelError::UnsupportedFeature { .. })
-        ));
+        assert!(build_request("example", None, &options, false)
+            .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     }
     let nan = CallOptions {
         temperature: Some(f32::NAN),
         ..Default::default()
     };
-    assert!(matches!(
-        build_request("example", None, &nan, false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(build_request("example", None, &nan, false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
     assert!(build_request(" ", None, &CallOptions::default(), false).is_err());
 }
 
@@ -110,10 +106,8 @@ fn system_messages_are_hoisted_and_only_allowed_at_the_start() {
         ])
     );
     let late = CallOptions::new(vec![Message::user("你好"), Message::system("规则")]);
-    assert!(matches!(
-        build_request("example", None, &late, false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(build_request("example", None, &late, false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
 }
 
 #[test]
@@ -246,22 +240,16 @@ fn json_schema_output_and_unknown_provider_fields_are_handled() {
         description: None,
         strict: None,
     });
-    assert!(matches!(
-        build_request("example", None, &options, false),
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(build_request("example", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     options.response_format = Some(ResponseFormat::Text);
     assert!(build(&options).get("output_config").is_none());
     options.provider_options = anthropic_options(json!({"messages": []}));
-    assert!(matches!(
-        build_request("example", None, &options, false),
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(build_request("example", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     options.provider_options = anthropic_options(json!({"betas": "not-a-list"}));
-    assert!(matches!(
-        build_request("example", None, &options, false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(build_request("example", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
 }
 
 #[test]

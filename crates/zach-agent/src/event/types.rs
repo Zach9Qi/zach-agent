@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use zach_ai_core::{FileData, FinishReason, ProviderMetadata, ToolResultOutput};
+use zach_ai_core::{ErrorInfo, FileData, FinishReason, ProviderMetadata, ToolResultOutput};
 
 /// Agent 运行过程中的核心语义化事件
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,8 +45,8 @@ pub enum AgentEvent {
     },
     /// 发生不可恢复的致命运行时错误
     RunError {
-        /// 错误详情描述文本
-        error_text: String,
+        /// 错误类别、描述与上下文；按 `error.kind` 分支处理，不要匹配描述文本
+        error: ErrorInfo,
     },
 
     // -----------------------------------------------------------------------
@@ -66,9 +66,8 @@ pub enum AgentEvent {
     StepRetry {
         /// 触发重置/重试的步骤轮次索引
         step_index: usize,
-        /// 重置或重试的原因说明
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        reason: Option<String>,
+        /// 触发重试的错误（类别必然可重试，可能带有服务端建议的等待时长）
+        error: ErrorInfo,
     },
 
     // -----------------------------------------------------------------------

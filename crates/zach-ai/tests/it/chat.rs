@@ -1,7 +1,7 @@
 //! Chat Completions 模型公开 API 的构造、能力和请求前校验。
 
 use zach_ai::{ModelCatalog, OpenAiChatCompletionsModel};
-use zach_ai_core::{CallOptions, LanguageModel, Message, ModelError, ModelProfile};
+use zach_ai_core::{CallOptions, ErrorKind, LanguageModel, Message, ModelProfile};
 
 #[test]
 fn chat_model_exposes_identity_and_catalog_profile_without_credentials_in_debug() {
@@ -54,12 +54,12 @@ async fn unsupported_options_fail_without_accessing_the_endpoint() {
         top_k: Some(5),
         ..Default::default()
     };
-    assert!(matches!(
-        model.do_generate(options.clone()).await,
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
-    assert!(matches!(
-        model.do_stream(options).await,
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(model
+        .do_generate(options.clone())
+        .await
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
+    assert!(model
+        .do_stream(options)
+        .await
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
 }

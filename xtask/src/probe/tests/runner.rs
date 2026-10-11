@@ -5,7 +5,8 @@ use super::{output::BrokenWriter, support::*};
 use serde_json::json;
 use std::sync::Arc;
 use zach_ai_core::{
-    Message, StreamPart, ToolChoice, ToolPart, ToolResultOutput, UnifiedFinishReason,
+    ErrorInfo, ErrorKind, Message, StreamPart, ToolChoice, ToolPart, ToolResultOutput,
+    UnifiedFinishReason,
 };
 
 #[tokio::test]
@@ -140,10 +141,10 @@ async fn semantic_errors_truncation_and_empty_answers_never_report_success() {
     if let StreamPart::Finish { finish_reason, .. } = &mut truncated[1] {
         finish_reason.unified = UnifiedFinishReason::Length;
     }
-    let mut failed = vec![StreamPart::Error {
-        message: "错误".into(),
-        raw: None,
-    }];
+    let mut failed = vec![StreamPart::Error(ErrorInfo::new(
+        ErrorKind::InvalidResponse,
+        "错误",
+    ))];
     failed.extend(text_reply("诊断"));
     for parts in [truncated, failed, text_reply(""), vec![]] {
         let (output, buffer) = output();

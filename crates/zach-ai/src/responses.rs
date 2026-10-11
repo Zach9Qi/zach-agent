@@ -43,7 +43,7 @@ use zach_ai_core::{
     CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
 };
 
-use crate::transport;
+use crate::{openai, transport};
 use request::{build_request, BuiltRequest};
 use response::parse_response;
 use stream::{responses_stream, ResponsesStreamParser};
@@ -167,7 +167,9 @@ impl OpenAiResponsesModel {
             .header(ACCEPT, transport::accept(stream))
             .json(&built.body)
             .build()
-            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
+            .map_err(|err| {
+                ModelError::invalid_request(format!("构建 {LABEL} 请求失败")).with_source(err)
+            })?;
         transport::prepare(&mut request, &self.timeouts, stream);
         Ok((request, built))
     }
@@ -180,6 +182,7 @@ impl OpenAiResponsesModel {
         let (request, built) = self.request(options, stream)?;
         let response = transport::execute(
             &self.client,
+            &openai::DIALECT,
             PROVIDER,
             LABEL,
             request,
@@ -223,9 +226,14 @@ impl LanguageModel for OpenAiResponsesModel {
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         let (response, built) = self.send(&options, true).await?;
-        let response =
-            transport::require_event_stream(response, PROVIDER, LABEL, self.timeouts.stream_idle)
-                .await?;
+        let response = transport::require_event_stream(
+            response,
+            &openai::DIALECT,
+            PROVIDER,
+            LABEL,
+            self.timeouts.stream_idle,
+        )
+        .await?;
         let parser = ResponsesStreamParser::new(options.include_raw_chunks);
         Ok(responses_stream(
             response.bytes_stream(),

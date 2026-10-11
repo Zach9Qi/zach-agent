@@ -76,7 +76,7 @@ fn assistant_message(parts: &[AssistantPart]) -> Result<Vec<Value>, ModelError> 
                 if *provider_executed {
                     return Err(ModelError::unsupported("provider_executed_tool_call", None));
                 }
-                calls.push(json!({"id":tool_call_id, "type":"function", "function":{"name":tool_name, "arguments":serde_json::to_string(input)?}}));
+                calls.push(json!({"id":tool_call_id, "type":"function", "function":{"name":tool_name, "arguments":input.to_string()}}));
             }
             // Chat Completions 的输入消息不接受思考链字段（DeepSeek 等端点
             // 收到 reasoning_content 会直接 400），历史推理不回传。
@@ -119,7 +119,7 @@ fn tool_message(parts: &[ToolPart]) -> Result<Vec<Value>, ModelError> {
         }
     }
     if results.is_empty() {
-        Err(ModelError::InvalidRequest("工具消息不能为空".into()))
+        Err(ModelError::invalid_request("工具消息不能为空"))
     } else {
         Ok(results)
     }

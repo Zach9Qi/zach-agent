@@ -1,42 +1,20 @@
-//! HTTP 错误分类、非 JSON 正文回退、内容类型校验与请求头合并规则。
+//! 内容类型校验、非 JSON 响应的诊断与请求头合并规则。错误分类见 `transport/error/tests.rs`。
 
 use super::*;
+use zach_ai_core::ErrorKind;
 
-#[test]
-fn authentication_rate_limit_overload_and_server_faults_have_stable_categories() {
-    let body = br#"{"type":"error","error":{"type":"x","message":"failure"}}"#;
-    assert!(matches!(
-        classify("p", 401, body),
-        ModelError::Authentication(message) if message == "failure"
-    ));
-    assert!(matches!(
-        classify("p", 403, body),
-        ModelError::Authentication(_)
-    ));
-    assert!(matches!(
-        classify("p", 429, body),
-        ModelError::RateLimit(message) if message == "failure"
-    ));
-    assert!(matches!(classify("p", 529, body), ModelError::RateLimit(_)));
-    // 5xx 与 408 是暂时性故障：保留状态码与原始正文，且可重试。
-    assert!(matches!(
-        classify("p", 500, body),
-        ModelError::ServerError { status: 500, raw: Some(_), provider, .. } if provider == "p"
-    ));
-    assert!(matches!(classify("p", 502, b"proxy failure"),
-        ModelError::ServerError { status: 502, message, raw: None, .. }
-            if message == "proxy failure"));
-    assert!(classify("p", 503, body).is_retryable());
-    assert!(classify("p", 408, body).is_retryable());
-    // 4xx（限流与鉴权之外）是对请求本身的拒绝，不可重试。
-    assert!(matches!(
-        classify("p", 404, body),
-        ModelError::ProviderError { raw: Some(_), provider, .. } if provider == "p"
-    ));
-    assert!(!classify("p", 404, body).is_retryable());
-    assert!(classify("p", 400, b"").to_string().contains("HTTP 400"));
-    assert!(matches!(classify("p", 400, br#"{"message":"flat"}"#),
-        ModelError::ProviderError { message, .. } if message == "flat"));
+/// 不认识任何厂商错误码，完全按状态码与正文分类
+const PLAIN: ErrorDialect = ErrorDialect {
+    code: no_code,
+    kind: no_kind,
+};
+
+fn no_code(_: &Value) -> Option<&str> {
+    None
+}
+
+fn no_kind(_: &str, _: &Value) -> Option<ErrorKind> {
+    None
 }
 
 /// 网关把流式请求当普通请求处理时会回 JSON/HTML，正文里的错误信息不能丢；
@@ -54,18 +32,25 @@ async fn document_content_types_are_rejected_with_the_body_message() {
         Some("application/json; charset=utf-8"),
         r#"{"error":{"message":"not a stream"}}"#,
     );
-    assert!(matches!(
-        require_event_stream(json, "p", "测试", None).await,
-        Err(ModelError::ProviderError { provider, message, raw: Some(_) })
-            if provider == "p"
-                && message.contains("not a stream")
-                && message.contains("application/json")
-    ));
+    let error = require_event_stream(json, &PLAIN, "p", "测试", None)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidResponse);
+    assert_eq!(error.provider(), Some("p"));
+    assert!(error.message().contains("not a stream"));
+    assert!(error.message().contains("application/json"));
+    assert!(error.raw().is_some());
     for document in ["text/html", "text/plain", "application/problem+json"] {
         assert!(
-            require_event_stream(response(Some(document), "<html>"), "p", "测试", None)
-                .await
-                .is_err(),
+            require_event_stream(
+                response(Some(document), "<html>"),
+                &PLAIN,
+                "p",
+                "测试",
+                None
+            )
+            .await
+            .is_err(),
             "{document}"
         );
     }
@@ -75,7 +60,7 @@ async fn document_content_types_are_rejected_with_the_body_message() {
         None,
     ] {
         assert!(
-            require_event_stream(response(lenient, "data: x\n\n"), "p", "测试", None)
+            require_event_stream(response(lenient, "data: x\n\n"), &PLAIN, "p", "测试", None)
                 .await
                 .is_ok(),
             "{lenient:?}"
@@ -97,10 +82,12 @@ fn extra_headers_override_defaults_and_mark_credentials_sensitive() {
     assert!(headers[AUTHORIZATION].is_sensitive());
     assert!(headers["x-api-key"].is_sensitive());
     let bad_name = HashMap::from([("bad\nname".to_owned(), "v".to_owned())]);
-    assert!(matches!(
-        extend_headers(&mut headers, Some(&bad_name)),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert_eq!(
+        extend_headers(&mut headers, Some(&bad_name))
+            .unwrap_err()
+            .kind(),
+        ErrorKind::InvalidRequest
+    );
     let bad_value = HashMap::from([("x-b".to_owned(), "v\n".to_owned())]);
     assert!(extend_headers(&mut headers, Some(&bad_value)).is_err());
     assert!(sensitive_header("bad\nkey", "API Key").is_err());

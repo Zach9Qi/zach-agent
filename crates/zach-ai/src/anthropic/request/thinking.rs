@@ -45,7 +45,7 @@ pub(super) fn apply(
     }
     // 旧代际：档位换算为思考预算，并压在 max_tokens 之下。
     if max_tokens <= MIN_BUDGET {
-        return Err(ModelError::InvalidRequest(format!(
+        return Err(ModelError::invalid_request(format!(
             "启用思考要求 max_tokens 大于 {MIN_BUDGET}，当前为 {max_tokens}"
         )));
     }
@@ -124,6 +124,7 @@ pub(super) fn generation(model_id: &str) -> Option<(u32, u32)> {
 mod tests {
     //! 代际识别与档位到 thinking 配置的换算。
     use super::*;
+    use zach_ai_core::ErrorKind;
 
     #[test]
     fn generation_is_read_from_the_model_id_and_ignores_date_suffixes() {
@@ -172,10 +173,10 @@ mod tests {
         .unwrap();
         assert_eq!(body["thinking"]["budget_tokens"], 8_191);
         let mut body = json!({});
-        assert!(matches!(
-            apply(&mut body, "claude-sonnet-4-5", ReasoningEffort::Low, 1_024),
-            Err(ModelError::InvalidRequest(_))
-        ));
+        assert!(
+            apply(&mut body, "claude-sonnet-4-5", ReasoningEffort::Low, 1_024)
+                .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest)
+        );
         let mut body = json!({});
         apply(&mut body, "claude-sonnet-4-5", ReasoningEffort::None, 1_024).unwrap();
         assert_eq!(body["thinking"], json!({"type": "disabled"}));

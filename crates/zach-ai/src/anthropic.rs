@@ -27,6 +27,7 @@
 //! # }
 //! ```
 
+mod error;
 mod request;
 mod response;
 mod stream;
@@ -168,7 +169,7 @@ impl AnthropicMessagesModel {
                 }
             }
             let value = HeaderValue::from_str(&all.join(","))
-                .map_err(|_| ModelError::InvalidRequest("anthropic-beta 包含非法字符".into()))?;
+                .map_err(|_| ModelError::invalid_request("anthropic-beta 包含非法字符"))?;
             headers.insert("anthropic-beta", value);
         }
         Ok(headers)
@@ -187,7 +188,9 @@ impl AnthropicMessagesModel {
             .header(ACCEPT, transport::accept(stream))
             .json(&built.body)
             .build()
-            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
+            .map_err(|err| {
+                ModelError::invalid_request(format!("构建 {LABEL} 请求失败")).with_source(err)
+            })?;
         transport::prepare(&mut request, &self.timeouts, stream);
         Ok((request, built))
     }
@@ -200,6 +203,7 @@ impl AnthropicMessagesModel {
         let (request, built) = self.request(options, stream)?;
         let response = transport::execute(
             &self.client,
+            &error::DIALECT,
             PROVIDER,
             LABEL,
             request,
@@ -243,9 +247,14 @@ impl LanguageModel for AnthropicMessagesModel {
 
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         let (response, built) = self.send(&options, true).await?;
-        let response =
-            transport::require_event_stream(response, PROVIDER, LABEL, self.timeouts.stream_idle)
-                .await?;
+        let response = transport::require_event_stream(
+            response,
+            &error::DIALECT,
+            PROVIDER,
+            LABEL,
+            self.timeouts.stream_idle,
+        )
+        .await?;
         let parser = MessagesStreamParser::new(options.include_raw_chunks);
         Ok(messages_stream(
             response.bytes_stream(),

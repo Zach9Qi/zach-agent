@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use tokio_util::sync::CancellationToken;
 use zach_ai_core::tool::tool_input_for_display;
 use zach_ai_core::{
-    GenerateResult, Message, ModelError, OutputContent, Prompt, StreamAccumulator, StreamPart,
-    UnifiedFinishReason,
+    ErrorInfo, ErrorKind, GenerateResult, Message, ModelError, OutputContent, Prompt,
+    StreamAccumulator, StreamPart, UnifiedFinishReason,
 };
 
 /// 单步结果
@@ -51,10 +51,10 @@ pub(super) async fn run_step(input: StepInput<'_>) -> StepOutcome {
             .host
             .emit(AgentEvent::StepRetry {
                 step_index: input.step_index,
-                reason: Some(error.to_string()),
+                error: ErrorInfo::from(&error),
             })
             .await;
-        let delay = input.retry.delay_for(attempt);
+        let delay = input.retry.delay_for(attempt, error.retry_after());
         if cancellable(input.cancel, tokio::time::sleep(delay))
             .await
             .is_none()
@@ -121,6 +121,8 @@ async fn stream_once(input: &StepInput<'_>) -> Result<StepOutcome, ModelError> {
         }
     }
 
+    // 首个流内错误通常是根因，它的类别决定是否重试（过载、限流以流内事件到达时同样重试）
+    let first_error = accumulator.errors().first().cloned();
     let result = accumulator.finish();
     let ids: Vec<String> = result
         .content
@@ -134,16 +136,18 @@ async fn stream_once(input: &StepInput<'_>) -> Result<StepOutcome, ModelError> {
         announce(&id, &result.content, &state.context, &mut announced, host).await;
     }
 
+    if let Some(error) = first_error {
+        return Err(error.into());
+    }
     match result.finish_reason.unified {
-        UnifiedFinishReason::Unknown => Err(ModelError::StreamError {
-            message: "模型流未正常收尾".to_string(),
-            source: None,
-        }),
-        UnifiedFinishReason::Error => Err(ModelError::Other(
-            result
-                .finish_reason
-                .raw
-                .unwrap_or_else(|| "模型生成失败".to_string()),
+        UnifiedFinishReason::Unknown => Err(ModelError::transport("模型流未正常收尾")),
+        // 厂商以错误结束却没有错误事件：视为服务端生成失败
+        UnifiedFinishReason::Error => Err(ModelError::new(
+            ErrorKind::Unavailable,
+            format!(
+                "模型以错误状态结束: {}",
+                result.finish_reason.raw.as_deref().unwrap_or("未给出原因")
+            ),
         )),
         _ => Ok(StepOutcome::Completed(result)),
     }

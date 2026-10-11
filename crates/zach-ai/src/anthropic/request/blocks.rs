@@ -46,9 +46,7 @@ pub(super) fn file_block(
                 json!({"type": "file", "file_id": file_id(reference)?})
             }
             FileData::Text { .. } => {
-                return Err(ModelError::InvalidRequest(
-                    "图片附件不能使用内联文本载荷".into(),
-                ))
+                return Err(ModelError::invalid_request("图片附件不能使用内联文本载荷"))
             }
         };
         return Ok(json!({"type": "image", "source": source}));
@@ -64,7 +62,7 @@ pub(super) fn file_block(
         (_, FileData::Text { text }) => text_source(text),
         (kind, FileData::Data { data }) if kind.starts_with("text/") => {
             let text = std::str::from_utf8(data).map_err(|_| {
-                ModelError::InvalidRequest(format!("{kind} 附件不是合法的 UTF-8 文本"))
+                ModelError::invalid_request(format!("{kind} 附件不是合法的 UTF-8 文本"))
             })?;
             text_source(text)
         }
@@ -94,7 +92,7 @@ fn file_id(reference: &std::collections::HashMap<String, String>) -> Result<&str
         .get("anthropic")
         .map(String::as_str)
         .filter(|id| !id.is_empty())
-        .ok_or_else(|| ModelError::InvalidRequest("缺少 anthropic 文件引用".into()))
+        .ok_or_else(|| ModelError::invalid_request("缺少 anthropic 文件引用"))
 }
 
 pub(super) fn assistant_part(part: &AssistantPart) -> Result<Option<Value>, ModelError> {

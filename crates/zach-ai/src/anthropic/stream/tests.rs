@@ -7,7 +7,7 @@ use super::*;
 use crate::test_support::{aggregate, aggregate_lenient, byte_stream, event_frame};
 use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::ModelError;
+use zach_ai_core::{ErrorKind, ModelError};
 
 fn message(content: Vec<Value>, stop_reason: &str) -> Value {
     json!({

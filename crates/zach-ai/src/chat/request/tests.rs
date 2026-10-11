@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::test_support::{profile, reasoning_profile};
-use zach_ai_core::Message;
+use zach_ai_core::{ErrorKind, Message};
 
 /// tool 消息的 content 只接受文本部件，文件附件必须在发送前被拒绝而非生成非法部件。
 #[test]
@@ -22,10 +22,8 @@ fn tool_result_file_blocks_are_rejected_instead_of_emitting_invalid_parts() {
         filename: None,
         provider_options: None,
     }])]);
-    assert!(matches!(
-        build_request("gpt-test", "openai", None, &image, false),
-        Err(zach_ai_core::ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(build_request("gpt-test", "openai", None, &image, false)
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     let text = CallOptions::new(vec![result(vec![ToolResultContentBlock::File {
         media_type: "text/plain".into(),
         data: FileData::Text {
@@ -157,13 +155,9 @@ fn provider_options_pass_through_but_cannot_override_adapter_fields() {
         let mut provider = zach_ai_core::ProviderOptions::new();
         provider.insert("openai", json!({ key: value }));
         options.provider_options = Some(provider);
-        assert!(
-            matches!(
-                build_request("qwen", "openai", None, &options, false),
-                Err(zach_ai_core::ModelError::UnsupportedFeature { feature, .. }) if feature == key
-            ),
-            "{key} 不应被覆盖"
-        );
+        let error = build_request("qwen", "openai", None, &options, false).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Unsupported, "{key} 不应被覆盖");
+        assert_eq!(error.code(), Some(key));
     }
 }
 

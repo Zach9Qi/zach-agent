@@ -9,11 +9,15 @@ use zach_ai_core::{
     ResponseMetadata, StreamAccumulator, StreamPart, UnifiedFinishReason, Usage,
 };
 
+use crate::openai::DIALECT;
+
 /// `provider` 只用于错误归属；响应元数据固定使用协议方 `openai` 的键。
 pub(super) fn parse_response(provider: &str, value: Value) -> Result<GenerateResult, ModelError> {
-    let error = |message: &str, raw: &Value| {
-        ModelError::provider_error(provider, message, Some(raw.clone()))
-    };
+    // 部分兼容端点以 HTTP 200 返回错误对象，按厂商错误分类而不是报"缺少 choices"
+    if let Some(error) = value.get("error").filter(|error| error.is_object()) {
+        return Err(DIALECT.error(provider, error).with_raw(value.clone()));
+    }
+    let error = |message: &str, raw: &Value| invalid_response(provider, message, raw);
     let choices = value["choices"]
         .as_array()
         .ok_or_else(|| error("响应缺少 choices 数组", &value))?;
@@ -189,11 +193,12 @@ fn string(provider: &str, value: &Value, path: &str) -> Result<String, ModelErro
     target
         .and_then(Value::as_str)
         .map(str::to_owned)
-        .ok_or_else(|| {
-            ModelError::provider_error(
-                provider,
-                format!("响应缺少字符串字段 {path}"),
-                Some(value.clone()),
-            )
-        })
+        .ok_or_else(|| invalid_response(provider, format!("响应缺少字符串字段 {path}"), value))
+}
+
+/// 响应违反 Chat Completions 协议；`raw` 是出错的响应片段
+fn invalid_response(provider: &str, message: impl Into<String>, raw: &Value) -> ModelError {
+    ModelError::invalid_response(message)
+        .with_provider(provider)
+        .with_raw(raw.clone())
 }

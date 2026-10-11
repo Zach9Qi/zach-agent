@@ -7,7 +7,7 @@ use crate::config::RetryPolicy;
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
 use std::sync::Arc;
-use zach_ai_core::{CallOptions, LanguageModel, Message, ProviderTool, ReasoningEffort};
+use zach_ai_core::{CallOptions, ErrorInfo, LanguageModel, Message, ProviderTool, ReasoningEffort};
 
 impl Agent {
     /// 对话记录快照（运行中会随消息写入实时增长）
@@ -159,8 +159,8 @@ impl Agent {
         self.inner.lock().approvals.keys().cloned().collect()
     }
 
-    /// 最近一次失败运行的错误信息
-    pub fn last_error(&self) -> Option<String> {
+    /// 最近一次失败运行的错误信息；按 [`ErrorInfo::kind`] 判断该如何处理
+    pub fn last_error(&self) -> Option<ErrorInfo> {
         self.inner.lock().last_error.clone()
     }
 }

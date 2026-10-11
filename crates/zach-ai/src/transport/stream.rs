@@ -99,22 +99,19 @@ where
             }
             match state.pull().await {
                 Pull::Bytes(bytes) => state.feed(&bytes),
-                Pull::Failed(error) => state.end(ModelError::stream_error(
-                    format!("读取 {} SSE 字节流失败", state.label),
-                    error,
-                )),
-                Pull::Idle(limit) => state.end(ModelError::StreamError {
-                    message: format!(
-                        "{} SSE 超过 {} 秒没有收到数据",
-                        state.label,
-                        limit.as_secs()
-                    ),
-                    source: None,
-                }),
-                Pull::End => state.end(ModelError::StreamError {
-                    message: format!("{} SSE 在终止事件到达前结束", state.label),
-                    source: None,
-                }),
+                Pull::Failed(error) => state.end(
+                    ModelError::transport(format!("读取 {} SSE 字节流失败", state.label))
+                        .with_source(error),
+                ),
+                Pull::Idle(limit) => state.end(ModelError::transport(format!(
+                    "{} SSE 超过 {} 秒没有收到数据",
+                    state.label,
+                    limit.as_secs()
+                ))),
+                Pull::End => state.end(ModelError::transport(format!(
+                    "{} SSE 在终止事件到达前结束",
+                    state.label
+                ))),
             }
         }
     }))

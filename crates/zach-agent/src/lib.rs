@@ -20,11 +20,11 @@ pub use approval::{
 };
 pub use config::{LoopConfig, RetryPolicy};
 pub use context::{AgentContext, RequestState};
-pub use error::AgentError;
+pub use error::{AgentError, RunError};
 pub use event::AgentEvent;
 pub use hooks::{AgentHooks, NoopHooks, ToolCallDecision, ToolCallInfo, TurnDecision, TurnInfo};
 pub use host::LoopHost;
 pub use tool::{
-    typed_tool, AgentTool, SharedTool, ToolContext, ToolError, ToolExecutionMode, ToolOutcome,
-    Typed, TypedTool,
+    typed_tool, AgentTool, SharedTool, ToolContext, ToolError, ToolErrorKind, ToolExecutionMode,
+    ToolOutcome, Typed, TypedTool,
 };

@@ -13,8 +13,8 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
     let parts = parser.complete(&value)?;
     let mut accumulator = StreamAccumulator::new();
     for part in parts {
-        if let StreamPart::Error { message, raw } = part {
-            return Err(ModelError::provider_error("openai", message, raw));
+        if let StreamPart::Error(error) = part {
+            return Err(error.into());
         }
         accumulator.process(part);
     }
@@ -22,13 +22,19 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
 }
 
 pub(super) fn string<'a>(value: &'a Value, field: &str) -> Result<&'a str, ModelError> {
-    value.get(field).and_then(Value::as_str).ok_or_else(|| {
-        ModelError::provider_error(
-            "openai",
-            format!("Responses 响应缺少字符串字段 {field}"),
-            None,
-        )
-    })
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid_response(format!("Responses 响应缺少字符串字段 {field}"), None))
+}
+
+/// 响应违反 Responses 协议；`raw` 是出错的响应或事件
+pub(super) fn invalid_response(message: impl Into<String>, raw: Option<Value>) -> ModelError {
+    let error = ModelError::invalid_response(message).with_provider("openai");
+    match raw {
+        Some(raw) => error.with_raw(raw),
+        None => error,
+    }
 }
 
 pub(super) fn metadata(value: Value) -> Option<ProviderMetadata> {
@@ -52,9 +58,9 @@ pub(super) fn finish(value: &Value) -> Result<StreamPart, ModelError> {
     let reason = value
         .pointer("/incomplete_details/reason")
         .and_then(Value::as_str);
-    let output = value["output"].as_array().ok_or_else(|| {
-        ModelError::provider_error("openai", "Responses 响应缺少 output 数组", None)
-    })?;
+    let output = value["output"]
+        .as_array()
+        .ok_or_else(|| invalid_response("Responses 响应缺少 output 数组", None))?;
     let has_calls = output.iter().any(|item| item["type"] == "function_call");
     let unified = match status {
         "completed" if has_calls => UnifiedFinishReason::ToolCalls,
@@ -68,8 +74,7 @@ pub(super) fn finish(value: &Value) -> Result<StreamPart, ModelError> {
         },
         "failed" | "cancelled" => UnifiedFinishReason::Error,
         _ => {
-            return Err(ModelError::provider_error(
-                "openai",
+            return Err(invalid_response(
                 format!("Responses 尚未完成: {status}"),
                 Some(value.clone()),
             ))

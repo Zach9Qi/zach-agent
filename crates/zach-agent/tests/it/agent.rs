@@ -6,10 +6,12 @@ use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zach_agent::{
-    Agent, AgentError, AgentEvent, AgentHooks, ApprovalDecision, QueueMode, RetryPolicy,
+    Agent, AgentError, AgentEvent, AgentHooks, ApprovalDecision, QueueMode, RetryPolicy, RunError,
     ToolCallDecision, ToolCallInfo, ToolOutcome,
 };
-use zach_ai_core::{Message, ModelError, ToolPart, ToolResultOutput, UnifiedFinishReason};
+use zach_ai_core::{
+    ErrorKind, Message, ModelError, ToolPart, ToolResultOutput, UnifiedFinishReason,
+};
 
 fn agent(model: Arc<ScriptedModel>) -> Agent {
     Agent::builder(model)
@@ -223,7 +225,7 @@ async fn approvals_are_answered_through_the_agent_handle() {
 #[tokio::test]
 async fn continue_run_retries_after_failure_and_drains_queues_after_replies() {
     let model = ScriptedModel::new(vec![
-        Script::Fail(ModelError::Authentication("过期".into())),
+        Script::Fail(ModelError::new(ErrorKind::Authentication, "过期")),
         Script::Parts(text("恢复了")),
         Script::Parts(text("追加的回复")),
     ]);
@@ -232,7 +234,7 @@ async fn continue_run_retries_after_failure_and_drains_queues_after_replies() {
 
     let failed = agent.prompt_text("你好").unwrap().outcome().await;
     assert!(failed.is_err());
-    assert!(agent.last_error().unwrap().contains("鉴权失败"));
+    assert_eq!(agent.last_error().unwrap().kind, ErrorKind::Authentication);
     assert_eq!(agent.messages(), vec![Message::user("你好")]);
 
     agent.continue_run().unwrap().outcome().await.unwrap();
@@ -280,11 +282,13 @@ async fn panicking_hook_fails_run_cleanly_and_keeps_transcript_usable() {
     let (events, result) = agent.prompt_text("你好").unwrap().collect().await;
 
     // 运行以 Internal 失败，且发出了 RunError、设置了 last_error
-    assert!(matches!(&result, Err(AgentError::Internal(text)) if text.contains("钩子崩了")));
-    assert!(events.iter().any(
-        |e| matches!(e, AgentEvent::RunError { error_text } if error_text.contains("钩子崩了"))
-    ));
-    assert!(agent.last_error().unwrap().contains("钩子崩了"));
+    assert!(matches!(&result, Err(RunError::Internal(text)) if text.contains("钩子崩了")));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        AgentEvent::RunError { error }
+            if error.kind == ErrorKind::Internal && error.message.contains("钩子崩了")
+    )));
+    assert!(agent.last_error().unwrap().message.contains("钩子崩了"));
     assert!(!agent.is_running());
     assert!(agent.pending_tool_calls().is_empty());
 

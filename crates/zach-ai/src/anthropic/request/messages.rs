@@ -23,8 +23,8 @@ pub(super) fn convert(messages: &[Message]) -> Result<Converted, ModelError> {
                 provider_options,
             } => {
                 if !converted.messages.is_empty() {
-                    return Err(ModelError::InvalidRequest(
-                        "Messages API 的系统提示只能出现在对话开头".into(),
+                    return Err(ModelError::invalid_request(
+                        "Messages API 的系统提示只能出现在对话开头",
                     ));
                 }
                 converted.system.push(with_cache_control(

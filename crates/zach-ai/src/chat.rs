@@ -20,7 +20,7 @@ use zach_ai_core::{
     CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
 };
 
-use crate::transport;
+use crate::{openai, transport};
 use request::{build_request, BuiltRequest};
 use response::parse_response;
 use stream::{chat_stream, ChatStreamParser};
@@ -164,7 +164,9 @@ impl OpenAiChatCompletionsModel {
             .header(ACCEPT, transport::accept(stream))
             .json(&built.body)
             .build()
-            .map_err(|err| ModelError::InvalidRequest(format!("构建 {LABEL} 请求失败: {err}")))?;
+            .map_err(|err| {
+                ModelError::invalid_request(format!("构建 {LABEL} 请求失败")).with_source(err)
+            })?;
         transport::prepare(&mut request, &self.timeouts, stream);
         Ok((request, built))
     }
@@ -177,6 +179,7 @@ impl OpenAiChatCompletionsModel {
         let (request, built) = self.request(options, stream)?;
         let response = transport::execute(
             &self.client,
+            &openai::DIALECT,
             &self.provider,
             LABEL,
             request,
@@ -224,6 +227,7 @@ impl LanguageModel for OpenAiChatCompletionsModel {
         let (response, built) = self.send(&options, true).await?;
         let response = transport::require_event_stream(
             response,
+            &openai::DIALECT,
             &self.provider,
             LABEL,
             self.timeouts.stream_idle,
@@ -231,7 +235,7 @@ impl LanguageModel for OpenAiChatCompletionsModel {
         .await?;
         Ok(chat_stream(
             response.bytes_stream(),
-            ChatStreamParser::new(options.include_raw_chunks),
+            ChatStreamParser::new(self.provider.clone(), options.include_raw_chunks),
             built.warnings,
             self.timeouts.stream_idle,
         ))

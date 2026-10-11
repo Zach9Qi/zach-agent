@@ -8,32 +8,12 @@ mod slots;
 
 use std::collections::{HashMap, HashSet};
 
+use crate::error::ErrorInfo;
 use crate::options::{ModelWarning, ProviderMetadata};
 use crate::response::{
     FinishReason, GenerateResult, OutputContent, ResponseMetadata, UnifiedFinishReason, Usage,
 };
 use crate::stream::part::StreamPart;
-use serde_json::Value;
-
-/// 流内收到的一次 [`StreamPart::Error`]
-#[derive(Debug, Clone, PartialEq)]
-pub struct StreamPartError {
-    pub message: String,
-    pub raw: Option<Value>,
-}
-
-impl StreamPartError {
-    /// 可读描述：优先使用 `message`，为空时退回原始载荷
-    fn describe(&self) -> String {
-        if !self.message.is_empty() {
-            self.message.clone()
-        } else if let Some(raw) = &self.raw {
-            raw.to_string()
-        } else {
-            "未知流式错误".to_string()
-        }
-    }
-}
 
 /// 流式事件聚合器
 ///
@@ -57,7 +37,7 @@ pub struct StreamAccumulator {
     /// 已收到完整入参的工具调用。之后的增量片段不再拼接，避免和完整 `ToolCall` 重复。
     sealed_tools: HashSet<String>,
     explicit_finish: Option<FinishReason>,
-    errors: Vec<StreamPartError>,
+    errors: Vec<ErrorInfo>,
 }
 
 impl StreamAccumulator {
@@ -110,8 +90,8 @@ impl StreamAccumulator {
     /// 流内收到的全部错误，按到达顺序排列
     ///
     /// 任一错误都会使最终结束原因为 [`UnifiedFinishReason::Error`]，并以首个错误描述作为原因。
-    /// 此访问器用于在收尾前读取完整诊断信息，不是判定最终结果是否失败的必要步骤。
-    pub fn errors(&self) -> &[StreamPartError] {
+    /// 首个错误通常是根因，其类别可用于决定是否重试（见 [`crate::ErrorKind::is_retryable`]）。
+    pub fn errors(&self) -> &[ErrorInfo] {
         &self.errors
     }
 
@@ -286,8 +266,8 @@ impl StreamAccumulator {
                 self.explicit_finish = Some(finish_reason);
                 slots::merge_metadata(&mut self.provider_metadata, provider_metadata);
             }
-            StreamPart::Error { message, raw } => {
-                self.errors.push(StreamPartError { message, raw });
+            StreamPart::Error(error) => {
+                self.errors.push(error);
             }
             StreamPart::Raw { .. } => {}
         }
@@ -315,9 +295,9 @@ impl StreamAccumulator {
     /// 错误优先于任何厂商结束原因；以第一个错误作为原始原因，它通常是根因
     fn resolved_finish_reason(&self) -> FinishReason {
         match (&self.explicit_finish, self.errors.first()) {
-            (_, Some(err)) => FinishReason {
+            (_, Some(error)) => FinishReason {
                 unified: UnifiedFinishReason::Error,
-                raw: Some(err.describe()),
+                raw: Some(describe(error)),
             },
             (Some(reason), None) => reason.clone(),
             // 既无 Finish 也无 Error：流被静默截断，不能伪装成正常停止
@@ -326,6 +306,17 @@ impl StreamAccumulator {
                 raw: None,
             },
         }
+    }
+}
+
+/// 错误的可读描述：优先使用 `message`，为空时退回原始载荷
+fn describe(error: &ErrorInfo) -> String {
+    if !error.message.is_empty() {
+        error.message.clone()
+    } else if let Some(raw) = &error.raw {
+        raw.to_string()
+    } else {
+        error.kind.label().to_string()
     }
 }
 

@@ -2,11 +2,12 @@
 
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
-use zach_ai_core::{ModelError, StreamPart};
+use zach_ai_core::{ErrorInfo, ModelError, StreamPart};
 
-use super::super::response::{finish, response_metadata, string};
+use super::super::response::{finish, invalid_response, response_metadata, string};
 use super::items::SUMMARY_SEPARATOR;
 use super::text::Block;
+use crate::openai::DIALECT;
 
 pub(in crate::responses) struct ResponsesStreamParser {
     pub(super) items: HashMap<String, Value>,
@@ -51,18 +52,16 @@ impl ResponsesStreamParser {
                 }
                 if let Err(error) = self.event(&event, &mut parts) {
                     self.failed = true;
-                    parts.push(StreamPart::Error {
-                        message: error.to_string(),
-                        raw: Some(event),
-                    });
+                    let mut error = ErrorInfo::from(error);
+                    error.raw.get_or_insert(event);
+                    parts.push(StreamPart::Error(error));
                 }
             }
             Err(error) => {
                 self.failed = true;
-                parts.push(StreamPart::Error {
-                    message: format!("Responses SSE JSON 解析失败: {error}"),
-                    raw: Some(json!(data)),
-                });
+                let error = invalid_response("Responses SSE JSON 解析失败", Some(json!(data)))
+                    .with_source(error);
+                parts.push(StreamPart::Error(error.into()));
             }
         }
         parts
@@ -129,11 +128,7 @@ impl ResponsesStreamParser {
             "response.function_call_arguments.delta" => {
                 let id = string(event, "item_id")?;
                 let item = self.items.get(id).ok_or_else(|| {
-                    ModelError::provider_error(
-                        "openai",
-                        "工具参数增量缺少对应输出项",
-                        Some(event.clone()),
-                    )
+                    invalid_response("工具参数增量缺少对应输出项", Some(event.clone()))
                 })?;
                 if !self.calls_done.contains_key(id) {
                     parts.push(StreamPart::ToolInputDelta {
@@ -146,11 +141,7 @@ impl ResponsesStreamParser {
             "response.function_call_arguments.done" => {
                 let id = string(event, "item_id")?;
                 let mut item = self.items.get(id).cloned().ok_or_else(|| {
-                    ModelError::provider_error(
-                        "openai",
-                        "工具参数完成事件缺少对应输出项",
-                        Some(event.clone()),
-                    )
+                    invalid_response("工具参数完成事件缺少对应输出项", Some(event.clone()))
                 })?;
                 item["arguments"] = json!(string(event, "arguments")?);
                 self.finish_call(&item, parts)?;
@@ -158,8 +149,7 @@ impl ResponsesStreamParser {
             "response.completed" | "response.incomplete" | "response.failed" => {
                 let status = string(&event["response"], "status")?;
                 if event["type"] != format!("response.{status}") {
-                    return Err(ModelError::provider_error(
-                        "openai",
+                    return Err(invalid_response(
                         "终止事件与响应状态不一致",
                         Some(event.clone()),
                     ));
@@ -167,15 +157,11 @@ impl ResponsesStreamParser {
                 parts.extend(self.complete(&event["response"])?);
                 self.terminal = true;
             }
+            // error 事件本身就是错误对象（code、message 与 type 同级）
             "error" => {
                 self.failed = true;
-                parts.push(StreamPart::Error {
-                    message: event["message"]
-                        .as_str()
-                        .unwrap_or("Responses 服务端错误")
-                        .into(),
-                    raw: Some(event.clone()),
-                });
+                let error = DIALECT.error("openai", event).with_raw(event.clone());
+                parts.push(StreamPart::Error(error.into()));
             }
             // 摘要与正文的完成快照由 output_item.done 补齐，其他进度事件只按需透出 Raw。
             _ => {}
@@ -199,24 +185,19 @@ impl ResponsesStreamParser {
         let mut parts = vec![StreamPart::ResponseMetadata(response_metadata(response))];
         if matches!(response["status"].as_str(), Some("failed" | "cancelled")) {
             self.failed = true;
-            parts.push(StreamPart::Error {
-                message: response
-                    .pointer("/error/message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Responses 生成失败")
-                    .into(),
-                raw: Some(response.clone()),
-            });
+            let error = DIALECT
+                .error("openai", &response["error"])
+                .with_raw(response.clone());
+            parts.push(StreamPart::Error(error.into()));
         } else {
             for item in response["output"].as_array().expect("finish 已校验 output") {
                 // 单个输出项解析失败不能吞掉终止事件：降级为 Error 并继续
                 // 处理其余项，保证末尾的 Finish（用量与停止原因）始终发出。
                 if let Err(error) = self.finish_item(item, &mut parts) {
                     self.failed = true;
-                    parts.push(StreamPart::Error {
-                        message: error.to_string(),
-                        raw: Some(item.clone()),
-                    });
+                    let mut error = ErrorInfo::from(error);
+                    error.raw.get_or_insert_with(|| item.clone());
+                    parts.push(StreamPart::Error(error));
                 }
             }
         }
@@ -226,9 +207,9 @@ impl ResponsesStreamParser {
 }
 
 fn content_index(event: &Value) -> Result<u64, ModelError> {
-    event["content_index"].as_u64().ok_or_else(|| {
-        ModelError::provider_error("openai", "文本事件缺少 content_index", Some(event.clone()))
-    })
+    event["content_index"]
+        .as_u64()
+        .ok_or_else(|| invalid_response("文本事件缺少 content_index", Some(event.clone())))
 }
 
 fn text_id(event: &Value) -> Result<String, ModelError> {

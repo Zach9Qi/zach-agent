@@ -1,128 +1,19 @@
-//! 统一错误类型定义
+//! 统一错误体系
+//!
+//! - [`ErrorKind`]：按"调用方该怎么处理"划分的类别，是可重试性等一切处理决策的唯一依据；
+//! - [`ModelError`]：运行时错误，由类别、统一的上下文字段与 `source` 链组成；
+//! - [`ErrorInfo`]：可序列化投影，跨越事件、流、持久化边界时只传它；
+//! - [`report`]：把错误及其 `source` 链渲染成一行。
+//!
+//! 约定：各层 `Display` 只描述本层事实，不拼接 `source`；需要完整原因时用 [`report`]，
+//! 因此逐层包装不会出现重复的前缀。
 
-use thiserror::Error;
+mod info;
+mod kind;
+mod model;
+mod report;
 
-/// 模型调用与交互过程中的统一错误类型
-#[derive(Debug, Error)]
-pub enum ModelError {
-    /// 客户端请求参数不合法（如缺失必填项、格式校验失败等）
-    #[error("请求参数无效: {0}")]
-    InvalidRequest(String),
-
-    /// 厂商或模型不支持某项特性（如某些模型不支持 tools、json schema 等）
-    #[error("不支持的特性: {feature} (详情: {details:?})")]
-    UnsupportedFeature {
-        feature: String,
-        details: Option<String>,
-    },
-
-    /// 鉴权失败（API Key 无效、过期或权限不足）
-    #[error("鉴权失败: {0}")]
-    Authentication(String),
-
-    /// 触发调用限流（Rate Limit）或配额用尽
-    #[error("触发限流或配额耗尽: {0}")]
-    RateLimit(String),
-
-    /// 厂商服务端暂时性故障（HTTP 5xx、408 等），重试可能成功
-    ///
-    /// 与 [`Self::ProviderError`] 的区别只在可重试性：后者是服务端明确拒绝了请求本身
-    /// （参数非法、模型不存在等），重试同样的请求没有意义。
-    #[error("厂商 [{provider}] 服务端暂时不可用 (HTTP {status}): {message}")]
-    ServerError {
-        provider: String,
-        status: u16,
-        message: String,
-        /// 原始错误正文，同 [`Self::ProviderError`] 装箱
-        raw: Option<Box<serde_json::Value>>,
-    },
-
-    /// 厂商服务端返回的明确错误
-    #[error("厂商 [{provider}] 返回错误: {message}")]
-    ProviderError {
-        provider: String,
-        message: String,
-        /// 原始错误正文；装箱以控制 `ModelError` 的体积，`Result` 传递时不必搬运大块载荷
-        raw: Option<Box<serde_json::Value>>,
-    },
-
-    /// 流式传输中断或读取超时（不可恢复，流随即结束）
-    #[error("流式传输错误: {message}")]
-    StreamError {
-        message: String,
-        /// 底层错误（如 `reqwest::Error`），根因常在其 `source()` 链深处
-        #[source]
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    },
-
-    /// JSON 序列化或反序列化失败
-    #[error("JSON 序列化/反序列化错误: {0}")]
-    Json(#[from] serde_json::Error),
-
-    /// 工具调用解析或执行前置错误
-    #[error("工具调用错误: {0}")]
-    ToolExecution(String),
-
-    /// 未归类的其他底层或网络错误
-    #[error("未归类的模型调用错误: {0}")]
-    Other(String),
-}
-
-impl ModelError {
-    /// 该错误本身是否属于暂时性故障（限流、服务端故障、传输中断），重试可能成功
-    ///
-    /// 只判断错误性质；流中途失败时可能已产出部分内容，是否真正重试由上层决定。
-    pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            Self::RateLimit(_) | Self::ServerError { .. } | Self::StreamError { .. }
-        )
-    }
-
-    /// 构造厂商返回错误
-    pub fn provider_error(
-        provider: impl Into<String>,
-        message: impl Into<String>,
-        raw: Option<serde_json::Value>,
-    ) -> Self {
-        Self::ProviderError {
-            provider: provider.into(),
-            message: message.into(),
-            raw: raw.map(Box::new),
-        }
-    }
-
-    /// 构造厂商服务端暂时性故障
-    pub fn server_error(
-        provider: impl Into<String>,
-        status: u16,
-        message: impl Into<String>,
-        raw: Option<serde_json::Value>,
-    ) -> Self {
-        Self::ServerError {
-            provider: provider.into(),
-            status,
-            message: message.into(),
-            raw: raw.map(Box::new),
-        }
-    }
-
-    /// 构造流式传输错误，保留底层错误作为 `source`
-    pub fn stream_error(
-        message: impl Into<String>,
-        source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
-    ) -> Self {
-        Self::StreamError {
-            message: message.into(),
-            source: Some(source.into()),
-        }
-    }
-
-    /// 构造特性不支持错误
-    pub fn unsupported(feature: impl Into<String>, details: Option<String>) -> Self {
-        Self::UnsupportedFeature {
-            feature: feature.into(),
-            details,
-        }
-    }
-}
+pub use info::ErrorInfo;
+pub use kind::ErrorKind;
+pub use model::ModelError;
+pub use report::report;

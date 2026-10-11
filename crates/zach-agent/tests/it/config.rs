@@ -14,9 +14,27 @@ fn retry_delay_grows_exponentially_and_is_capped() {
         max_delay: Duration::from_millis(350),
         multiplier: 2.0,
     };
-    assert_eq!(policy.delay_for(1), Duration::from_millis(100));
-    assert_eq!(policy.delay_for(2), Duration::from_millis(200));
-    assert_eq!(policy.delay_for(3), Duration::from_millis(350));
+    assert_eq!(policy.delay_for(1, None), Duration::from_millis(100));
+    assert_eq!(policy.delay_for(2, None), Duration::from_millis(200));
+    assert_eq!(policy.delay_for(3, None), Duration::from_millis(350));
+}
+
+/// 服务端建议的等待时长是下限（过早重试只会再次被限流），但不突破调用方设定的单次上限
+#[test]
+fn retry_after_hint_raises_the_delay_but_never_beyond_the_cap() {
+    let policy = RetryPolicy {
+        max_retries: 5,
+        initial_delay: Duration::from_millis(100),
+        max_delay: Duration::from_millis(350),
+        multiplier: 2.0,
+    };
+    let hint = |millis| Some(Duration::from_millis(millis));
+    assert_eq!(policy.delay_for(1, hint(250)), Duration::from_millis(250));
+    assert_eq!(policy.delay_for(2, hint(50)), Duration::from_millis(200));
+    assert_eq!(
+        policy.delay_for(1, hint(10_000)),
+        Duration::from_millis(350)
+    );
 }
 
 #[test]

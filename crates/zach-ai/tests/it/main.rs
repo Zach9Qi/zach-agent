@@ -15,7 +15,7 @@ mod chat;
 // 这组用例始终执行；只开其他 feature 的构建会少掉它们，换载体需要另写一套请求与分块夹具。
 #[cfg(feature = "openai-chat")]
 mod http;
-#[cfg(feature = "openai-chat")]
+#[cfg(any(feature = "openai-chat", feature = "anthropic"))]
 mod support;
 
 #[cfg(feature = "anthropic")]

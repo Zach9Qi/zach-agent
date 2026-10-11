@@ -9,9 +9,9 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use zach_agent::{
     continue_agent_loop, run_agent_loop, AgentContext, AgentError, AgentEvent, AgentHooks,
-    LoopConfig, RequestState, RetryPolicy, RunOutput, SharedTool, TurnDecision, TurnInfo,
+    LoopConfig, RequestState, RetryPolicy, RunError, RunOutput, SharedTool, TurnDecision, TurnInfo,
 };
-use zach_ai_core::{Message, ModelError, StreamPart, ToolPart, UnifiedFinishReason};
+use zach_ai_core::{ErrorKind, Message, ModelError, StreamPart, ToolPart, UnifiedFinishReason};
 
 fn config(model: Arc<ScriptedModel>) -> LoopConfig {
     LoopConfig::new(model).with_retry(RetryPolicy {
@@ -34,7 +34,7 @@ async fn run(
     config: LoopConfig,
     context: AgentContext,
     host: &TestHost,
-) -> Result<RunOutput, AgentError> {
+) -> Result<RunOutput, RunError> {
     let prompts = vec![Message::user("你好")];
     run_agent_loop(prompts, context, config, host, CancellationToken::new()).await
 }
@@ -162,17 +162,14 @@ async fn follow_up_messages_continue_a_finished_run() {
 #[tokio::test(start_paused = true)]
 async fn retryable_failures_emit_step_retry_and_recover() {
     let model = ScriptedModel::new(vec![
-        Script::Fail(ModelError::RateLimit("慢点".into())),
+        Script::Fail(ModelError::new(ErrorKind::RateLimited, "慢点")),
         Script::Items(vec![
             Ok(StreamPart::TextDelta {
                 id: "t".into(),
                 delta: "半".into(),
                 provider_metadata: None,
             }),
-            Err(ModelError::stream_error(
-                "断开",
-                std::io::Error::other("reset"),
-            )),
+            Err(ModelError::transport("断开").with_source(std::io::Error::other("reset"))),
         ]),
         Script::Parts(text("好")),
     ]);
@@ -202,24 +199,23 @@ async fn truncated_stream_is_retried() {
 
 #[tokio::test]
 async fn fatal_failures_emit_run_error_without_committing_the_step() {
-    let model = ScriptedModel::new(vec![Script::Fail(ModelError::Authentication(
-        "无效".into(),
+    let model = ScriptedModel::new(vec![Script::Fail(ModelError::new(
+        ErrorKind::Authentication,
+        "无效",
     ))]);
     let host = TestHost::default();
     let error = run(config(model.clone()), context(vec![]), &host)
         .await
         .unwrap_err();
 
-    assert!(matches!(
-        error,
-        AgentError::Model(ModelError::Authentication(_))
-    ));
+    assert_eq!(error.kind(), ErrorKind::Authentication);
+    assert!(matches!(&error, RunError::Model { partial, .. } if partial.steps == 0));
     assert_eq!(host.kinds().last().map(String::as_str), Some("run_error"));
     assert_eq!(*host.messages.lock().unwrap(), vec![Message::user("你好")]);
 
     let model = ScriptedModel::new(
         (0..3)
-            .map(|_| Script::Fail(ModelError::RateLimit("忙".into())))
+            .map(|_| Script::Fail(ModelError::new(ErrorKind::RateLimited, "忙")))
             .collect(),
     );
     let host = TestHost::default();
@@ -331,7 +327,10 @@ async fn continue_requires_a_non_assistant_tail() {
         cancel.clone(),
     )
     .await;
-    assert!(matches!(empty, Err(AgentError::NoMessages)));
+    assert!(matches!(
+        empty,
+        Err(RunError::NotStarted(AgentError::NoMessages))
+    ));
 
     let mut tail_assistant = context(vec![]);
     tail_assistant.messages = vec![Message::user("问"), Message::assistant("答")];
@@ -339,7 +338,9 @@ async fn continue_requires_a_non_assistant_tail() {
         continue_agent_loop(tail_assistant, config(model.clone()), &host, cancel.clone()).await;
     assert!(matches!(
         result,
-        Err(AgentError::CannotContinueFromAssistant)
+        Err(RunError::NotStarted(
+            AgentError::CannotContinueFromAssistant
+        ))
     ));
 
     let mut tail_user = context(vec![]);

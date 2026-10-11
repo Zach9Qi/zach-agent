@@ -14,6 +14,7 @@ use futures::StreamExt;
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::time::{timeout, Instant};
+use zach_ai_core::error::report;
 use zach_ai_core::{LanguageModel, StreamAccumulator, UnifiedFinishReason};
 
 pub(super) async fn run(
@@ -78,19 +79,16 @@ async fn single(
 ) -> ProbeResult<Outcome> {
     let options = scenario.request.clone();
     let result = match mode {
-        Mode::Generate => model
-            .do_generate(options)
-            .await
-            .map_err(|e| e.to_string())?,
+        Mode::Generate => model.do_generate(options).await.map_err(|e| report(&e))?,
         Mode::Stream => {
-            let mut stream = model.do_stream(options).await.map_err(|e| e.to_string())?;
+            let mut stream = model.do_stream(options).await.map_err(|e| report(&e))?;
             let mut accumulator = StreamAccumulator::new();
             while let Some(part) = stream.next().await {
                 match part {
                     Ok(part) => accumulator.process(part),
                     Err(error) => {
                         reporter.emit("partial_result", &accumulator.finish());
-                        return Err(error.to_string());
+                        return Err(report(&error));
                     }
                 }
                 reporter.check()?;

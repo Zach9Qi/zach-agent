@@ -8,7 +8,8 @@ use zach_ai_core::{CallOptions, LanguageModel};
 
 /// 模型请求失败时的重试策略（指数退避）
 ///
-/// 只对 [`zach_ai_core::ModelError::is_retryable`] 为真的错误生效。
+/// 只对 [`zach_ai_core::ModelError::is_retryable`] 为真的错误生效；服务端给出
+/// `retry_after` 时以它为等待下限，见 [`Self::delay_for`]。
 #[derive(Debug, Clone, PartialEq)]
 pub struct RetryPolicy {
     /// 最大重试次数（不含首次请求）
@@ -42,10 +43,14 @@ impl RetryPolicy {
     }
 
     /// 第 `attempt` 次重试（从 1 开始）前的等待时长
-    pub fn delay_for(&self, attempt: u32) -> Duration {
+    ///
+    /// 服务端建议的 `retry_after` 作为下限，过早重试只会再次被限流；但结果仍不超过
+    /// [`Self::max_delay`]，单次等待的上限始终由调用方掌控。
+    pub fn delay_for(&self, attempt: u32, retry_after: Option<Duration>) -> Duration {
         let exponent = attempt.saturating_sub(1) as i32;
         let secs = self.initial_delay.as_secs_f64() * self.multiplier.powi(exponent);
-        Duration::from_secs_f64(secs.min(self.max_delay.as_secs_f64()))
+        let backoff = Duration::from_secs_f64(secs.min(self.max_delay.as_secs_f64()));
+        retry_after.map_or(backoff, |hint| hint.max(backoff).min(self.max_delay))
     }
 }
 

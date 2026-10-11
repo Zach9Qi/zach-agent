@@ -34,7 +34,7 @@ pub(super) fn build_request(
     stream: bool,
 ) -> Result<BuiltRequest, ModelError> {
     if model_id.trim().is_empty() {
-        return Err(ModelError::InvalidRequest("模型 ID 不能为空".into()));
+        return Err(ModelError::invalid_request("模型 ID 不能为空"));
     }
     reject_unsupported(options)?;
     // 显式 thinking 覆盖整体替换通用档位：不写入默认 `thinking` 与派生的
@@ -73,7 +73,9 @@ pub(super) fn build_request(
     for (name, value) in [("temperature", temperature), ("top_p", options.top_p)] {
         if let Some(value) = value {
             if !value.is_finite() {
-                return Err(ModelError::InvalidRequest(format!("{name} 必须是有限数值")));
+                return Err(ModelError::invalid_request(format!(
+                    "{name} 必须是有限数值"
+                )));
             }
             body[name] = json!(value);
         }
@@ -150,9 +152,9 @@ fn apply_provider_options(
     let Some(extra) = options.and_then(|p| p.inner.get("anthropic")) else {
         return Ok(Vec::new());
     };
-    let fields = extra.as_object().ok_or_else(|| {
-        ModelError::InvalidRequest("provider_options.anthropic 必须是对象".into())
-    })?;
+    let fields = extra
+        .as_object()
+        .ok_or_else(|| ModelError::invalid_request("provider_options.anthropic 必须是对象"))?;
     let mut betas = Vec::new();
     for (key, value) in fields {
         match key.as_str() {
@@ -185,9 +187,7 @@ fn beta_list(value: &Value) -> Result<Vec<String>, ModelError> {
         })
         .filter(|items| items.iter().all(|item| !item.trim().is_empty()))
         .ok_or_else(|| {
-            ModelError::InvalidRequest(
-                "provider_options.anthropic.betas 必须是非空字符串数组".into(),
-            )
+            ModelError::invalid_request("provider_options.anthropic.betas 必须是非空字符串数组")
         })
 }
 

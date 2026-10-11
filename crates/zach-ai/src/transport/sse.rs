@@ -44,10 +44,10 @@ impl SseDecoder {
             } else {
                 self.line.push(byte);
                 if self.line.len() + self.data.len() > MAX_FRAME_BYTES {
-                    return Err(ModelError::StreamError {
-                        message: format!("{} SSE 单帧超过 8 MiB", self.label),
-                        source: None,
-                    });
+                    return Err(ModelError::invalid_response(format!(
+                        "{} SSE 单帧超过 8 MiB",
+                        self.label
+                    )));
                 }
             }
         }
@@ -57,7 +57,8 @@ impl SseDecoder {
     fn finish_line(&mut self, frames: &mut Vec<String>) -> Result<(), ModelError> {
         let bytes = std::mem::take(&mut self.line);
         let line = std::str::from_utf8(&bytes).map_err(|err| {
-            ModelError::stream_error(format!("{} SSE 包含非法 UTF-8", self.label), err)
+            ModelError::invalid_response(format!("{} SSE 包含非法 UTF-8", self.label))
+                .with_source(err)
         })?;
         // 只有流的第一行可能带 BOM。
         let line = if self.first_line_done {
@@ -88,6 +89,7 @@ impl SseDecoder {
 mod tests {
     //! SSE 解码器对行结束符、注释、多行 data 与异常输入的处理。
     use super::*;
+    use zach_ai_core::ErrorKind;
 
     #[test]
     fn decoder_supports_multiline_data_comments_and_all_line_endings() {
@@ -110,18 +112,17 @@ mod tests {
         assert_eq!(frames, vec!["\nx"]);
     }
 
+    /// 这两类失败重发同一请求大概率原样复现，因此是不可重试的协议错误而不是传输错误。
     #[test]
-    fn invalid_utf8_and_oversized_frames_fail_explicitly() {
+    fn invalid_utf8_and_oversized_frames_are_non_retryable_protocol_errors() {
         let mut decoder = SseDecoder::new("测试");
-        assert!(matches!(
-            decoder.push(b"data: \xff\n\n"),
-            Err(ModelError::StreamError { .. })
-        ));
+        let error = decoder.push(b"data: \xff\n\n").unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidResponse);
+        assert!(!error.is_retryable());
         let mut decoder = SseDecoder::new("测试");
-        assert!(matches!(
-            decoder.push(&vec![b'x'; MAX_FRAME_BYTES + 1]),
-            Err(ModelError::StreamError { message, .. }) if message.contains("8 MiB")
-        ));
+        let error = decoder.push(&vec![b'x'; MAX_FRAME_BYTES + 1]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidResponse);
+        assert!(error.message().contains("8 MiB"));
     }
 
     /// 多字节字符被切在两次 push 之间时不能提前按 UTF-8 校验。

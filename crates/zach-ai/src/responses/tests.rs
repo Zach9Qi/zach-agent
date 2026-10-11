@@ -3,7 +3,7 @@
 use super::*;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use zach_ai_core::Prompt;
+use zach_ai_core::{ErrorKind, Prompt};
 
 #[test]
 fn request_targets_responses_and_keeps_authorization_sensitive() {
@@ -54,8 +54,7 @@ fn empty_api_key_sends_no_authorization_header() {
 #[test]
 fn invalid_base_url_fails_before_http_execution() {
     let model = OpenAiResponsesModel::new("secret", "example").with_base_url("not a URL");
-    assert!(matches!(
-        model.request(&CallOptions::default(), false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(model
+        .request(&CallOptions::default(), false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
 }

@@ -14,8 +14,8 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
     let parts = parser.complete(&value)?;
     let mut accumulator = StreamAccumulator::new();
     for part in parts {
-        if let StreamPart::Error { message, raw } = part {
-            return Err(ModelError::provider_error("anthropic", message, raw));
+        if let StreamPart::Error(error) = part {
+            return Err(error.into());
         }
         accumulator.process(part);
     }
@@ -23,17 +23,19 @@ pub(super) fn parse_response(value: Value) -> Result<GenerateResult, ModelError>
 }
 
 pub(super) fn string<'a>(value: &'a Value, field: &str) -> Result<&'a str, ModelError> {
-    value.get(field).and_then(Value::as_str).ok_or_else(|| {
-        ModelError::provider_error(
-            "anthropic",
-            format!("Messages 响应缺少字符串字段 {field}"),
-            None,
-        )
-    })
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid_response(format!("Messages 响应缺少字符串字段 {field}"), None))
 }
 
-pub(super) fn error(message: impl Into<String>, raw: Option<Value>) -> ModelError {
-    ModelError::provider_error("anthropic", message, raw)
+/// 响应违反 Messages 协议；`raw` 是出错的响应或事件
+pub(super) fn invalid_response(message: impl Into<String>, raw: Option<Value>) -> ModelError {
+    let error = ModelError::invalid_response(message).with_provider("anthropic");
+    match raw {
+        Some(raw) => error.with_raw(raw),
+        None => error,
+    }
 }
 
 pub(super) fn metadata(value: Value) -> Option<ProviderMetadata> {

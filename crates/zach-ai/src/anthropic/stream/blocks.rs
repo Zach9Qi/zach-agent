@@ -5,7 +5,7 @@ mod tools;
 use serde_json::{json, Value};
 use zach_ai_core::{ModelError, ProviderMetadata, SourceContent, StreamPart};
 
-use super::super::response::{error, metadata, string};
+use super::super::response::{invalid_response, metadata, string};
 use super::parser::MessagesStreamParser;
 
 pub(super) struct Block {
@@ -40,7 +40,10 @@ impl MessagesStreamParser {
         parts: &mut Vec<StreamPart>,
     ) -> Result<(), ModelError> {
         if self.blocks.contains_key(&index) {
-            return Err(error(format!("内容块索引 {index} 重复开始"), None));
+            return Err(invalid_response(
+                format!("内容块索引 {index} 重复开始"),
+                None,
+            ));
         }
         let kind = string(block, "type")?;
         let id = index.to_string();
@@ -131,9 +134,9 @@ impl MessagesStreamParser {
         let block = self
             .blocks
             .get_mut(&index)
-            .ok_or_else(|| error(format!("增量缺少对应内容块 {index}"), None))?;
+            .ok_or_else(|| invalid_response(format!("增量缺少对应内容块 {index}"), None))?;
         if block.ended {
-            return Err(error("已结束的内容块又收到增量", None));
+            return Err(invalid_response("已结束的内容块又收到增量", None));
         }
         let id = block.id.clone();
         match (kind, &mut block.kind) {
@@ -179,7 +182,10 @@ impl MessagesStreamParser {
                 | "input_json_delta",
                 _,
             ) => {
-                return Err(error(format!("增量类型 {kind} 与内容块类型不匹配"), None));
+                return Err(invalid_response(
+                    format!("增量类型 {kind} 与内容块类型不匹配"),
+                    None,
+                ));
             }
             // 未知增量类型按版本策略忽略。
             _ => {}
@@ -195,9 +201,12 @@ impl MessagesStreamParser {
         let block = self
             .blocks
             .get_mut(&index)
-            .ok_or_else(|| error(format!("结束事件缺少对应内容块 {index}"), None))?;
+            .ok_or_else(|| invalid_response(format!("结束事件缺少对应内容块 {index}"), None))?;
         if block.ended {
-            return Err(error(format!("内容块索引 {index} 重复结束"), None));
+            return Err(invalid_response(
+                format!("内容块索引 {index} 重复结束"),
+                None,
+            ));
         }
         block.ended = true;
         let id = block.id.clone();

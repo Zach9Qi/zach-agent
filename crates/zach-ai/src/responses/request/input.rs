@@ -169,7 +169,7 @@ fn assistant_part(part: &AssistantPart) -> Result<Option<Value>, ModelError> {
             }
             let mut call = json!({
                 "type": "function_call", "call_id": tool_call_id,
-                "name": tool_name, "arguments": serde_json::to_string(input)?,
+                "name": tool_name, "arguments": input.to_string(),
             });
             if let Some(id) = provider_options
                 .as_ref()

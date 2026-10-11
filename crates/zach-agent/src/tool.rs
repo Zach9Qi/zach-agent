@@ -6,6 +6,6 @@ mod typed;
 mod types;
 
 pub use context::ToolContext;
-pub use error::ToolError;
+pub use error::{ToolError, ToolErrorKind};
 pub use typed::{typed_tool, Typed, TypedTool};
 pub use types::{AgentTool, SharedTool, ToolExecutionMode, ToolOutcome};

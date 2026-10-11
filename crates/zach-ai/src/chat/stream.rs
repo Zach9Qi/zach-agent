@@ -12,14 +12,20 @@ use bytes::Bytes;
 use futures::Stream;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
-use zach_ai_core::{FinishReason, LanguageModelStream, ModelWarning, StreamPart, Usage};
+use zach_ai_core::{
+    FinishReason, LanguageModelStream, ModelError, ModelWarning, StreamPart, Usage,
+};
 
 use super::response::{finish_reason, response_metadata, usage};
+use crate::openai::DIALECT;
 use crate::transport::{sse_stream, SseParser};
 use choice::ChoiceState;
 
 pub(super) struct ChatStreamParser {
+    /// 兼容端点的厂商身份，标注到本协议产生的全部错误上
+    provider: Arc<str>,
     raw: bool,
     /// 按 `choice.index` 排序，收尾事件因此有确定的顺序。
     choices: BTreeMap<u64, ChoiceState>,
@@ -34,8 +40,9 @@ pub(super) struct ChatStreamParser {
 }
 
 impl ChatStreamParser {
-    pub(super) fn new(raw: bool) -> Self {
+    pub(super) fn new(provider: Arc<str>, raw: bool) -> Self {
         Self {
+            provider,
             raw,
             choices: BTreeMap::new(),
             pending_finish: None,
@@ -48,15 +55,32 @@ impl ChatStreamParser {
     }
 
     pub(super) fn data(&mut self, data: &str) -> Vec<StreamPart> {
+        let parts = self.frame(data);
+        self.attribute(parts)
+    }
+
+    /// 为本协议产生、尚未标注厂商的错误补上厂商身份（工具调用等内部状态不持有它）
+    fn attribute(&self, mut parts: Vec<StreamPart>) -> Vec<StreamPart> {
+        for part in &mut parts {
+            if let StreamPart::Error(error) = part {
+                error
+                    .provider
+                    .get_or_insert_with(|| self.provider.to_string());
+            }
+        }
+        parts
+    }
+
+    fn frame(&mut self, data: &str) -> Vec<StreamPart> {
         if data == "[DONE]" {
             self.terminal = true;
             let mut parts = self.finish_pending();
             if !self.finished {
                 self.failed = true;
-                parts.push(StreamPart::Error {
-                    message: "Chat Completions 在收到结束标记前没有 finish_reason".into(),
-                    raw: None,
-                });
+                let error = ModelError::invalid_response(
+                    "Chat Completions 在收到结束标记前没有 finish_reason",
+                );
+                parts.push(StreamPart::Error(error.into()));
             }
             return parts;
         }
@@ -64,10 +88,10 @@ impl ChatStreamParser {
             Ok(event) => event,
             Err(error) => {
                 self.failed = true;
-                return vec![StreamPart::Error {
-                    message: format!("Chat Completions SSE JSON 解析失败: {error}"),
-                    raw: Some(json!(data)),
-                }];
+                let error = ModelError::invalid_response("Chat Completions SSE JSON 解析失败")
+                    .with_raw(json!(data))
+                    .with_source(error);
+                return vec![StreamPart::Error(error.into())];
             }
         };
         let mut parts = Vec::new();
@@ -79,13 +103,8 @@ impl ChatStreamParser {
         // 部分代理会固定带上 `"error": null`，只有非空对象才是错误。
         if let Some(error) = event.get("error").filter(|error| !error.is_null()) {
             self.failed = true;
-            parts.push(StreamPart::Error {
-                message: error["message"]
-                    .as_str()
-                    .unwrap_or("Chat Completions 服务端错误")
-                    .into(),
-                raw: Some(error.clone()),
-            });
+            let error = DIALECT.error(&self.provider, error).with_raw(error.clone());
+            parts.push(StreamPart::Error(error.into()));
             return parts;
         }
         if !self.metadata_sent && event["id"].as_str().is_some() {
@@ -167,7 +186,8 @@ impl SseParser for ChatStreamParser {
     /// 不支持 `stream_options.include_usage` 又省掉 `[DONE]` 直接断开的端点：
     /// `finish_reason` 已到就按完成收尾（用量为空），内容完整的响应不能被判为传输错误。
     fn eof(&mut self) -> Vec<StreamPart> {
-        self.finish_pending()
+        let parts = self.finish_pending();
+        self.attribute(parts)
     }
 }
 

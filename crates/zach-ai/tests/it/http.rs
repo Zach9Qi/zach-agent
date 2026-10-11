@@ -5,7 +5,7 @@ use futures::StreamExt;
 use serde_json::Value;
 use zach_ai::OpenAiChatCompletionsModel;
 use zach_ai_core::{
-    CallOptions, LanguageModel, Message, ModelError, StreamAccumulator, StreamPart,
+    CallOptions, ErrorKind, LanguageModel, Message, StreamAccumulator, StreamPart,
     UnifiedFinishReason,
 };
 
@@ -43,44 +43,82 @@ fn chunk(delta: &str, finish: Option<&str>) -> String {
     )
 }
 
-/// 对一个错误的判定。
-type Check = fn(&ModelError) -> bool;
-
 #[tokio::test]
-async fn http_statuses_map_to_stable_error_categories() {
-    let checks: [(u16, Check); 4] = [
-        (
-            401,
-            |error| matches!(error, ModelError::Authentication(message) if message == "nope"),
-        ),
-        (429, |error| {
-            matches!(error, ModelError::RateLimit(_)) && error.is_retryable()
-        }),
-        (503, |error| {
-            matches!(error, ModelError::ServerError { status: 503, .. }) && error.is_retryable()
-        }),
-        (400, |error| {
-            matches!(error, ModelError::ProviderError { raw: Some(_), .. }) && !error.is_retryable()
-        }),
-    ];
-    for (status, check) in checks {
+async fn http_statuses_map_to_stable_error_kinds() {
+    for (status, kind) in [
+        (401, ErrorKind::Authentication),
+        (429, ErrorKind::RateLimited),
+        (503, ErrorKind::Unavailable),
+        (400, ErrorKind::Rejected),
+    ] {
         let (base, _) = serve(json(status, r#"{"error":{"message":"nope"}}"#)).await;
         let error = model(&base).do_generate(options()).await.unwrap_err();
-        assert!(check(&error), "HTTP {status}: {error:?}");
+        assert_eq!(error.kind(), kind, "HTTP {status}: {error:?}");
+        assert_eq!(error.status(), Some(status));
+        assert_eq!(error.provider(), Some("openai"));
+        assert_eq!(error.message(), "nope");
+        assert!(error.raw().is_some());
     }
+}
+
+/// 状态码同为 429：限流可重试，配额耗尽需要充值、不可重试；上下文超长单独成类，便于压缩后重试
+#[tokio::test]
+async fn openai_error_codes_refine_the_status_based_kind() {
+    for (status, code, kind) in [
+        (429, "rate_limit_exceeded", ErrorKind::RateLimited),
+        (429, "insufficient_quota", ErrorKind::Rejected),
+        (
+            400,
+            "context_length_exceeded",
+            ErrorKind::ContextLengthExceeded,
+        ),
+        (401, "invalid_api_key", ErrorKind::Authentication),
+    ] {
+        let body = format!(r#"{{"error":{{"message":"m","type":"t","code":"{code}"}}}}"#);
+        let (base, _) = serve(json(status, &body)).await;
+        let error = model(&base).do_generate(options()).await.unwrap_err();
+        assert_eq!(error.kind(), kind, "{code}");
+        assert_eq!(error.code(), Some(code));
+    }
+}
+
+/// 部分兼容端点以 HTTP 200 返回错误对象：按厂商错误分类，而不是报"缺少 choices"
+#[tokio::test]
+async fn generate_answered_with_an_error_object_is_classified_as_a_provider_error() {
+    let body = r#"{"error":{"message":"busy","code":"server_error"}}"#;
+    let (base, _) = serve(json(200, body)).await;
+    let error = model(&base).do_generate(options()).await.unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Unavailable);
+    assert_eq!(error.message(), "busy");
+}
+
+/// 网关返回 HTML 错误页：报告为响应无法解析，并保留正文开头便于定位
+#[tokio::test]
+async fn generate_answered_with_html_keeps_a_body_snippet() {
+    let (base, _) = serve(Script {
+        status: 200,
+        content_type: "text/html",
+        body: Body::Full("<html>bad gateway</html>".into()),
+    })
+    .await;
+    let error = model(&base).do_generate(options()).await.unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidResponse);
+    assert_eq!(
+        error.raw().and_then(Value::as_str),
+        Some("<html>bad gateway</html>")
+    );
+    assert!(std::error::Error::source(&error).is_some());
 }
 
 /// 网关把流式请求当普通请求处理时回 JSON：正文里的错误信息必须保留，而不是只报内容类型不对。
 #[tokio::test]
-async fn stream_answered_with_json_is_a_provider_error_carrying_the_body_message() {
+async fn stream_answered_with_json_is_a_protocol_error_carrying_the_body_message() {
     let (base, _) = serve(json(200, r#"{"error":{"message":"streaming disabled"}}"#)).await;
     let Err(error) = model(&base).do_stream(options()).await else {
         panic!("非流式正文不应建立成流");
     };
-    assert!(
-        matches!(&error, ModelError::ProviderError { message, .. } if message.contains("streaming disabled")),
-        "{error:?}"
-    );
+    assert_eq!(error.kind(), ErrorKind::InvalidResponse, "{error:?}");
+    assert!(error.message().contains("streaming disabled"), "{error:?}");
 }
 
 #[tokio::test]
@@ -127,7 +165,7 @@ async fn connection_closed_mid_stream_is_a_transport_error() {
         "{parts:?}"
     );
     assert!(
-        matches!(parts.last(), Some(Err(ModelError::StreamError { .. }))),
+        matches!(parts.last(), Some(Err(error)) if error.kind() == ErrorKind::Transport),
         "{parts:?}"
     );
 }

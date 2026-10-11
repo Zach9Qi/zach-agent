@@ -7,7 +7,7 @@ use super::*;
 use crate::test_support::{aggregate, aggregate_lenient, byte_stream, data_frame};
 use futures::StreamExt;
 use serde_json::{json, Value};
-use zach_ai_core::{ModelError, UnifiedFinishReason};
+use zach_ai_core::{ErrorKind, ModelError, UnifiedFinishReason};
 
 /// 一个带固定响应头字段的分块。
 fn chunk(choices: Vec<Value>) -> Value {
@@ -44,7 +44,7 @@ fn position(parts: &[Result<StreamPart, ModelError>], pick: fn(&StreamPart) -> b
 async fn parse_wire(wire: String) -> Vec<Result<StreamPart, ModelError>> {
     chat_stream(
         byte_stream(wire),
-        ChatStreamParser::new(false),
+        ChatStreamParser::new("openai".into(), false),
         vec![],
         None,
     )
@@ -217,9 +217,7 @@ async fn response_metadata_is_emitted_once_and_null_error_field_is_ignored() {
             .count(),
         1
     );
-    assert!(!parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(!parts.iter().any(|p| matches!(p, Ok(StreamPart::Error(_)))));
     let result = aggregate(parts);
     assert_eq!(result.text(), "你好");
     assert_eq!(result.response.unwrap().id.as_deref(), Some("chatcmpl-1"));

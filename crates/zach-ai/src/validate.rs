@@ -5,7 +5,7 @@
 //! - 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告（`None` 等价于默认，静默忽略）；
 //! - 档案未声明可关闭推理却要求 `None`：不发送关闭指令并给出 `Compatibility` 警告；
 //! - 档位不在模型支持列表里：适配器提供了降级别名则降级并给出 `Compatibility` 警告，
-//!   否则报 `UnsupportedFeature`，因为没有不改变语义的替代方案；
+//!   否则报 [`ErrorKind::Unsupported`]，因为没有不改变语义的替代方案；
 //! - 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
 //!
 //! 警告随 `StreamStart` / `GenerateResult.warnings` 透出，Agent 层会把它们作为事件呈现。
@@ -132,7 +132,7 @@ pub(crate) fn effort_name(effort: ReasoningEffort) -> &'static str {
 mod tests {
     //! 档案已知与未知时推理档位、温度的校验结果与警告。
     use super::*;
-    use zach_ai_core::ReasoningProfile;
+    use zach_ai_core::{ErrorKind, ReasoningProfile};
 
     fn profile(reasoning: Option<ReasoningProfile>, temperature: bool) -> ModelProfile {
         let mut profile = ModelProfile::new("p", "m", 1000, 100);
@@ -180,11 +180,12 @@ mod tests {
             }),
             true,
         );
-        assert!(matches!(
-            validate(Some(&profile), Some(ReasoningEffort::Medium), None, &[]),
-            Err(ModelError::UnsupportedFeature { feature, details: Some(details) })
-                if feature == "reasoning_effort.medium" && details.contains("low, high")
-        ));
+        let Err(error) = validate(Some(&profile), Some(ReasoningEffort::Medium), None, &[]) else {
+            panic!("不在支持列表里的档位应被拒绝");
+        };
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+        assert_eq!(error.code(), Some("reasoning_effort.medium"));
+        assert!(error.message().contains("low, high"));
         let aliased = validate(
             Some(&profile),
             Some(ReasoningEffort::Minimal),

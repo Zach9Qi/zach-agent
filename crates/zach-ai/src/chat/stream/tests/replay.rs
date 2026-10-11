@@ -139,8 +139,11 @@ async fn tool_call_without_any_id_poisons_the_turn_instead_of_vanishing() {
         .any(|p| matches!(p, Ok(StreamPart::ToolCall { .. }))));
     assert!(parts.iter().any(|p| matches!(
         p,
-        Ok(StreamPart::Error { message, raw: Some(raw) })
-            if message.contains("缺少 id") && raw["name"] == "add"
+        Ok(StreamPart::Error(error))
+            if error.kind == ErrorKind::InvalidResponse
+                && error.provider.as_deref() == Some("openai")
+                && error.message.contains("缺少 id")
+                && error.raw.as_ref().is_some_and(|raw| raw["name"] == "add")
     )));
     assert_eq!(
         aggregate_lenient(parts).finish_reason.unified,

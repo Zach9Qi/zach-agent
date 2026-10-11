@@ -17,7 +17,7 @@ async fn eof_without_terminal_event_is_a_transport_error() {
         let parts = parse_wire(wire).await;
         assert!(matches!(
             parts.last(),
-            Some(Err(ModelError::StreamError { .. }))
+            Some(Err(error)) if error.kind() == ErrorKind::Transport
         ));
         assert!(!parts
             .iter()
@@ -44,9 +44,7 @@ async fn final_snapshot_mismatch_keeps_streamed_text_and_records_the_snapshot() 
     .collect::<String>();
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok), "{parts:?}");
-    assert!(!parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(!parts.iter().any(|p| matches!(p, Ok(StreamPart::Error(_)))));
     assert_eq!(
         parts
             .iter()
@@ -83,9 +81,7 @@ async fn unadapted_output_item_cannot_swallow_finish_and_usage() {
     let wire = event_frame(&json!({"type": "response.completed", "response": payload}));
     let parts = parse_wire(wire).await;
     assert!(parts.iter().all(Result::is_ok));
-    assert!(parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { .. }))));
+    assert!(parts.iter().any(|p| matches!(p, Ok(StreamPart::Error(_)))));
     assert!(parts.iter().any(|p| matches!(
         p,
         Ok(StreamPart::Finish { usage, .. }) if usage.input_tokens.total == Some(100)
@@ -100,13 +96,17 @@ async fn unadapted_output_item_cannot_swallow_finish_and_usage() {
 async fn failed_and_incomplete_responses_have_distinct_outcomes() {
     let mut failed = response(vec![]);
     failed["status"] = json!("failed");
-    failed["error"] = json!({"message": "生成失败"});
-    assert!(parse_response(failed.clone()).is_err());
+    failed["error"] = json!({"code": "server_error", "message": "生成失败"});
+    let error = parse_response(failed.clone()).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Unavailable);
+    assert_eq!(error.code(), Some("server_error"));
     let wire = event_frame(&json!({"type": "response.failed", "response": failed}));
     let parts = parse_wire(wire).await;
-    assert!(parts
-        .iter()
-        .any(|p| matches!(p, Ok(StreamPart::Error { message, .. }) if message == "生成失败")));
+    assert!(parts.iter().any(|p| matches!(
+        p,
+        Ok(StreamPart::Error(error))
+            if error.message == "生成失败" && error.kind == ErrorKind::Unavailable
+    )));
     let mut incomplete = response(vec![message("半截")]);
     incomplete["status"] = json!("incomplete");
     incomplete["incomplete_details"] = json!({"reason": "max_output_tokens"});
@@ -162,5 +162,5 @@ fn incomplete_or_invalid_json_objects_are_not_successful_responses() {
         "item_id": "missing", "delta": "{}"})
         .to_string(),
     );
-    assert!(matches!(&parts[0], StreamPart::Error { .. }));
+    assert!(matches!(&parts[0], StreamPart::Error(_)));
 }

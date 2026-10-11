@@ -4,7 +4,7 @@ use super::*;
 use reqwest::header::AUTHORIZATION;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use zach_ai_core::{Prompt, ProviderOptions};
+use zach_ai_core::{ErrorKind, Prompt, ProviderOptions};
 
 fn body(request: &reqwest::Request) -> Value {
     serde_json::from_slice(request.body().unwrap().as_bytes().unwrap()).unwrap()
@@ -75,8 +75,7 @@ fn empty_api_key_sends_no_credential_header() {
 #[test]
 fn invalid_base_url_fails_before_http_execution() {
     let model = AnthropicMessagesModel::new("secret", "example").with_base_url("not a URL");
-    assert!(matches!(
-        model.request(&CallOptions::default(), false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(model
+        .request(&CallOptions::default(), false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
 }

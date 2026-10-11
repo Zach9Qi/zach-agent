@@ -5,7 +5,7 @@
 
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use zach_ai_core::StreamPart;
+use zach_ai_core::{ModelError, StreamPart};
 
 use super::super::response::{metadata, reasoning_text};
 
@@ -246,10 +246,10 @@ fn finish_tool(state: &mut ToolState, parts: &mut Vec<StreamPart>) -> bool {
         if state.name.is_empty() && state.arguments.is_empty() {
             return false;
         }
-        parts.push(StreamPart::Error {
-            message: "Chat Completions 工具调用缺少 id，无法与执行结果配对".into(),
-            raw: Some(json!({"name": state.name, "arguments": state.arguments})),
-        });
+        let error =
+            ModelError::invalid_response("Chat Completions 工具调用缺少 id，无法与执行结果配对")
+                .with_raw(json!({"name": state.name, "arguments": state.arguments}));
+        parts.push(StreamPart::Error(error.into()));
         return true;
     }
     parts.push(StreamPart::ToolInputEnd {

@@ -43,13 +43,13 @@ pub(super) fn definitions(definitions: &[ToolDefinition]) -> Result<Value, Model
                     Value::Object(args) => Value::Object(args.clone()),
                     Value::Null => json!({}),
                     _ => {
-                        return Err(ModelError::InvalidRequest(format!(
+                        return Err(ModelError::invalid_request(format!(
                             "服务端工具 {kind} 的参数必须是对象"
                         )))
                     }
                 };
                 if value.get("type").and_then(Value::as_str).is_none() {
-                    return Err(ModelError::InvalidRequest(format!(
+                    return Err(ModelError::invalid_request(format!(
                         "服务端工具 {kind} 缺少版本化的 type 字段"
                     )));
                 }

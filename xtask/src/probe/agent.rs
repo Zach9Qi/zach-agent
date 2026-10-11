@@ -16,6 +16,7 @@ use zach_agent::{
     run_agent_loop, typed_tool, AgentContext, AgentEvent, AgentHooks, LoopConfig, LoopHost,
     RequestState, RetryPolicy, ToolContext, ToolError, ToolOutcome, TurnInfo, TypedTool,
 };
+use zach_ai_core::error::report;
 use zach_ai_core::{AssistantPart, LanguageModel, Message, ToolChoice};
 
 pub(super) async fn run(
@@ -46,7 +47,7 @@ pub(super) async fn run(
         cancel,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| report(&e))?;
     reporter.emit("agent_result", &json!({
         "run_id": output.run_id, "steps": output.steps, "usage": output.usage,
         "finish_reason": output.finish_reason, "aborted": output.aborted, "messages": output.messages,

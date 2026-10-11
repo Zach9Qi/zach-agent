@@ -9,8 +9,8 @@ use std::sync::{
     Arc,
 };
 use zach_ai_core::{
-    CallOptions, GenerateResult, LanguageModel, LanguageModelStream, ModelError, ModelProfile,
-    StreamAccumulator,
+    CallOptions, ErrorInfo, ErrorKind, GenerateResult, LanguageModel, LanguageModelStream,
+    ModelError, ModelProfile, StreamAccumulator,
 };
 
 pub(super) struct ObservedModel {
@@ -40,7 +40,7 @@ impl ObservedModel {
     fn request(&self, options: &CallOptions, mode: &str) -> Result<usize, ModelError> {
         let call = self.calls.fetch_add(1, Ordering::Relaxed);
         if call >= self.limit {
-            return Err(ModelError::InvalidRequest(format!(
+            return Err(ModelError::invalid_request(format!(
                 "达到联调模型调用上限 {}",
                 self.limit
             )));
@@ -52,7 +52,9 @@ impl ObservedModel {
                 "provider": self.provider(), "options": options,
             }),
         );
-        self.reporter.check().map_err(ModelError::Other)?;
+        self.reporter
+            .check()
+            .map_err(|message| ModelError::new(ErrorKind::Internal, message))?;
         Ok(self.trace.lock().expect("观察记录锁中毒").request(options))
     }
 }
@@ -122,17 +124,7 @@ impl LanguageModel for ObservedModel {
     }
 }
 
+/// 输出可序列化的错误信息：类别、描述、原因链与原始载荷
 fn report_error(reporter: &Reporter, error: &ModelError) {
-    let raw = match error {
-        ModelError::ProviderError { raw, .. } | ModelError::ServerError { raw, .. } => raw.as_ref(),
-        _ => None,
-    };
-    reporter.emit(
-        "model_error",
-        &json!({
-            "message": error.to_string(),
-            "source": std::error::Error::source(error).map(ToString::to_string),
-            "raw": raw,
-        }),
-    );
+    reporter.emit("model_error", &json!(ErrorInfo::from(error)));
 }

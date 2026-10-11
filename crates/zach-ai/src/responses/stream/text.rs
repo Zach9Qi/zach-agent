@@ -7,7 +7,7 @@
 use serde_json::{json, Value};
 use zach_ai_core::{ModelError, ProviderMetadata, StreamPart};
 
-use super::super::response::metadata;
+use super::super::response::{invalid_response, metadata};
 use super::parser::ResponsesStreamParser;
 
 pub(super) struct Block {
@@ -68,11 +68,7 @@ impl ResponsesStreamParser {
         self.start_block(id, reasoning, metadata, parts);
         let block = self.blocks.get_mut(id).expect("分块已建立");
         if block.ended {
-            return Err(ModelError::provider_error(
-                "openai",
-                "已结束的分块又收到增量",
-                None,
-            ));
+            return Err(invalid_response("已结束的分块又收到增量", None));
         }
         block.text.push_str(text);
         if !text.is_empty() {

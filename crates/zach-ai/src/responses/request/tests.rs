@@ -3,8 +3,8 @@
 use super::*;
 use crate::test_support::{profile, reasoning_profile};
 use zach_ai_core::{
-    AssistantPart, FileData, FunctionTool, Message, Prompt, ProviderOptions, ProviderTool,
-    ToolChoice, ToolPart, UserPart,
+    AssistantPart, ErrorKind, FileData, FunctionTool, Message, Prompt, ProviderOptions,
+    ProviderTool, ToolChoice, ToolPart, UserPart,
 };
 
 #[test]
@@ -137,10 +137,8 @@ fn foreign_file_reference_fails_instead_of_using_an_arbitrary_id() {
         "application/pdf",
         FileData::from_reference("anthropic", "other-file"),
     )]);
-    assert!(matches!(
-        build_request("model", None, &options, false),
-        Err(ModelError::InvalidRequest(_))
-    ));
+    assert!(build_request("model", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::InvalidRequest));
 }
 
 #[test]
@@ -211,10 +209,9 @@ fn profile_rejects_or_drops_settings_before_sending() {
     let mut options = CallOptions::new(vec![Message::user("x")])
         .with_temperature(0.5)
         .with_reasoning(Xhigh);
-    assert!(matches!(
-        build_request(&locked.id, Some(&locked), &options, false),
-        Err(ModelError::UnsupportedFeature { feature, .. }) if feature == "reasoning_effort.xhigh"
-    ));
+    let error = build_request(&locked.id, Some(&locked), &options, false).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Unsupported);
+    assert_eq!(error.code(), Some("reasoning_effort.xhigh"));
     options.reasoning = Some(High);
     let built = build_request(&locked.id, Some(&locked), &options, false).unwrap();
     assert!(built.body.get("temperature").is_none());
@@ -253,10 +250,8 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
         seed: Some(1),
         ..Default::default()
     };
-    assert!(matches!(
-        build_request("model", None, &options, false),
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(build_request("model", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     options.seed = None;
     options.tools = Some(vec![ProviderTool::new(
         "openai.web_search",
@@ -264,10 +259,8 @@ fn unsupported_parameters_and_hosted_tools_are_rejected_before_sending() {
         json!({}),
     )
     .into()]);
-    assert!(matches!(
-        build_request("model", None, &options, false),
-        Err(ModelError::UnsupportedFeature { .. })
-    ));
+    assert!(build_request("model", None, &options, false)
+        .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
     options.tools = None;
     let mut provider = ProviderOptions::new();
     provider.insert("openai", json!({"background": true}));

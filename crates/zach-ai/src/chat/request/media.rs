@@ -38,7 +38,7 @@ pub(super) fn input(
                 json!({"file_data":format!("data:{media_type};base64,{}", BASE64.encode(data)), "filename":filename.unwrap_or("document.pdf")})
             }
             FileData::Reference { reference } => {
-                json!({"file_id":reference.get("openai").ok_or_else(|| ModelError::InvalidRequest("缺少 openai 文件引用".into()))?})
+                json!({"file_id":reference.get("openai").ok_or_else(|| ModelError::invalid_request("缺少 openai 文件引用"))?})
             }
             FileData::Text { .. } => unreachable!(),
         };

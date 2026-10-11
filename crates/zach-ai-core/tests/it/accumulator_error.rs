@@ -2,14 +2,15 @@
 
 use serde_json::json;
 use zach_ai_core::{
-    FinishReason, ProviderMetadata, StreamAccumulator, StreamPart, UnifiedFinishReason, Usage,
+    ErrorInfo, ErrorKind, FinishReason, ProviderMetadata, StreamAccumulator, StreamPart,
+    UnifiedFinishReason, Usage,
 };
 
 fn error() -> StreamPart {
-    StreamPart::Error {
-        message: "分块解析失败".into(),
+    StreamPart::Error(ErrorInfo {
         raw: Some(json!("data: {bad")),
-    }
+        ..ErrorInfo::new(ErrorKind::InvalidResponse, "分块解析失败")
+    })
 }
 
 fn finish(unified: UnifiedFinishReason) -> StreamPart {
@@ -148,17 +149,19 @@ fn errors_do_not_prevent_collecting_content_usage_and_metadata() {
 fn all_stream_errors_are_kept_in_order_and_first_error_is_the_cause() {
     let mut accumulator = StreamAccumulator::new();
     accumulator.process(error());
-    accumulator.process(StreamPart::Error {
-        message: "后续错误".into(),
+    accumulator.process(StreamPart::Error(ErrorInfo {
         raw: Some(json!({ "type": "overloaded_error" })),
-    });
+        ..ErrorInfo::new(ErrorKind::Unavailable, "后续错误")
+    }));
     accumulator.process(finish(UnifiedFinishReason::ToolCalls));
 
     let errors = accumulator.errors();
     assert_eq!(errors.len(), 2);
     assert_eq!(errors[0].message, "分块解析失败");
+    assert_eq!(errors[0].kind, ErrorKind::InvalidResponse);
     assert_eq!(errors[0].raw, Some(json!("data: {bad")));
     assert_eq!(errors[1].message, "后续错误");
+    assert_eq!(errors[1].kind, ErrorKind::Unavailable);
     assert_eq!(errors[1].raw, Some(json!({ "type": "overloaded_error" })));
     assert_eq!(
         accumulator.finish().finish_reason.raw.as_deref(),
@@ -167,17 +170,17 @@ fn all_stream_errors_are_kept_in_order_and_first_error_is_the_cause() {
 }
 
 #[test]
-fn empty_error_message_falls_back_to_raw_or_default_description() {
+fn empty_error_message_falls_back_to_raw_or_kind_label() {
     let raw = json!({ "type": "overloaded_error" });
     for (payload, expected) in [
         (Some(raw.clone()), raw.to_string()),
-        (None, "未知流式错误".into()),
+        (None, ErrorKind::Unavailable.label().to_string()),
     ] {
         let mut accumulator = StreamAccumulator::new();
-        accumulator.process(StreamPart::Error {
-            message: String::new(),
+        accumulator.process(StreamPart::Error(ErrorInfo {
             raw: payload,
-        });
+            ..ErrorInfo::new(ErrorKind::Unavailable, "")
+        }));
         accumulator.process(finish(UnifiedFinishReason::Length));
         let result = accumulator.finish();
         assert_eq!(result.finish_reason.unified, UnifiedFinishReason::Error);

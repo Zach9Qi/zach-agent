@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 use zach_agent::AgentEvent;
-use zach_ai_core::ToolResultOutput;
+use zach_ai_core::{ErrorInfo, ErrorKind, ToolResultOutput};
 
 fn encode(event: &AgentEvent) -> Value {
     serde_json::to_value(event).unwrap()
@@ -38,9 +38,37 @@ fn type_tag_and_fields_are_snake_case() {
     assert_eq!(
         encode(&AgentEvent::StepRetry {
             step_index: 0,
-            reason: None,
+            error: ErrorInfo::new(ErrorKind::RateLimited, "慢点"),
         })["type"],
         "step_retry"
+    );
+}
+
+/// 宿主按 `error.kind` 分支处理错误，它的序列化形状是对外契约
+#[test]
+fn run_error_carries_a_machine_readable_kind() {
+    let event = AgentEvent::RunError {
+        error: ErrorInfo {
+            provider: Some("openai".into()),
+            status: Some(401),
+            ..ErrorInfo::new(ErrorKind::Authentication, "key 无效")
+        },
+    };
+    assert_eq!(
+        encode(&event),
+        json!({
+            "type": "run_error",
+            "error": {
+                "kind": "authentication",
+                "message": "key 无效",
+                "provider": "openai",
+                "status": 401
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<AgentEvent>(encode(&event)).unwrap(),
+        event
     );
 }
 

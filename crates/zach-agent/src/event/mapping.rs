@@ -160,9 +160,9 @@ pub fn map_stream_part(part: &StreamPart) -> Option<AgentEvent> {
             data,
             provider_metadata,
         },
-        StreamPart::Error { message, raw } => AgentEvent::Custom {
+        StreamPart::Error(error) => AgentEvent::Custom {
             kind: "model.stream_error".to_string(),
-            data: json!({ "message": message, "raw": raw }),
+            data: json!(error),
             provider_metadata: None,
         },
         StreamPart::Raw { raw_value } => AgentEvent::Custom {
