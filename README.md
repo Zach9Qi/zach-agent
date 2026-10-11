@@ -132,7 +132,7 @@ impl TypedTool for Weather {
     }
 }
 
-async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentError> {
+async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), Box<dyn std::error::Error>> {
     let agent = Agent::builder(model)
         .system_prompt("你是天气助手")
         .tool(typed_tool(Weather))
@@ -162,7 +162,8 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), zach_agent::AgentErro
 - **钩子**（`AgentHooks`）：`transform_context`、`prepare_request`、`before_tool_call`、`after_tool_call`、`finish_turn`、`prepare_next_turn`，可逐轮替换模型、调用参数与上下文。
 - **审批**（`ApprovalHandler`）：工具声明 `needs_approval` 或钩子返回 `RequireApproval` 时，请求先交给审批处理器选择路径——`ApprovalRoute::Decided` 直接放行/拒绝，`ApprovalRoute::Ask` 发出 `ToolApprovalRequest` 事件并等待 `respond_approval`（可带超时，`None` 表示永不超时）。默认 `InteractiveApproval` 一律转人工；无人值守场景用 `DenyAll` / `ApproveAll`，或以闭包实现白名单：`.approval(|req: &ApprovalRequest| if req.tool_name == "ls" { ApprovalRoute::approve() } else { ApprovalRoute::ask() })`。
   - 未消费事件流（调用 `outcome()` 或丢弃 `AgentRun`）时，转人工的请求会被自动拒绝而不是让运行悬挂；批处理请显式配置处理器。
-- **失败与中止**：可重试的模型错误按 `RetryPolicy` 退避重试并发出 `StepRetry`；重试用尽发出 `RunError`，失败那一轮不写入对话记录，可直接 `continue_run()` 重试。中止发出 `RunAbort`，已生成的文本保留，未完成的工具调用补"已中止"结果。
+- **失败与中止**：可重试的模型错误（限流、服务暂不可用、传输失败；无论以 HTTP 状态码还是流内错误事件到达）按 `RetryPolicy` 退避重试并发出 `StepRetry`，服务端给出 `Retry-After` 时以它为等待下限；重试用尽发出 `RunError`，`outcome()` 返回 `RunError::Model`，其中 `partial` 带有失败前已完成的消息与用量。失败那一轮不写入对话记录，可直接 `continue_run()` 重试。中止发出 `RunAbort`，已生成的文本保留，未完成的工具调用补"已中止"结果。
+- **错误处理**：同步调用（`prompt`、`continue_run`、`reset`、`respond_approval`）只返回前置条件错误 `AgentError`，模型错误只在运行结束时以 `RunError` 出现。按类别而不是描述文本处理错误：`RunError::kind()`、`RunError` 事件的 `error.kind` 与 `Agent::last_error()` 都给出 `ErrorKind`（例如 `Authentication` 提示重新配置凭据，`ContextLengthExceeded` 压缩历史后重试）。各层 `Display` 只描述本层，完整原因链用 `zach_ai_core::error::report` 渲染。工具里可以直接用 `?` 返回任意错误，原因链会写进回传给模型的文本。
 - **事件背压**：`AgentRun` 的普通事件队列有界，正常运行时需持续消费；中止会打断发送等待，即使保留句柄且不消费，也不会因满队列卡住收尾。中止后的普通事件仅尽力投递，队列满时可能丢弃；`RunAbort` / `RunError` / `RunFinish` 独立保存，恢复消费后在已排队的普通事件之后产出。
 
 不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复（转人工时由宿主发出 `ApprovalRequest::to_event()`）。

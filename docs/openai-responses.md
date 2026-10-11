@@ -34,9 +34,8 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
     while let Some(part) = stream.next().await {
         match part? {
             StreamPart::TextDelta { delta, .. } => print!("{delta}"),
-            StreamPart::Error { message, raw } => {
-                return Err(ModelError::provider_error("openai", message, raw));
-            }
+            // 流内错误携带与流外错误相同的类别与上下文，可直接转回 ModelError
+            StreamPart::Error(error) => return Err(error.into()),
             _ => {}
         }
     }
@@ -66,7 +65,7 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
 
 暂未支持服务端内置工具（如 Web Search、MCP、Code Interpreter）、后台任务、
 `previous_response_id` 续接、音视频和生成图片。这些能力需要单独适配其执行与回放语义。
-声明不支持的工具或请求参数会在发送前返回 `UnsupportedFeature`。
+声明不支持的工具或请求参数会在发送前返回 `ErrorKind::Unsupported` 错误，`code()` 为特性名。
 通用参数 `top_k`、`presence_penalty`、`frequency_penalty`、`stop_sequences`、`seed` 不映射到 Responses。
 
 函数声明未指定 `strict` 时发送 `false`，JSON Schema 输出未指定 `strict` 时不发送该字段，
@@ -81,7 +80,7 @@ async fn chat(api_key: String, model_id: String) -> Result<(), ModelError> {
 
 - 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
 - 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
-- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
+- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `ErrorKind::Unsupported`；
   本适配器的别名为 `Max` → `Xhigh`（`max` 仅 gpt-5.6 及更新代际的档案声明，档案未知时原样发送）；
 - 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
 
@@ -128,7 +127,7 @@ options.provider_options = Some(provider);
 - 非流式请求（`do_generate`）在服务端生成完之前收不到任何字节，默认整体超时 10 分钟，
   `with_generate_timeout(Some(..))` 可放宽，`None` 表示不限制；
 - 流式请求（`do_stream`）等待响应头、以及相邻两次收到数据之间默认最多 5 分钟，
-  `with_stream_idle_timeout` 可调整；超时以可重试的 `StreamError` 结束流。
+  `with_stream_idle_timeout` 可调整；超时以可重试的 `ErrorKind::Transport` 错误结束流。
 
 `with_client` 可传入自定义 `reqwest::Client` 配置连接池与代理；客户端级的 `timeout` /
 `read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
@@ -136,14 +135,19 @@ options.provider_options = Some(provider);
 `with_profile` 注入模型档案，优先于内置目录中的同名条目，用于代理端点或目录未收录的模型。
 API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴权的网关。
 
-HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为保留状态码
-与原始正文的 `ServerError`，其他非成功状态映射为保留原始错误 JSON 的 `ProviderError`。
-传输失败映射为 `StreamError` 并保留根因。沿用 core 的重试规则：限流、服务端暂时性故障
-和传输错误可由 Agent 重试，`ProviderError` 是对请求本身的拒绝，不重试。流式请求若收到
-JSON、HTML 或纯文本而非 `text/event-stream`（网关错误页、或把流式请求当普通请求处理），
-按带正文信息的 `ProviderError` 报告；Content-Type 缺失或为 `application/octet-stream` 时放行。
+错误按"该怎么处理"分类（`ErrorKind`），厂商错误码优先，认不出时按 HTTP 状态码兜底：
+401/403 为 `Authentication`，429 为 `RateLimited`，408 与 5xx 为 `Unavailable`，其余为 `Rejected`；
+三者与传输失败（`Transport`）可由 Agent 重试。错误保留厂商、状态码、错误码（`code()`）与原始正文
+（`raw()`），`Retry-After` / `retry-after-ms` 解析为 `retry_after()`。
+OpenAI 错误码优先看 `code` 再看 `type`：`rate_limit_exceeded` 为 `RateLimited`，`insufficient_quota`
+虽是 429 但需要充值，归为不重试的 `Rejected`；`context_length_exceeded` 为 `ContextLengthExceeded`，
+`server_error` 为 `Unavailable`。流内 `error` 事件与 `response.failed` 的错误对象使用同一套规则，
+因此同一个故障无论以 HTTP 状态码还是流内事件到达，类别都一致。传输失败保留根因作为 `source`。
+流式请求若收到 JSON、HTML 或纯文本而非 `text/event-stream`（网关错误页、或把流式请求当普通请求处理），
+按带正文信息的 `InvalidResponse` 报告（正文里有可识别的厂商错误码时以其类别为准）；
+Content-Type 缺失或为 `application/octet-stream` 时放行。
 
-SSE JSON/协议错误产生 `StreamPart::Error`；之后可以继续收集诊断与 usage，
+SSE JSON/协议错误产生 `StreamPart::Error`（类别为 `InvalidResponse`）；之后可以继续收集诊断与 usage，
 但聚合器不会把本次调用重新判为成功。`*.done` 快照与已收到的增量对不上（中间代理改写了文本）
 不算协议错误：保留流式正文，最终快照放在该块 End 事件的 `provider_metadata.openai.final_snapshot`。传输错误产生一次 `Err` 后流立即结束。
 没有收到 Responses 终止事件就结束连接时，也会报告传输错误。

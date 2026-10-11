@@ -56,7 +56,7 @@ DeepSeek、Qwen、xAI 等端点通过 `reasoning_content` 字段、OpenRouter、
 
 - 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
 - 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
-- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `UnsupportedFeature`；
+- 档位不在模型支持列表里：有降级别名时降级并给出 `Compatibility` 警告，否则发送前报 `ErrorKind::Unsupported`；
   本适配器的别名为 `Max` → `Xhigh`（`max` 仅 gpt-5.6 及更新代际的档案声明，档案未知时原样发送）；
 - 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告；
 - 声明了非 `openai` 的厂商身份且要求 `ReasoningEffort::None`：不发送 `reasoning_effort`（`none`
@@ -80,15 +80,20 @@ Agent 层会以 `model.warnings` 事件呈现。
 - 非流式请求（`do_generate`）在服务端生成完之前收不到任何字节，默认整体超时 10 分钟，
   `with_generate_timeout(Some(..))` 可放宽，`None` 表示不限制；
 - 流式请求（`do_stream`）等待响应头、以及相邻两次收到数据之间默认最多 5 分钟，
-  `with_stream_idle_timeout` 可调整；超时以可重试的 `StreamError` 结束流。
+  `with_stream_idle_timeout` 可调整；超时以可重试的 `ErrorKind::Transport` 错误结束流。
 
 `with_client` 可传入自定义 `reqwest::Client` 配置连接池与代理；客户端级的 `timeout` /
 `read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
 
-HTTP 401/403 映射为 `Authentication`，429 映射为 `RateLimit`，408 与 5xx 映射为可重试的
-`ServerError`，其他非成功状态映射为 `ProviderError`；传输失败映射为 `StreamError`。流式请求若收到
-JSON、HTML 或纯文本而非 `text/event-stream`，按带正文信息的 `ProviderError` 报告；Content-Type
-缺失或为 `application/octet-stream` 时放行。
+错误按"该怎么处理"分类（`ErrorKind`），厂商错误码优先，认不出时按 HTTP 状态码兜底：
+401/403 为 `Authentication`，429 为 `RateLimited`，408 与 5xx 为 `Unavailable`，其余为 `Rejected`；
+三者与传输失败（`Transport`）可由 Agent 重试。错误保留厂商、状态码、错误码（`code()`）与原始正文
+（`raw()`），`Retry-After` / `retry-after-ms` 解析为 `retry_after()`。
+错误码规则与 Responses 相同（`code` 优先于 `type`，`insufficient_quota` 不重试等），兼容端点的
+私有错误码认不出时按状态码兜底；错误中的厂商名取 `with_provider` 声明的身份。流内错误分块、
+以及以 HTTP 200 返回的错误对象都按同一规则分类。流式请求若收到 JSON、HTML 或纯文本而非
+`text/event-stream`，按带正文信息的 `InvalidResponse` 报告；Content-Type 缺失或为
+`application/octet-stream` 时放行。
 
 ## 厂商扩展
 
@@ -97,7 +102,7 @@ JSON、HTML 或纯文本而非 `text/event-stream`，按带正文信息的 `Prov
 兼容端点的通用协议，各家私有字段（如 Qwen 的 `enable_thinking`、vLLM 的 `chat_template_kwargs`）
 无法穷举，因此采用透传。但已由通用参数写入的字段
 （`model`、`messages`、`stream`、`temperature`、`tools` 等）不允许覆盖，会在发送前以
-`UnsupportedFeature` 拒绝，避免 `CallOptions` 上的设置被悄悄改掉。
+`ErrorKind::Unsupported` 拒绝（`code()` 为字段名），避免 `CallOptions` 上的设置被悄悄改掉。
 
 联调工具通过位置参数 `chat`（或 `--protocol openai-chat`）选择该协议，根地址仍然不包含
 `/chat/completions` 后缀。

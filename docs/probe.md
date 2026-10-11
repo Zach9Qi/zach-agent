@@ -320,7 +320,7 @@ OpenAI 根地址包含版本路径，Anthropic 根地址不含 `/v1`；两者都
 | `model_request` | 每轮实际通用 `CallOptions`，包含历史和工具声明 |
 | `stream_part` | 统一事件；开启 include_raw_chunks 后包含原始协议事件 |
 | `model_result` | 每轮普通或流聚合后的结果、用量与结束原因 |
-| `model_error` / `partial_result` | 模型错误或传输失败前的部分结果 |
+| `model_error` / `partial_result` | 模型错误（类别 `kind`、描述、原因链 `causes`、错误码、状态码与原始载荷）或传输失败前的部分结果 |
 | `agent_event` / `agent_result` | Agent 生命周期、执行事件及最终历史 |
 | `assertion_result` | 断言索引（从 0 开始）、具体预期与是否通过 |
 | `probe_finish` / `probe_error` | 运行是否成功、耗时或失败说明；套件中每次运行各输出一组 |

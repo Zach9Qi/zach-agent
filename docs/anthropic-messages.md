@@ -80,7 +80,7 @@ Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推�
 
 - 模型不支持推理却设置了档位：丢弃并给出 `Unsupported` 警告；
 - 档案未声明可关闭推理却要求 `ReasoningEffort::None`：不发送关闭指令并给出 `Compatibility` 警告；
-- 档位不在模型支持列表里：`Minimal` 降级为 `low` 并给出 `Compatibility` 警告，其余发送前报 `UnsupportedFeature`；
+- 档位不在模型支持列表里：`Minimal` 降级为 `low` 并给出 `Compatibility` 警告，其余发送前报 `ErrorKind::Unsupported`；
 - 档案声明不接受 `temperature`：丢弃并给出 `Unsupported` 警告。
 
 警告随流式的 `StreamStart.warnings` 与非流式的 `GenerateResult.warnings` 返回，
@@ -93,7 +93,7 @@ Agent 层会以 `model.warnings` 事件呈现。
 - 非流式请求（`do_generate`）在服务端生成完之前收不到任何字节，默认整体超时 10 分钟，
   `with_generate_timeout(Some(..))` 可放宽，`None` 表示不限制；
 - 流式请求（`do_stream`）等待响应头、以及相邻两次收到数据之间默认最多 5 分钟，
-  `with_stream_idle_timeout` 可调整；超时以可重试的 `StreamError` 结束流。
+  `with_stream_idle_timeout` 可调整；超时以可重试的 `ErrorKind::Transport` 错误结束流。
 
 `with_client` 可传入自定义 `reqwest::Client` 配置连接池与代理；客户端级的 `timeout` /
 `read_timeout` 会与上述规则叠加，注意 `read_timeout` 同样会约束非流式请求等待响应头的时间。
@@ -106,7 +106,7 @@ Agent 层会以 `model.warnings` 事件呈现。
   `mcp_servers`、`container`：写入请求正文（`output_config` 与 `metadata` 按字段合并）。
 - `betas`：字符串数组，与默认请求头中的 `anthropic-beta` 合并后发送。
 
-其他键会在请求前以 `UnsupportedFeature` 拒绝，避免静默改变适配器行为。
+其他键会在请求前以 `ErrorKind::Unsupported` 拒绝，避免静默改变适配器行为。
 
 ## 响应映射
 
@@ -126,7 +126,16 @@ Agent 层会以 `model.warnings` 事件呈现。
 发出 `Finish`，`message_stop` 之后不再读取网络。`Finish` 之前连接断开视为传输错误；
 `Finish` 之后、`message_stop` 之前断开（代理省略终止符）不影响结果。流内 `error` 事件
 （如 `overloaded_error`）使本轮结果为 `Error`，其后的断开不再额外报告。
-HTTP 429 与 529 映射为可重试的限流错误，408 与其余 5xx 映射为可重试的 `ServerError`。
+
+错误按"该怎么处理"分类（`ErrorKind`），厂商错误码优先，认不出时按 HTTP 状态码兜底：
+401/403 为 `Authentication`，429 为 `RateLimited`，408 与 5xx 为 `Unavailable`，其余为 `Rejected`；
+三者与传输失败（`Transport`）可由 Agent 重试。错误保留厂商、状态码、错误码（`code()`）与原始正文
+（`raw()`），`Retry-After` / `retry-after-ms` 解析为 `retry_after()`。
+错误码取错误对象的 `type`：`overloaded_error` 与 `api_error` 为 `Unavailable`，`rate_limit_error`
+为 `RateLimited`，`authentication_error` / `permission_error` 为 `Authentication`，描述以
+`prompt is too long` 开头的 `invalid_request_error` 为 `ContextLengthExceeded`。HTTP 错误正文与
+流内 `error` 事件使用同一套规则：过载无论以 HTTP 529 还是 200 之后的流内事件到达，都是可重试的
+`Unavailable`。
 
 ## 联调
 
