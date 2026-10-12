@@ -1,16 +1,8 @@
 //! 工作区的路径解析与范围判定
 
+use crate::support::root;
 use std::path::{Path, PathBuf};
 use zach_coding_agent::Workspace;
-
-/// 当前平台下的绝对根目录
-fn root() -> PathBuf {
-    if cfg!(windows) {
-        PathBuf::from("C:\\ws")
-    } else {
-        PathBuf::from("/ws")
-    }
-}
 
 #[test]
 fn relative_paths_resolve_against_the_root() {

@@ -80,6 +80,34 @@ impl Workspace {
         let path = path_key(path);
         path == root || path.starts_with(&format!("{root}/"))
     }
+
+    /// 访问某路径适用的策略；工作区内恒为放行
+    pub(crate) fn access(&self, path: &Path, write: bool) -> OutsideAccess {
+        if self.contains(path) {
+            OutsideAccess::Allow
+        } else if write {
+            self.write_outside
+        } else {
+            self.read_outside
+        }
+    }
+
+    /// 给模型看的路径：工作区内为 `/` 分隔的相对路径（根目录为 `.`），之外为绝对路径
+    pub(crate) fn display(&self, path: &Path) -> String {
+        if !self.contains(path) {
+            return path.display().to_string();
+        }
+        let relative: Vec<String> = path
+            .components()
+            .skip(self.root.components().count())
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        if relative.is_empty() {
+            ".".to_string()
+        } else {
+            relative.join("/")
+        }
+    }
 }
 
 /// 路径比较用的键：统一 `/` 分隔，Windows 上转小写
