@@ -1,5 +1,6 @@
 //! 编码工具集：按工作区、文件系统与截断上限组装可交给 `zach-agent` 的工具
 
+mod edit;
 mod locks;
 mod read;
 mod text;
@@ -52,9 +53,9 @@ impl CodingTools {
         vec![self.read()]
     }
 
-    /// 编码工具：read、write
+    /// 编码工具：read、write、edit
     pub fn coding(&self) -> Vec<SharedTool> {
-        vec![self.read(), self.write()]
+        vec![self.read(), self.write(), self.edit()]
     }
 
     fn read(&self) -> SharedTool {
@@ -63,6 +64,10 @@ impl CodingTools {
 
     fn write(&self) -> SharedTool {
         typed_tool(write::WriteTool::new(self.env.clone()))
+    }
+
+    fn edit(&self) -> SharedTool {
+        typed_tool(edit::EditTool::new(self.env.clone()))
     }
 }
 

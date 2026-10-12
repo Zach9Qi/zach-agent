@@ -4,6 +4,7 @@
 
 mod support;
 
+mod edit;
 mod local_fs;
 mod policy;
 mod read;
