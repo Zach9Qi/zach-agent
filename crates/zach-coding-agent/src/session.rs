@@ -2,14 +2,25 @@
 //!
 //! 压缩、回退、分叉都以追加条目表达，从不改写已写入的内容。设计见 `docs/session-persistence.md`。
 
+mod blobs;
 mod entry;
+mod error;
+mod handle;
+mod hooks;
 mod log;
+mod options;
 mod projection;
+mod run;
+mod shared;
 mod store;
 
 pub use entry::{
     CompactionEntry, CompactionReason, ConfigEntry, CustomEntry, Entry, EntryBody, EntryId,
     ForkOrigin, MessageEntry, MessageOrigin, ModelRef, SessionHeader, SessionId, FORMAT_VERSION,
 };
+pub use error::SessionError;
+pub use handle::Session;
 pub use log::{LogError, SessionLog};
+pub use options::{Durability, SessionOptions};
+pub use run::{SessionEvent, SessionRun};
 pub use store::{BlobRef, MemoryStore, SessionStore, StoreError, StoredSession};

@@ -13,6 +13,8 @@ serde_json.workspace = true
 schemars.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
+futures.workspace = true
+tracing.workspace = true
 # ripgrep 的目录遍历库：遵守 .gitignore 等忽略规则
 ignore = "0.4"
 # find 与 grep 的 glob 过滤
@@ -42,6 +44,5 @@ windows-sys = { version = "0.61", features = [
 # 超时用例使用虚拟时钟（`start_paused`），避免真实等待
 tokio = { workspace = true, features = ["test-util"] }
 tokio-util.workspace = true
-futures.workspace = true
 # 本地文件系统实现的用例需要真实的临时目录
 tempfile = "3"

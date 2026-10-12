@@ -1,14 +1,17 @@
-//! 共享测试替身：纯内存文件系统、脚本化 shell 与工具调用辅助
+//! 共享测试替身：纯内存文件系统、脚本化 shell、脚本化模型与工具调用辅助
 
 use async_trait::async_trait;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use zach_agent::{SharedTool, ToolContext, ToolError, ToolOutcome};
-use zach_ai_core::ToolResultOutput;
+use zach_ai_core::{
+    CallOptions, FinishReason, GenerateResult, LanguageModel, LanguageModelStream, Message,
+    ModelError, StreamPart, ToolResultOutput, Usage,
+};
 use zach_coding_agent::{
     CodingTools, FileInfo, FileSystem, FsEntry, OutputSink, Shell, ShellExit, ShellRequest,
     Workspace,
@@ -234,4 +237,121 @@ pub fn text_of(outcome: &ToolOutcome) -> &str {
 /// 详情中的某个字段
 pub fn detail<'a>(outcome: &'a ToolOutcome, key: &str) -> &'a Value {
     &outcome.details.as_ref().expect("缺少详情")[key]
+}
+
+/// 执行时只记录"已执行"的工具
+pub fn fn_tool_flag(name: &str) -> (Arc<std::sync::atomic::AtomicBool>, SharedTool) {
+    let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let tool = Arc::new(FlagTool {
+        definition: zach_ai_core::FunctionTool::new(name, serde_json::json!({ "type": "object" })),
+        flag: flag.clone(),
+    });
+    (flag, tool)
+}
+
+struct FlagTool {
+    definition: zach_ai_core::FunctionTool,
+    flag: Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[async_trait]
+impl zach_agent::AgentTool for FlagTool {
+    fn definition(&self) -> &zach_ai_core::FunctionTool {
+        &self.definition
+    }
+
+    async fn execute(&self, _input: Value, _ctx: ToolContext) -> Result<ToolOutcome, ToolError> {
+        self.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(ToolOutcome::text("已执行"))
+    }
+}
+
+/// 按脚本逐次产出流式分块的模型；脚本用完后挂起，记录每次请求的对话
+#[derive(Default)]
+pub struct ScriptedModel {
+    scripts: Mutex<VecDeque<Vec<StreamPart>>>,
+    requests: Mutex<Vec<Vec<Message>>>,
+}
+
+impl ScriptedModel {
+    pub fn new(scripts: Vec<Vec<StreamPart>>) -> Arc<Self> {
+        Arc::new(Self {
+            scripts: Mutex::new(scripts.into()),
+            requests: Mutex::default(),
+        })
+    }
+
+    /// 每次请求收到的对话（含系统提示词）
+    pub fn requests(&self) -> Vec<Vec<Message>> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl LanguageModel for ScriptedModel {
+    fn provider(&self) -> &str {
+        "mock"
+    }
+
+    fn model_id(&self) -> &str {
+        "scripted"
+    }
+
+    async fn do_generate(&self, _options: CallOptions) -> Result<GenerateResult, ModelError> {
+        Err(ModelError::unsupported("generate", None))
+    }
+
+    async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
+        self.requests.lock().unwrap().push(options.prompt.messages);
+        match self.scripts.lock().unwrap().pop_front() {
+            Some(parts) => Ok(Box::pin(futures::stream::iter(parts.into_iter().map(Ok)))),
+            None => Ok(Box::pin(futures::stream::pending())),
+        }
+    }
+}
+
+/// 一段完整的文本回复
+pub fn reply_parts(text: &str) -> Vec<StreamPart> {
+    let id = "t".to_string();
+    vec![
+        StreamPart::TextStart {
+            id: id.clone(),
+            provider_metadata: None,
+        },
+        StreamPart::TextDelta {
+            id: id.clone(),
+            delta: text.into(),
+            provider_metadata: None,
+        },
+        StreamPart::TextEnd {
+            id,
+            provider_metadata: None,
+        },
+        finish(FinishReason::stop()),
+    ]
+}
+
+/// 发起若干工具调用：`(tool_call_id, tool_name, 入参)`
+pub fn call_parts(calls: &[(&str, &str, Value)]) -> Vec<StreamPart> {
+    let mut parts: Vec<StreamPart> = calls
+        .iter()
+        .map(|(id, name, input)| StreamPart::ToolCall {
+            tool_call_id: (*id).into(),
+            tool_name: (*name).into(),
+            input: input.to_string(),
+            provider_executed: false,
+            dynamic: false,
+            provider_metadata: None,
+        })
+        .collect();
+    parts.push(finish(FinishReason::tool_calls()));
+    parts
+}
+
+fn finish(finish_reason: FinishReason) -> StreamPart {
+    StreamPart::Finish {
+        usage: Usage::simple(100, 20),
+        finish_reason,
+        provider_metadata: None,
+    }
 }
