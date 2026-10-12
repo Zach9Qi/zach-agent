@@ -20,10 +20,15 @@ pub enum ToolExecutionMode {
 }
 
 /// 工具执行结果
+///
+/// 结果分两路：`output` 进入对话记录、回传给模型，应尽量精简；`details` 只给宿主
+/// （界面、日志、审计）使用，随最终输出事件的 `tool_metadata` 透出，不进入对话记录。
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolOutcome {
     /// 回传给模型的结果载荷
     pub output: ToolResultOutput,
+    /// 给宿主的结构化详情（差异、退出码、截断信息等），不发给模型
+    pub details: Option<Value>,
     /// 请求在本批工具结束后停止运行。
     ///
     /// 仅当同一批次所有工具结果都为 `true` 时才会提前结束。
@@ -35,6 +40,7 @@ impl ToolOutcome {
     pub fn new(output: ToolResultOutput) -> Self {
         Self {
             output,
+            details: None,
             terminate: false,
         }
     }
@@ -52,6 +58,12 @@ impl ToolOutcome {
     /// 文本错误结果
     pub fn error(text: impl Into<String>) -> Self {
         Self::new(ToolResultOutput::error_text(text))
+    }
+
+    /// 附带给宿主的结构化详情
+    pub fn with_details(mut self, details: Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     /// 设置提前结束提示

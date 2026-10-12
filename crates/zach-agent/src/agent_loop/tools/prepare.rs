@@ -98,19 +98,24 @@ async fn request_approval(
     Some((decision.approved, decision.reason))
 }
 
-/// 调用得出最终结果：发出输出事件并返回结果
+/// 调用得出最终结果：发出输出事件（附带结果详情）并返回结果
 pub(super) async fn settle(
     call: &LocalCall,
     outcome: ToolOutcome,
     batch: &BatchInput<'_>,
 ) -> ToolOutcome {
-    let event = tool_output_event(
+    let mut event = tool_output_event(
         call.tool_call_id.clone(),
         outcome.output.clone(),
         false,
         false,
         None,
     );
+    if let AgentEvent::ToolOutputAvailable { tool_metadata, .. }
+    | AgentEvent::ToolOutputError { tool_metadata, .. } = &mut event
+    {
+        tool_metadata.clone_from(&outcome.details);
+    }
     batch.host.emit(event).await;
     outcome
 }

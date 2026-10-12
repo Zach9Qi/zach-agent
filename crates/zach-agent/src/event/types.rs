@@ -245,7 +245,7 @@ pub enum AgentEvent {
         /// 是否由模型供应商在服务端直接代为执行
         #[serde(default)]
         provider_executed: bool,
-        /// 工具本身的自定义配置/元数据
+        /// 工具给宿主的结构化详情（即 [`crate::ToolOutcome::details`]），只出现在最终结果上
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tool_metadata: Option<Value>,
         /// 模型服务商附带的工具执行结果元数据（如耗时、厂商自定义用量）
@@ -264,7 +264,7 @@ pub enum AgentEvent {
         /// 是否由模型供应商在服务端直接代为执行
         #[serde(default)]
         provider_executed: bool,
-        /// 工具本身的自定义配置/元数据
+        /// 工具给宿主的结构化详情（即 [`crate::ToolOutcome::details`]）
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tool_metadata: Option<Value>,
         /// 模型服务商附带的工具执行元数据
