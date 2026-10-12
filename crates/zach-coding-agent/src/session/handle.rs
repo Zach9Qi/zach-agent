@@ -195,7 +195,7 @@ impl Session {
         self.shared.record(EntryBody::Custom(custom)).await
     }
 
-    /// Agent 的模型、系统提示词或工具与分支上记录的不同时，追加只含变化字段的配置条目
+    /// Agent 的模型、推理档位、系统提示词或工具与分支上记录的不同时，追加只含变化字段的配置条目
     pub(super) async fn record_config(&self) -> Result<(), SessionError> {
         let model = self.agent.model();
         let current = ConfigEntry {
@@ -203,6 +203,7 @@ impl Session {
                 provider: model.provider().to_string(),
                 id: model.model_id().to_string(),
             }),
+            reasoning: self.agent.options().reasoning,
             system_prompt: self.agent.system_prompt(),
             tools: Some(
                 self.agent
@@ -217,6 +218,9 @@ impl Session {
             model: current
                 .model
                 .filter(|model| recorded.model.as_ref() != Some(model)),
+            reasoning: current
+                .reasoning
+                .filter(|reasoning| recorded.reasoning != Some(*reasoning)),
             system_prompt: current
                 .system_prompt
                 .filter(|prompt| recorded.system_prompt.as_ref() != Some(prompt)),

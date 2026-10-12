@@ -6,7 +6,7 @@ use futures::StreamExt;
 use serde_json::json;
 use std::sync::Arc;
 use zach_agent::{Agent, RetryPolicy, SharedTool};
-use zach_ai_core::{FileData, Message, UserPart};
+use zach_ai_core::{FileData, Message, ReasoningEffort, UserPart};
 use zach_coding_agent::session::{
     EntryBody, ForkOrigin, LogError, MemoryStore, MessageOrigin, Session, SessionError,
     SessionEvent, SessionOptions, SessionStore,
@@ -141,13 +141,19 @@ async fn config_changes_record_only_the_changed_fields() {
     let session = Session::create(store.clone(), agent.clone(), SessionOptions::new());
     session.prompt_text("一").unwrap().outcome().await.unwrap();
     agent.set_system_prompt(Some("新提示词".into()));
+    agent.set_reasoning(Some(ReasoningEffort::High));
     session.prompt_text("二").unwrap().outcome().await.unwrap();
 
     let stored = store.load(session.id()).await.unwrap();
+    let EntryBody::Config(first) = &stored.entries[0].body else {
+        panic!("第 1 条应为配置: {:?}", stored.entries[0]);
+    };
+    assert!(first.reasoning.is_none(), "未设置推理档位时不记录");
     let EntryBody::Config(change) = &stored.entries[3].body else {
         panic!("第 4 条应为配置变化: {:?}", stored.entries[3]);
     };
     assert_eq!(change.system_prompt.as_deref(), Some("新提示词"));
+    assert_eq!(change.reasoning, Some(ReasoningEffort::High));
     assert!(change.model.is_none() && change.tools.is_none());
 }
 

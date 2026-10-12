@@ -10,7 +10,7 @@ use std::fmt;
 use std::hash::{BuildHasher, RandomState};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zach_agent::{Commit, CommitKind};
-use zach_ai_core::{FinishReason, Message, Usage};
+use zach_ai_core::{FinishReason, Message, ReasoningEffort, Usage};
 
 /// 当前写入的会话格式版本
 pub const FORMAT_VERSION: u32 = 1;
@@ -226,11 +226,14 @@ pub struct CompactionEntry {
     pub modified_files: Vec<String>,
 }
 
-/// 配置变化，只记录变化的字段
+/// 配置变化，只记录变化的字段；未设置的字段表示不变
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConfigEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelRef>,
+    /// 推理档位
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<ReasoningEffort>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,6 +246,9 @@ impl ConfigEntry {
         if later.model.is_some() {
             self.model.clone_from(&later.model);
         }
+        if later.reasoning.is_some() {
+            self.reasoning = later.reasoning;
+        }
         if later.system_prompt.is_some() {
             self.system_prompt.clone_from(&later.system_prompt);
         }
@@ -253,7 +259,10 @@ impl ConfigEntry {
 
     /// 是否没有任何字段
     pub fn is_empty(&self) -> bool {
-        self.model.is_none() && self.system_prompt.is_none() && self.tools.is_none()
+        self.model.is_none()
+            && self.reasoning.is_none()
+            && self.system_prompt.is_none()
+            && self.tools.is_none()
     }
 }
 

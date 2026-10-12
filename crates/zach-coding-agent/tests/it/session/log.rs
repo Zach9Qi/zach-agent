@@ -119,7 +119,7 @@ fn config_changes_merge_along_the_current_branch_only() {
         EntryBody::Config(ConfigEntry {
             model: Some(model.clone()),
             system_prompt: Some("旧提示词".into()),
-            tools: None,
+            ..ConfigEntry::default()
         }),
         input("问"),
         EntryBody::Config(ConfigEntry {
