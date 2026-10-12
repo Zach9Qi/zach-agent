@@ -1,4 +1,4 @@
-//! 共享测试替身：纯内存文件系统与工具调用辅助
+//! 共享测试替身：纯内存文件系统、脚本化 shell 与工具调用辅助
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -9,7 +9,10 @@ use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use zach_agent::{SharedTool, ToolContext, ToolError, ToolOutcome};
 use zach_ai_core::ToolResultOutput;
-use zach_coding_agent::{CodingTools, FileInfo, FileSystem, FsEntry, Workspace};
+use zach_coding_agent::{
+    CodingTools, FileInfo, FileSystem, FsEntry, OutputSink, Shell, ShellExit, ShellRequest,
+    Workspace,
+};
 
 /// 当前平台下的绝对根目录
 pub fn root() -> PathBuf {
@@ -135,6 +138,67 @@ impl FileSystem for MemoryFs {
 
     async fn walk(&self, path: &Path) -> io::Result<Vec<FsEntry>> {
         self.entries(path, true)
+    }
+}
+
+/// [`FakeShell`] 送完输出后的结局
+#[derive(Debug, Clone, Copy)]
+pub enum End {
+    /// 以给定退出码结束
+    Exit(Option<i32>),
+    /// 永不结束（用于超时）
+    Hang,
+    /// 启动失败
+    Fail,
+}
+
+/// 按脚本送出输出的 shell，记录收到的命令与工作目录
+pub struct FakeShell {
+    chunks: Vec<Vec<u8>>,
+    end: End,
+    requests: Mutex<Vec<(String, PathBuf)>>,
+}
+
+impl FakeShell {
+    pub fn new(chunks: &[&str], end: End) -> Arc<Self> {
+        Arc::new(Self {
+            chunks: chunks
+                .iter()
+                .map(|chunk| chunk.as_bytes().to_vec())
+                .collect(),
+            end,
+            requests: Mutex::default(),
+        })
+    }
+
+    pub fn requests(&self) -> Vec<(String, PathBuf)> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl Shell for FakeShell {
+    fn name(&self) -> &str {
+        "bash"
+    }
+
+    async fn run(
+        &self,
+        request: ShellRequest<'_>,
+        output: &mut OutputSink<'_>,
+    ) -> io::Result<ShellExit> {
+        let record = (request.command.to_string(), request.cwd.to_path_buf());
+        self.requests.lock().unwrap().push(record);
+        if let End::Fail = self.end {
+            return Err(io::Error::other("找不到程序"));
+        }
+        for chunk in &self.chunks {
+            output(chunk);
+        }
+        match self.end {
+            End::Exit(code) => Ok(ShellExit { code }),
+            End::Hang | End::Fail => std::future::pending().await,
+        }
     }
 }
 

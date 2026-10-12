@@ -32,6 +32,8 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
+# 超时用例使用虚拟时钟（`start_paused`），避免真实等待
+tokio = { workspace = true, features = ["test-util"] }
 tokio-util.workspace = true
 futures.workspace = true
 # 本地文件系统实现的用例需要真实的临时目录
