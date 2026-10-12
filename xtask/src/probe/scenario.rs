@@ -1,5 +1,6 @@
 //! 场景沿用标准调用参数，加载本地文件简写与共享 Schema 后执行断言。
 
+mod fields;
 mod files;
 mod schema;
 
@@ -96,10 +97,11 @@ impl Scenario {
         if let Some(schema_file) = &draft.schema_file {
             schema::prepare(&mut draft.request, schema_file)?;
         }
-        let request = serde_ignored::deserialize(&draft.request, |_| ignored = true)
+        let request = CallOptions::deserialize(&draft.request)
             .map_err(|_| "标准 request 格式无效：请检查字段类型；文件必须提供 data 或 path")?;
-        if ignored {
-            return Err("场景包含标准类型不识别的字段，请检查拼写".into());
+        let round_trip = serde_json::to_value(&request).map_err(|_| "序列化标准请求失败")?;
+        if let Some(path) = fields::unknown(&draft.request, &round_trip) {
+            return Err(format!("场景字段 {path} 不被标准类型识别，请检查拼写"));
         }
         let mut scenario = Self {
             request,

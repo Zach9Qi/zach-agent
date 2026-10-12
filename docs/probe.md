@@ -90,6 +90,8 @@ cargo xtask probe responses stream --scenario my.json   # 自定义场景
 
 `request` 沿用已有标准类型；文件块中的 `path` 是场景加载器提供的简写，加载时移除
 `path` 并补齐标准 `data`，最终构造完整的 `CallOptions`。
+标准类型不识别的字段（包括消息、内容块、输出格式内部的拼写错误）会在请求前报错并指出字段路径，
+不会被静默丢弃；显式写成 `null` 的可选字段与省略等价。
 `reasoning: "high"` 是通用推理强度；OpenAI 的摘要配置放在
 `request.provider_options.openai.reasoning.summary: "auto"`。
 原始协议事件使用 `request.include_raw_chunks: true`。

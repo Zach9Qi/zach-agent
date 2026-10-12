@@ -272,6 +272,56 @@ fn agent_settings_cannot_silently_override_standard_tool_declarations() {
     .is_err());
 }
 
+/// 消息、内容块、输出格式等按标签区分的标准类型会先缓冲再反序列化，内部拼错的字段曾被静默丢弃、
+/// 联调按默认值跑完。现在同样拒绝并指出字段路径；显式写成 null 的可选字段与省略等价。
+#[test]
+fn typos_inside_tagged_standard_types_are_rejected_with_their_path() {
+    let base = || {
+        let mut value = source();
+        value["request"]["response_format"] = json!({"type": "json"});
+        value
+    };
+    for (pointer, key, path) in [
+        (
+            "/request/prompt/messages/0",
+            "contnet",
+            "request.prompt.messages[0].contnet",
+        ),
+        (
+            "/request/prompt/messages/0/content/2",
+            "filname",
+            "request.prompt.messages[0].content[2].filname",
+        ),
+        (
+            "/request/response_format",
+            "stirct",
+            "request.response_format.stirct",
+        ),
+    ] {
+        let mut value = base();
+        value.pointer_mut(pointer).unwrap()[key] = json!(true);
+        let error = Scenario::parse(
+            Mode::Stream,
+            &value.to_string(),
+            Path::new("x.json"),
+            |_| panic!("拼写应在读取文件前校验"),
+        )
+        .err()
+        .unwrap();
+        assert!(error.contains(path), "{error}");
+    }
+    let mut value = base();
+    value["request"]["prompt"]["messages"][0]["content"][0]["provider_options"] = Value::Null;
+    value["request"]["stop_sequences"] = Value::Null;
+    assert!(Scenario::parse(
+        Mode::Stream,
+        &value.to_string(),
+        Path::new("x.json"),
+        |_| Ok(vec![1])
+    )
+    .is_ok());
+}
+
 #[test]
 fn malformed_json_and_trailing_data_do_not_echo_private_values() {
     let error = Scenario::parse(
