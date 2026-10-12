@@ -27,4 +27,4 @@ pub use handle::Session;
 pub use log::{LogError, SessionLog};
 pub use options::{Durability, SessionOptions};
 pub use run::{SessionEvent, SessionRun};
-pub use store::{BlobRef, MemoryStore, SessionStore, StoreError, StoredSession};
+pub use store::{BlobRef, JsonlStore, MemoryStore, SessionStore, StoreError, StoredSession};

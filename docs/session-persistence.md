@@ -1,6 +1,6 @@
 # 会话持久化与上下文压缩设计
 
-状态：已实施，默认的文件存储尚未实现（见文末"实施状态"）。适用范围：`zach-agent`（契约补充）与 `zach-coding-agent`（会话层）。
+状态：已实施（见文末"实施状态"）。适用范围：`zach-agent`（契约补充）与 `zach-coding-agent`（会话层）。
 
 ## 目标与非目标
 
@@ -21,7 +21,7 @@ zach-agent            提交通知：每条消息写入对话记录后，有序�
      ▲
 zach-coding-agent
   session/            Session（驱动 Agent）、条目模型、投影、压缩
-  session/store       SessionStore trait、MemoryStore（进程内）；文件存储待实现
+  session/store       SessionStore trait、JsonlStore（默认的文件存储）、MemoryStore（进程内）
 ```
 
 - `zach-agent` 不感知会话、文件与格式，只新增"提交通知"这一项契约。
@@ -152,7 +152,7 @@ pub trait TranscriptSink: Send + Sync {
 
 ## 五、存储抽象
 
-当前提供进程内的 `MemoryStore`（测试与不需要持久化的宿主）；下文的 `JsonlStore` 是待实现的默认文件存储规格。
+提供默认的文件存储 `JsonlStore`，以及进程内的 `MemoryStore`（测试与不需要持久化的宿主）。
 
 ```rust
 #[async_trait]
@@ -162,15 +162,19 @@ pub trait SessionStore: Send + Sync {
     async fn sync(&self, id: &SessionId) -> Result<(), StoreError>;
     async fn load(&self, id: &SessionId) -> Result<StoredSession, StoreError>; // 头、条目、诊断
     async fn list(&self) -> Result<Vec<SessionHeader>, StoreError>;
-    async fn put_blob(&self, data: &[u8]) -> Result<BlobRef, StoreError>;
+    async fn put_blob(&self, blob: &BlobRef, data: &[u8]) -> Result<(), StoreError>; // 已存在时跳过
     async fn get_blob(&self, blob: &BlobRef) -> Result<Vec<u8>, StoreError>;
 }
 ```
 
-- `JsonlStore` 的根目录由宿主指定（运行时不假设任何全局目录）：`<root>/sessions/<id>.jsonl`、`<root>/blobs/`。
-  Unix 上目录权限 0700、文件 0600。
-- 测试使用纯内存的存储替身；`JsonlStore` 自身的用例使用临时目录。
-- `StoreError` 区分：不存在、格式损坏（带行号）、版本过新、IO 错误。
+- `JsonlStore` 的根目录由宿主指定（运行时不假设任何全局目录）：`<root>/sessions/<id>.jsonl`、`<root>/blobs/sha256-<hex>`，
+  目录在第一次写入时创建。Unix 上目录权限 0700、文件 0600。
+- 会话 ID 只允许字母、数字、`-` 与 `_`（不超过 128 个字符），文件名不会逃出根目录；文件头中的 ID 必须与文件名一致。
+- 一批条目编码后一次写入；写入失败时截回写入前的长度，保证 `append` 要么完整写入要么没有。
+- blob 先写临时文件并 fsync，再改名为最终路径，进程中途被杀不会留下半截内容；`sync` 只 fsync 会话文件。
+- 文件操作放在阻塞线程池中执行。
+- 测试使用纯内存的存储替身；`JsonlStore` 自身的用例使用临时目录，两种实现共用同一组存储契约用例。
+- `StoreError` 区分：不存在、已存在、ID 不合法、格式损坏（带行号）、版本过新、blob 不存在、IO 错误。
 
 ## 六、Session：驱动 Agent
 
@@ -262,7 +266,7 @@ impl Session {
 | :--- | :--- | :--- |
 | `zach-agent`：`Commit` / `CommitKind`、`LoopHost::on_commit`、`TranscriptSink` | `e464210` | 已完成 |
 | 会话模型与投影、v1 样例文件 | `e374222` | 已完成 |
-| 存储抽象与 `MemoryStore` | `d332314` | 已完成；**`JsonlStore` 待实现** |
+| 存储抽象与 `MemoryStore` | `d332314` | 已完成 |
 | `Session`：运行、逐条落盘、大对象、回退与分叉、写入失败处理 | `687bad7` | 已完成 |
 | 压缩：估算、切点、摘要、文件追踪、轮间压缩与溢出重试 | `4fa3cf5` | 已完成 |
 

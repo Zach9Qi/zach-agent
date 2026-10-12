@@ -1,7 +1,8 @@
-//! 会话：条目日志与投影、v1 样例文件、存储契约、运行生命周期与上下文压缩；子模块共用的辅助放在这里
+//! 会话：条目日志与投影、v1 样例文件、存储契约与文件存储、运行生命周期与上下文压缩；子模块共用的辅助放在这里
 
 mod compaction;
 mod fixtures;
+mod jsonl;
 mod lifecycle;
 mod log;
 mod store;

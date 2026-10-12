@@ -4,7 +4,7 @@
 //!
 //! 本示例不访问网络。[`EchoModel`] 复述最后一个问题并报出它看到了几个问题，
 //! 用来观察恢复与回退后模型实际收到的上下文；[`JoinSummarizer`] 把被压缩的问题拼成摘要，
-//! 代替真实的摘要模型。会话保存在进程内的 `MemoryStore` 中。
+//! 代替真实的摘要模型。会话以 JSONL 文件保存在临时目录中，恢复时换用新的存储实例，相当于进程重启。
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -15,7 +15,7 @@ use zach_ai_core::{
     ModelError, StreamPart, Usage, UserPart,
 };
 use zach_coding_agent::session::{
-    CompactionOptions, EntryBody, MemoryStore, Session, SessionEvent, SessionOptions, SessionStore,
+    CompactionOptions, EntryBody, JsonlStore, Session, SessionEvent, SessionOptions, SessionStore,
     Summarizer, SummaryRequest,
 };
 
@@ -111,7 +111,7 @@ async fn ask(session: &Session, text: &str) -> Result<(), Box<dyn std::error::Er
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let store = Arc::new(MemoryStore::new());
+    let dir = tempfile::tempdir()?;
     let options = SessionOptions::new()
         .with_workspace_root("/repo")
         .with_compaction(
@@ -121,11 +121,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
     println!("== 新建会话");
-    let session = Session::create(store.clone(), agent(), options.clone());
+    let session = Session::create(
+        Arc::new(JsonlStore::new(dir.path())),
+        agent(),
+        options.clone(),
+    );
     ask(&session, "第一问").await?;
     ask(&session, "第二问").await?;
 
-    println!("\n== 用新的 Agent 恢复会话，模型看得到之前的问题");
+    println!("\n== 用新的存储实例与 Agent 从磁盘恢复会话，模型看得到之前的问题");
+    let store = Arc::new(JsonlStore::new(dir.path()));
     let session = Session::open(store.clone(), session.id(), agent(), options).await?;
     ask(&session, "第三问").await?;
 
@@ -140,7 +145,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  {message:?}");
     }
 
-    println!("\n== 存储中的条目（只追加，从不改写）");
+    let file = dir
+        .path()
+        .join("sessions")
+        .join(format!("{}.jsonl", session.id()));
+    println!(
+        "\n== 会话文件 {} 中的条目（只追加，从不改写）",
+        file.display()
+    );
     for entry in store.load(session.id()).await?.entries {
         let kind = match &entry.body {
             EntryBody::Message(message) => format!("消息/{:?}", message.origin),

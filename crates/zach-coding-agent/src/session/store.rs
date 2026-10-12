@@ -1,7 +1,9 @@
 //! 会话存储：会话层只经由 [`SessionStore`] 读写，宿主可接入文件、数据库或远程实现
 
+mod jsonl;
 mod memory;
 
+pub use jsonl::JsonlStore;
 pub use memory::MemoryStore;
 
 use super::entry::{Entry, SessionHeader, SessionId};

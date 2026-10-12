@@ -4,16 +4,22 @@
 use super::tool_outputs;
 use serde_json::{json, Value};
 use zach_ai_core::Message;
-use zach_coding_agent::session::{Entry, EntryBody, ModelRef, SessionHeader, SessionLog};
+use zach_coding_agent::session::{
+    Entry, EntryBody, JsonlStore, ModelRef, SessionHeader, SessionLog, SessionStore,
+};
 
 const FIXTURES: [&str; 4] = ["linear", "compacted", "branched", "interrupted"];
 
-/// 样例文件的各行
-fn lines(name: &str) -> Vec<String> {
-    let path = format!(
+fn path(name: &str) -> String {
+    format!(
         "{}/tests/fixtures/sessions/v1/{name}.jsonl",
         env!("CARGO_MANIFEST_DIR")
-    );
+    )
+}
+
+/// 样例文件的各行
+fn lines(name: &str) -> Vec<String> {
+    let path = path(name);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"));
     text.lines().map(str::to_string).collect()
 }
@@ -53,6 +59,23 @@ fn every_v1_fixture_round_trips_unchanged() {
                 number + 1
             );
         }
+    }
+}
+
+/// 文件存储原样加载样例文件，不产生警告
+#[tokio::test]
+async fn every_v1_fixture_loads_through_the_file_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let store = JsonlStore::new(dir.path());
+    for name in FIXTURES {
+        let (header, log) = load(name);
+        std::fs::copy(path(name), sessions.join(format!("{}.jsonl", header.id))).unwrap();
+        let stored = store.load(&header.id).await.unwrap();
+        assert_eq!(stored.header, header, "{name}");
+        assert_eq!(stored.entries, log.entries(), "{name}");
+        assert!(stored.warnings.is_empty(), "{name}");
     }
 }
 
