@@ -44,6 +44,9 @@ zach-ai      (适配层: 各 LLM 厂商 API 客户端/协议映射)
       ▲
       │ (依赖)
 zach-agent   (编排层: Agent 运行时)
+      ▲
+      │ (依赖)
+zach-coding-agent (应用层: 编码智能体运行时)
 ```
 
 ---
@@ -55,6 +58,7 @@ zach-agent   (编排层: Agent 运行时)
 | **`zach-ai-core`** | `crates/zach-ai-core` | **底层抽象契约**。定义 `LanguageModel` 统一接口、`Prompt`/`Message` 结构、流式事件 (`StreamPart`)、流聚合器 (`StreamAccumulator`)、工具协议与调用参数 (`CallOptions`)。 |
 | **`zach-ai`** | `crates/zach-ai` | **厂商实现层**。已实现 OpenAI Responses API、Chat Completions 兼容协议、Anthropic Messages API 和模型档案目录。 |
 | **`zach-agent`** | `crates/zach-agent` | **Agent 编排与运行时**。提供低层循环（`run_agent_loop`）与有状态的 `Agent` 句柄：多轮工具调用、并行/串行工具执行、人工审批、插队/追加消息、策略钩子、失败重试与中止，运行过程以 `AgentEvent` 事件流透出。 |
+| **`zach-coding-agent`** | `crates/zach-coding-agent` | **编码智能体运行时**。在 `zach-agent` 之上提供工作区感知的 read / write / edit / grep / find / ls 与 shell 命令工具，文件与命令经由可替换的 `FileSystem` / `Shell` 抽象执行，结果分为给模型的精简输出与给宿主的结构化详情。只是运行时库，不含命令行与界面。 |
 
 ---
 
@@ -168,6 +172,37 @@ async fn chat(model: Arc<dyn LanguageModel>) -> Result<(), Box<dyn std::error::E
 
 不需要状态管理时，可直接调用低层 `run_agent_loop`，并自行实现 `LoopHost` 接收事件、提供排队消息与审批答复（转人工时由宿主发出 `ApprovalRequest::to_event()`）。
 
+### 编码工具集
+
+`zach-coding-agent` 的 `CodingTools` 按工作区组装编码工具，产出的 `Vec<SharedTool>` 直接交给 `Agent`：
+
+```rust
+use std::sync::Arc;
+use zach_agent::Agent;
+use zach_ai_core::LanguageModel;
+use zach_coding_agent::{CodingTools, OutsideAccess, Workspace};
+
+fn coding_agent(model: Arc<dyn LanguageModel>) -> Agent {
+    // 工作区之外：读取放行（默认），写入拒绝（默认为转人工审批）
+    let workspace = Workspace::new("/path/to/repo").with_write_outside(OutsideAccess::Deny);
+    // 本地磁盘 + 自动探测的 bash（Windows 上为 Git Bash）
+    let tools = CodingTools::local(workspace);
+    Agent::builder(model)
+        .system_prompt("你是编码助手")
+        .tools(tools.coding())
+        .build()
+}
+```
+
+- **工具集**：`read_only()` 为 read、grep、find、ls；`coding()` 另含 write、edit，以及配置了 shell 时以 shell 名称命名的命令工具。
+- **结果两路**：`output` 给模型，尽量精简并附带"如何继续"的提示（如 `使用 offset=2001 继续读取`）；`details` 给宿主，随 `ToolOutputAvailable` / `ToolOutputError` 事件的 `tool_metadata` 透出（edit 的统一差异、命令的退出码与耗时、截断统计、完整输出路径等），不进入对话记录。
+- **截断**：输出默认上限 2000 行或 50KB（`with_limits` 调整）。读文件与搜索保留开头，命令输出保留末尾；命令输出被截断时完整内容落盘（`with_spill_dir`）。
+- **edit**：一次可做多处替换，全部对照原文件定位，要求唯一且互不重叠；精确匹配失败时回退到宽松匹配（忽略行尾空白、引号与破折号的 Unicode 变体）；原文件的 CRLF 与 BOM 原样保留。同一构造器产出的写类工具共享按文件的锁，并行修改同一文件时排队。
+- **命令**：默认超时 120 秒（`with_command_timeout`），超时或运行中止时终止整棵进程树（Unix 进程组，Windows 作业对象）；输出去掉 ANSI 控制序列。命令不做路径审批，需要时用 `AgentHooks::before_tool_call` 或审批处理器把关。
+- **可替换的执行环境**：`CodingTools::new(workspace, fs)` 接受任意 `FileSystem` 实现，`with_shell` 接受任意 `Shell` 实现，可对接沙箱、容器或远程环境。
+
+可离线运行的完整示例：`cargo run -p zach-coding-agent --example edit_file`。
+
 ---
 
 ## 开发与测试
@@ -200,6 +235,9 @@ cargo test
 
 # 仅测试 agent 模块
 cargo test -p zach-agent
+
+# 仅测试编码智能体运行时（本机 shell 用例需要 bash，Windows 上为 Git Bash）
+cargo test -p zach-coding-agent
 
 # 仅测试 ai-core 模块
 cargo test -p zach-ai-core

@@ -34,6 +34,8 @@ zach-ai-core (底层契约: Trait/基础模型/Error)
 zach-ai      (实现层: API客户端/Provider/数据流)
   ▲
 zach-agent   (编排层: Agent运行时/状态机/工具调度)
+  ▲
+zach-coding-agent (应用层: 编码智能体运行时/工作区与文件、命令工具)
 ```
 
 ## 7. 可见性与代码复用
