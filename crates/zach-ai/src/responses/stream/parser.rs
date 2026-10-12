@@ -157,10 +157,15 @@ impl ResponsesStreamParser {
                 parts.extend(self.complete(&event["response"])?);
                 self.terminal = true;
             }
-            // error 事件本身就是错误对象（code、message 与 type 同级）
+            // 文档中 error 事件的 code、message 与 type 同级，线上实际把错误对象嵌套在 `error` 下；
+            // 两种形态都识别，否则读不到错误码，流内限流会被当成不可重试的拒绝。
             "error" => {
                 self.failed = true;
-                let error = DIALECT.error("openai", event).with_raw(event.clone());
+                let body = event
+                    .get("error")
+                    .filter(|e| e.is_object())
+                    .unwrap_or(event);
+                let error = DIALECT.error("openai", body).with_raw(event.clone());
                 parts.push(StreamPart::Error(error.into()));
             }
             // 摘要与正文的完成快照由 output_item.done 补齐，其他进度事件只按需透出 Raw。

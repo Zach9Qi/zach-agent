@@ -141,10 +141,11 @@ API Key 为空字符串时不发送 `Authorization` 头，用于接入无需鉴�
 401/403 为 `Authentication`，429 为 `RateLimited`，408 与 5xx 为 `Unavailable`，其余为 `Rejected`；
 三者与传输失败（`Transport`）可由 Agent 重试。错误保留厂商、状态码、错误码（`code()`）与原始正文
 （`raw()`），`Retry-After` / `retry-after-ms` 解析为 `retry_after()`。
-OpenAI 错误码优先看 `code` 再看 `type`：`rate_limit_exceeded` 为 `RateLimited`，`insufficient_quota`
-虽是 429 但需要充值，归为不重试的 `Rejected`；`context_length_exceeded` 为 `ContextLengthExceeded`，
-`server_error` 为 `Unavailable`。流内 `error` 事件与 `response.failed` 的错误对象使用同一套规则，
-因此同一个故障无论以 HTTP 状态码还是流内事件到达，类别都一致。传输失败保留根因作为 `source`。
+OpenAI 错误码优先看 `code` 再看 `type`：`rate_limit_exceeded` 与 `too_many_requests` 为 `RateLimited`，
+`insufficient_quota` 虽是 429 但需要充值，归为不重试的 `Rejected`；`context_length_exceeded` 为
+`ContextLengthExceeded`，`server_error` 为 `Unavailable`。流内 `error` 事件与 `response.failed` 的错误对象
+使用同一套规则，因此同一个故障无论以 HTTP 状态码还是流内事件到达，类别都一致。流内 `error` 事件的
+错误对象线上嵌套在 `error` 字段下（与文档的平铺形态不同），两种形态都会识别。传输失败保留根因作为 `source`。
 流式请求若收到 JSON、HTML 或纯文本而非 `text/event-stream`（网关错误页、或把流式请求当普通请求处理），
 按带正文信息的 `InvalidResponse` 报告（正文里有可识别的厂商错误码时以其类别为准）；
 Content-Type 缺失或为 `application/octet-stream` 时放行。

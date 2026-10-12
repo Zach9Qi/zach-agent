@@ -61,6 +61,38 @@ async fn final_snapshot_mismatch_keeps_streamed_text_and_records_the_snapshot() 
     assert_eq!(result.text(), "你好 ");
 }
 
+/// 文档中的 `error` 事件是平铺形态，线上实际把错误对象嵌套在 `error` 下。两种都要读出错误码，
+/// 否则 HTTP 200 之后才到达的限流会被当成不可重试的拒绝，错误描述也会丢失。
+#[tokio::test]
+async fn in_stream_error_events_are_classified_in_both_nested_and_flat_shapes() {
+    let nested = json!({"type": "error", "sequence_number": 2, "error": {
+        "type": "too_many_requests", "code": "too_many_requests",
+        "message": "Too Many Requests", "param": null}});
+    let flat = json!({"type": "error", "sequence_number": 2,
+        "code": "server_error", "message": "服务端错误", "param": null});
+    for (event, kind, code, message) in [
+        (
+            nested,
+            ErrorKind::RateLimited,
+            "too_many_requests",
+            "Too Many Requests",
+        ),
+        (flat, ErrorKind::Unavailable, "server_error", "服务端错误"),
+    ] {
+        let parts = parse_wire(event_frame(&event)).await;
+        assert!(
+            parts.iter().any(|p| matches!(
+                p,
+                Ok(StreamPart::Error(error))
+                    if error.kind == kind
+                        && error.code.as_deref() == Some(code)
+                        && error.message == message
+            )),
+            "{parts:?}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn malformed_events_cannot_be_rescued_by_a_later_completed_response() {
     let wire = "data: invalid\n\n".to_owned()

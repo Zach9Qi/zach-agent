@@ -21,7 +21,8 @@ fn kind(code: &str, _error: &Value) -> Option<ErrorKind> {
     let kind = match code {
         "invalid_api_key" => ErrorKind::Authentication,
         "context_length_exceeded" => ErrorKind::ContextLengthExceeded,
-        "rate_limit_exceeded" => ErrorKind::RateLimited,
+        // Responses 流内的限流错误码是 `too_many_requests`
+        "rate_limit_exceeded" | "too_many_requests" => ErrorKind::RateLimited,
         // 状态码同为 429，但需要充值，重试无济于事
         "insufficient_quota" => ErrorKind::Rejected,
         "server_error" => ErrorKind::Unavailable,
@@ -51,6 +52,7 @@ mod tests {
     fn quota_exhaustion_is_not_retried_although_it_shares_status_429_with_rate_limits() {
         let classify = |code: &str| DIALECT.error("openai", &json!({"code": code})).kind();
         assert_eq!(classify("rate_limit_exceeded"), ErrorKind::RateLimited);
+        assert_eq!(classify("too_many_requests"), ErrorKind::RateLimited);
         assert_eq!(classify("insufficient_quota"), ErrorKind::Rejected);
         assert_eq!(
             classify("context_length_exceeded"),
