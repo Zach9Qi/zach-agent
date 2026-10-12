@@ -14,6 +14,9 @@ use zach_ai_core::{
 
 use crate::validate::{validate, Validated};
 
+/// 无状态回放推理项所需的 include 选项
+const ENCRYPTED_REASONING: &str = "reasoning.encrypted_content";
+
 /// 已构建的请求：正文与档案校验产生的警告。
 #[derive(Debug)]
 pub(super) struct BuiltRequest {
@@ -42,14 +45,18 @@ pub(super) fn build_request(
         options.temperature,
         &[(ReasoningEffort::Max, ReasoningEffort::Xhigh)],
     )?;
-    // Agent 自行管理历史，默认采用无状态模式并请求可回放的加密推理。
+    // Agent 自行管理历史，默认采用无状态模式；推理模型另请求可回放的加密推理。
+    // 非推理模型（gpt-4o、gpt-4.1 等）收到该选项会直接 400，档案未知时按推理模型处理。
+    let encrypted_reasoning = profile.is_none_or(|profile| profile.reasoning.is_some());
     let mut body = json!({
         "model": model_id,
         "input": input::messages(&options.prompt.messages)?,
         "stream": stream,
         "store": false,
-        "include": ["reasoning.encrypted_content"]
     });
+    if encrypted_reasoning {
+        body["include"] = json!([ENCRYPTED_REASONING]);
+    }
     if let Some(value) = options.max_output_tokens {
         body["max_output_tokens"] = json!(value);
     }
@@ -117,8 +124,9 @@ pub(super) fn build_request(
         if values.iter().any(|v| !v.is_string()) {
             return Err(ModelError::invalid_request("include 必须是字符串数组"));
         }
-        let encrypted = json!("reasoning.encrypted_content");
-        if !values.contains(&encrypted) {
+        // 推理模型缺少加密推理就无法无状态回放，扩展参数覆盖 include 时仍补上。
+        let encrypted = json!(ENCRYPTED_REASONING);
+        if encrypted_reasoning && !values.contains(&encrypted) {
             values.push(encrypted);
         }
     }

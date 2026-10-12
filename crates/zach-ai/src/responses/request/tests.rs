@@ -194,6 +194,42 @@ fn provider_options_merge_reasoning_and_keep_replay_enabled() {
     assert_eq!(body["include"], json!(["reasoning.encrypted_content"]));
 }
 
+/// 非推理模型（gpt-4o、gpt-4.1 等）收到 `reasoning.encrypted_content` 会直接 400，
+/// 只有档案声明推理能力（或档案未知）时才请求加密推理。
+#[test]
+fn non_reasoning_models_do_not_request_encrypted_reasoning() {
+    let plain = profile("openai", "gpt-4o", None, true);
+    let mut options = CallOptions::new(vec![Message::user("x")]);
+    let body = build_request(&plain.id, Some(&plain), &options, false)
+        .unwrap()
+        .body;
+    assert!(body.get("include").is_none());
+
+    // 显式的 include 原样发送，不再补加密推理。
+    let mut provider = ProviderOptions::new();
+    provider.insert(
+        "openai",
+        json!({"include": ["message.output_text.logprobs"]}),
+    );
+    options.provider_options = Some(provider);
+    let body = build_request(&plain.id, Some(&plain), &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(body["include"], json!(["message.output_text.logprobs"]));
+
+    let thinker = profile("openai", "o3", reasoning_profile(&[], false), true);
+    let body = build_request(&thinker.id, Some(&thinker), &options, false)
+        .unwrap()
+        .body;
+    assert_eq!(
+        body["include"],
+        json!([
+            "message.output_text.logprobs",
+            "reasoning.encrypted_content"
+        ])
+    );
+}
+
 /// 档案声明不接受 temperature 或不支持某档位时，在发送前丢弃或报错，而不是让服务端返回 400；
 /// `max` 按别名降级为 xhigh。
 #[test]

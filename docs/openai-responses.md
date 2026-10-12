@@ -89,7 +89,9 @@ Agent 层会以 `model.warnings` 事件呈现。
 
 ## 历史、推理与扩展参数
 
-默认 `store: false`，并请求 `include: ["reasoning.encrypted_content"]`，方便 Agent 自行维护完整历史。
+默认 `store: false`；推理模型另请求 `include: ["reasoning.encrypted_content"]`，方便 Agent 自行维护完整历史。
+档案未声明推理能力的模型（gpt-4o、gpt-4.1 等）不发送该选项，否则服务端会以 400 拒绝；
+档案未知时按推理模型处理，经网关接入非推理模型时请用 `with_profile` 提供档案。
 可以将 `GenerateResult::into_assistant_message()` 追加到下一轮 Prompt。
 保留返回的 provider metadata，避免丢失加密推理；没有 Responses 回放数据的外部推理摘要会被忽略，
 不会作为助手正文发送。
@@ -100,7 +102,7 @@ Agent 层会以 `model.warnings` 事件呈现。
 - `metadata`、`service_tier`、`truncation`、`store`、`include`；
 - `user`、`safety_identifier`、`prompt_cache_key`、`prompt_cache_retention`。
 
-对象字段合并，同名字段由扩展参数覆盖；`include` 始终保留加密推理选项。
+对象字段合并，同名字段由扩展参数覆盖；推理模型的 `include` 始终保留加密推理选项。
 例如请求可见推理摘要：
 
 ```rust
