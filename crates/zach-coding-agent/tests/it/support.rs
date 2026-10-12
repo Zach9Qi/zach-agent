@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use zach_agent::{SharedTool, ToolContext, ToolError, ToolOutcome};
 use zach_ai_core::{
@@ -158,17 +159,25 @@ pub enum End {
 /// 按脚本送出输出的 shell，记录收到的命令与工作目录
 pub struct FakeShell {
     chunks: Vec<Vec<u8>>,
+    /// 每段输出之前等待的时长（虚拟时钟下推进）
+    gap: Duration,
     end: End,
     requests: Mutex<Vec<(String, PathBuf)>>,
 }
 
 impl FakeShell {
     pub fn new(chunks: &[&str], end: End) -> Arc<Self> {
+        Self::paced(chunks, Duration::ZERO, end)
+    }
+
+    /// 每段输出之前先等待 `gap`
+    pub fn paced(chunks: &[&str], gap: Duration, end: End) -> Arc<Self> {
         Arc::new(Self {
             chunks: chunks
                 .iter()
                 .map(|chunk| chunk.as_bytes().to_vec())
                 .collect(),
+            gap,
             end,
             requests: Mutex::default(),
         })
@@ -196,6 +205,9 @@ impl Shell for FakeShell {
             return Err(io::Error::other("找不到程序"));
         }
         for chunk in &self.chunks {
+            if !self.gap.is_zero() {
+                tokio::time::sleep(self.gap).await;
+            }
             output(chunk);
         }
         match self.end {

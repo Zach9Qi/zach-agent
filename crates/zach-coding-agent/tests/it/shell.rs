@@ -1,10 +1,15 @@
-//! shell 工具：输出整理、退出状态、尾部截断与落盘、超时及工具集装配
+//! shell 工具：输出整理、退出状态、尾部截断与落盘、超时、进度上报及工具集装配
 
-use crate::support::{at, call, detail, root, text_of, tool, tools, End, FakeShell, MemoryFs};
+use crate::support::{
+    at, call, call_parts, detail, reply_parts, root, text_of, tool, tools, End, FakeShell,
+    MemoryFs, ScriptedModel,
+};
+use futures::StreamExt;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
-use zach_agent::SharedTool;
+use zach_agent::{Agent, AgentEvent, SharedTool};
+use zach_ai_core::ToolResultOutput;
 use zach_coding_agent::TruncationLimits;
 
 fn bash(fs: &Arc<MemoryFs>, shell: Arc<FakeShell>) -> SharedTool {
@@ -157,6 +162,44 @@ async fn timeouts_report_partial_output_and_are_capped() {
         .await
         .unwrap();
     assert!(text_of(&outcome).ends_with("命令超时（30 秒），已终止"));
+}
+
+/// 运行中的输出以中间结果上报：至少间隔 100 毫秒，内容为清洗后的输出末尾
+#[tokio::test(start_paused = true)]
+async fn progress_updates_are_throttled_and_show_the_sanitized_tail() {
+    let fs = MemoryFs::new();
+    // 每 60 毫秒一段输出：第 2、4 段时距上次上报满 100 毫秒，其余被节流
+    let chunks = ["1\n", "\u{1b}[32m2\u{1b}[0m\n", "3\n", "4\n", "5\n"];
+    let shell = FakeShell::paced(&chunks, Duration::from_millis(60), End::Exit(Some(0)));
+    let model = ScriptedModel::new(vec![
+        call_parts(&[("c1", "bash", json!({ "command": "make" }))]),
+        reply_parts("好了"),
+    ]);
+    let agent = Agent::builder(model)
+        .tools(tools(&fs).with_shell(shell).coding())
+        .build();
+
+    let mut run = agent.prompt_text("构建").unwrap();
+    let mut outputs = Vec::new();
+    while let Some(event) = run.next().await {
+        if let AgentEvent::ToolOutputAvailable {
+            output: ToolResultOutput::Text { value, .. },
+            preliminary,
+            ..
+        } = event
+        {
+            outputs.push((preliminary, value));
+        }
+    }
+    run.outcome().await.unwrap();
+    assert_eq!(
+        outputs,
+        [
+            (true, "1\n2".to_string()),
+            (true, "1\n2\n3\n4".to_string()),
+            (false, "1\n2\n3\n4\n5".to_string()),
+        ]
+    );
 }
 
 #[tokio::test]
