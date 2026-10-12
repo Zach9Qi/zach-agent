@@ -58,7 +58,7 @@ zach-coding-agent (应用层: 编码智能体运行时)
 | **`zach-ai-core`** | `crates/zach-ai-core` | **底层抽象契约**。定义 `LanguageModel` 统一接口、`Prompt`/`Message` 结构、流式事件 (`StreamPart`)、流聚合器 (`StreamAccumulator`)、工具协议与调用参数 (`CallOptions`)。 |
 | **`zach-ai`** | `crates/zach-ai` | **厂商实现层**。已实现 OpenAI Responses API、Chat Completions 兼容协议、Anthropic Messages API 和模型档案目录。 |
 | **`zach-agent`** | `crates/zach-agent` | **Agent 编排与运行时**。提供低层循环（`run_agent_loop`）与有状态的 `Agent` 句柄：多轮工具调用、并行/串行工具执行、人工审批、插队/追加消息、策略钩子、失败重试与中止，运行过程以 `AgentEvent` 事件流透出。 |
-| **`zach-coding-agent`** | `crates/zach-coding-agent` | **编码智能体运行时**。在 `zach-agent` 之上提供工作区感知的 read / write / edit / grep / find / ls 与 shell 命令工具，文件与命令经由可替换的 `FileSystem` / `Shell` 抽象执行，结果分为给模型的精简输出与给宿主的结构化详情。只是运行时库，不含命令行与界面。 |
+| **`zach-coding-agent`** | `crates/zach-coding-agent` | **编码智能体运行时**。在 `zach-agent` 之上提供工作区感知的 read / write / edit / grep / find / ls 与 shell 命令工具，文件与命令经由可替换的 `FileSystem` / `Shell` 抽象执行，结果分为给模型的精简输出与给宿主的结构化详情；另含系统提示词组装（AGENTS.md 发现）与会话持久化（JSONL 文件存储、回退分叉、上下文压缩）。只是运行时库，不含命令行与界面。 |
 
 ---
 
@@ -201,6 +201,35 @@ fn coding_agent(model: Arc<dyn LanguageModel>) -> Agent {
 - **edit**：一次可做多处替换，全部对照原文件定位，要求唯一且互不重叠；精确匹配失败时回退到宽松匹配（忽略行尾空白、引号与破折号的 Unicode 变体）；原文件的 CRLF 与 BOM 原样保留。同一构造器产出的写类工具共享按文件的锁，并行修改同一文件时排队。
 - **命令**：默认超时 120 秒（`with_command_timeout`），超时或运行中止时终止整棵进程树（Unix 进程组，Windows 作业对象）；输出去掉 ANSI 控制序列。命令不做路径审批，需要时用 `AgentHooks::before_tool_call` 或审批处理器把关。
 - **可替换的执行环境**：`CodingTools::new(workspace, fs)` 接受任意 `FileSystem` 实现，`with_shell` 接受任意 `Shell` 实现，可对接沙箱、容器或远程环境。
+
+### 系统提示词
+
+`SystemPrompt` 组装编码智能体的系统提示词，`ContextFiles` 从工作区根目录逐级向上查找项目指令文件（默认 `AGENTS.md`，其次 `CLAUDE.md`）：
+
+```rust
+use std::sync::Arc;
+use zach_agent::Agent;
+use zach_ai_core::LanguageModel;
+use zach_coding_agent::{CodingTools, ContextFiles, LocalFileSystem, SystemPrompt, Workspace};
+
+async fn coding_agent(model: Arc<dyn LanguageModel>) -> Agent {
+    let workspace = Workspace::new("/path/to/repo");
+    let tools = CodingTools::local(workspace.clone()).coding();
+    let context = ContextFiles::new()
+        .with_global_dir("/home/me/.config/my-agent") // 可选：宿主的全局指令目录
+        .discover(&LocalFileSystem, workspace.root())
+        .await;
+    let prompt = SystemPrompt::new(&workspace)
+        .with_tools(&tools)
+        .with_context_files(context)
+        .render();
+    Agent::builder(model).system_prompt(prompt).tools(tools).build()
+}
+```
+
+- **段落**：开头的身份说明（`with_preamble` 可替换）之后依次是 `<rules>`（按所给工具生成的使用规则、`with_rule` 追加的规则与通用规则）、`<addendum>`（`with_addendum`）、`<project_context>`（各指令文件及其路径）与 `<workspace>`（工作区根目录）。
+- **查找顺序**：全局目录的文件在最前，其后从最外层的祖先目录到工作区根目录，越靠后越具体；每个目录只取第一个存在且非空的文件，读取失败的跳过。文件经由 `FileSystem` 读取，可搭配沙箱或远程实现；运行时不假设任何全局目录。
+- 接入会话时，系统提示词的变化会记录在配置条目中；是否在每次运行前重新查找由宿主决定。
 
 可离线运行的完整示例：`cargo run -p zach-coding-agent --example edit_file`。
 

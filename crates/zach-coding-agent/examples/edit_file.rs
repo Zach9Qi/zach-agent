@@ -4,6 +4,7 @@
 //!
 //! 本示例不访问网络，也不依赖本机 shell。[`ScriptedModel`] 按对话中已有的工具结果数量
 //! 依次发起 `read`、`edit` 调用并最终作答；工具在临时目录组成的工作区里真实读写文件。
+//! 系统提示词由 `SystemPrompt` 组装，并带上工作区中 AGENTS.md 的项目约定。
 //! 宿主从事件的 `tool_metadata` 中取出 edit 工具给出的统一差异用于展示，模型看不到它。
 //!
 //! 接入真实模型时只需替换模型实现。
@@ -18,7 +19,7 @@ use zach_ai_core::{
     CallOptions, FinishReason, GenerateResult, LanguageModel, LanguageModelStream, Message,
     ModelError, StreamPart, Usage,
 };
-use zach_coding_agent::{CodingTools, Workspace};
+use zach_coding_agent::{CodingTools, ContextFiles, LocalFileSystem, SystemPrompt, Workspace};
 
 /// 按轮次固定行事的模型：第 1 轮读文件，第 2 轮修改，第 3 轮作答
 struct ScriptedModel;
@@ -109,12 +110,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dir.path().join("greet.py"),
         "def greet():\n    print(\"hello\")\n",
     )?;
+    std::fs::write(
+        dir.path().join("AGENTS.md"),
+        "Python 代码使用四个空格缩进。\n",
+    )?;
 
     // 本地磁盘 + 本机 shell；本示例的脚本只用到 read 与 edit
-    let tools = CodingTools::local(Workspace::new(dir.path()));
+    let workspace = Workspace::new(dir.path());
+    let tools = CodingTools::local(workspace.clone()).coding();
+    // 从工作区根目录向上查找 AGENTS.md / CLAUDE.md，连同工具规则一起组装系统提示词
+    let context = ContextFiles::new()
+        .discover(&LocalFileSystem, workspace.root())
+        .await;
+    let system_prompt = SystemPrompt::new(&workspace)
+        .with_tools(&tools)
+        .with_context_files(context)
+        .render();
+    println!("[系统提示词]\n{system_prompt}\n");
+
     let agent = Agent::builder(Arc::new(ScriptedModel))
-        .system_prompt("你是编码助手，先读文件再修改")
-        .tools(tools.coding())
+        .system_prompt(system_prompt)
+        .tools(tools)
         .build();
 
     let mut run = agent.prompt_text("把 greet.py 的问候语改成 hello, world")?;
