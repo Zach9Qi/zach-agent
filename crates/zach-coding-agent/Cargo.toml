@@ -9,6 +9,12 @@ license.workspace = true
 zach-agent.workspace = true
 zach-ai-core.workspace = true
 serde.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+# ripgrep 的目录遍历库：遵守 .gitignore 等忽略规则
+ignore = "0.4"
 
 [dev-dependencies]
 serde_json.workspace = true
+# 本地文件系统实现的用例需要真实的临时目录
+tempfile = "3"
