@@ -1,7 +1,10 @@
 //! 编码工具集：按工作区、文件系统、shell 与截断上限组装可交给 `zach-agent` 的工具
 
 mod edit;
+mod find;
 mod locks;
+mod ls;
+mod pattern;
 mod read;
 mod shell;
 mod text;
@@ -86,14 +89,20 @@ impl CodingTools {
         self
     }
 
-    /// 只读工具：read
+    /// 只读工具：read、find、ls
     pub fn read_only(&self) -> Vec<SharedTool> {
-        vec![self.read()]
+        vec![self.read(), self.find(), self.ls()]
     }
 
-    /// 编码工具：read、write、edit，以及配置了 shell 时的命令工具（以 shell 名称命名）
+    /// 编码工具：read、write、edit、find、ls，以及配置了 shell 时的命令工具（以 shell 名称命名）
     pub fn coding(&self) -> Vec<SharedTool> {
-        let mut tools = vec![self.read(), self.write(), self.edit()];
+        let mut tools = vec![
+            self.read(),
+            self.write(),
+            self.edit(),
+            self.find(),
+            self.ls(),
+        ];
         tools.extend(self.shell());
         tools
     }
@@ -108,6 +117,14 @@ impl CodingTools {
 
     fn edit(&self) -> SharedTool {
         typed_tool(edit::EditTool::new(self.env.clone()))
+    }
+
+    fn find(&self) -> SharedTool {
+        typed_tool(find::FindTool::new(self.env.clone()))
+    }
+
+    fn ls(&self) -> SharedTool {
+        typed_tool(ls::LsTool::new(self.env.clone()))
     }
 
     fn shell(&self) -> Option<SharedTool> {

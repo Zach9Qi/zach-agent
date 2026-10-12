@@ -175,15 +175,18 @@ fn shell_tool_is_named_after_the_shell_and_only_present_when_configured() {
     let names = |tools: Vec<SharedTool>| -> Vec<String> {
         tools.iter().map(|tool| tool.name().to_string()).collect()
     };
-    assert_eq!(names(tools(&fs).coding()), ["read", "write", "edit"]);
+    assert_eq!(
+        names(tools(&fs).coding()),
+        ["read", "write", "edit", "find", "ls"]
+    );
 
     let shell = FakeShell::new(&[], End::Exit(Some(0)));
     let with_shell = tools(&fs).with_shell(shell);
     assert_eq!(
         names(with_shell.coding()),
-        ["read", "write", "edit", "bash"]
+        ["read", "write", "edit", "find", "ls", "bash"]
     );
-    assert_eq!(names(with_shell.read_only()), ["read"]);
+    assert_eq!(names(with_shell.read_only()), ["read", "find", "ls"]);
     let bash = tool(&with_shell.coding(), "bash");
     let description = bash.definition().description.as_deref().unwrap();
     assert!(description.contains("执行 bash 命令") && description.contains("默认超时 120 秒"));
