@@ -25,6 +25,9 @@ pub enum SessionError {
     /// 此前写入失败，会话已停止；条目可能没有全部落盘
     #[error("会话写入失败，已停止: {0}")]
     Persist(String),
+    /// 生成压缩摘要失败
+    #[error("上下文压缩失败: {0}")]
+    Compaction(String),
     /// 运行任务异常退出
     #[error("会话运行任务异常退出: {0}")]
     Internal(String),

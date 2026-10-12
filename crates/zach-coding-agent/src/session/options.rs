@@ -1,5 +1,6 @@
 //! 会话选项
 
+use super::compaction::CompactionOptions;
 use std::fmt;
 use std::sync::Arc;
 use zach_agent::{AgentHooks, NoopHooks};
@@ -26,6 +27,7 @@ pub struct SessionOptions {
     pub(crate) hooks: Arc<dyn AgentHooks>,
     pub(crate) durability: Durability,
     pub(crate) blob_threshold: usize,
+    pub(crate) compaction: CompactionOptions,
 }
 
 impl Default for SessionOptions {
@@ -35,6 +37,7 @@ impl Default for SessionOptions {
             hooks: Arc::new(NoopHooks),
             durability: Durability::default(),
             blob_threshold: DEFAULT_BLOB_THRESHOLD,
+            compaction: CompactionOptions::default(),
         }
     }
 }
@@ -69,6 +72,12 @@ impl SessionOptions {
         self.blob_threshold = bytes;
         self
     }
+
+    /// 上下文压缩选项
+    pub fn with_compaction(mut self, compaction: CompactionOptions) -> Self {
+        self.compaction = compaction;
+        self
+    }
 }
 
 impl fmt::Debug for SessionOptions {
@@ -77,6 +86,7 @@ impl fmt::Debug for SessionOptions {
             .field("workspace_root", &self.workspace_root)
             .field("durability", &self.durability)
             .field("blob_threshold", &self.blob_threshold)
+            .field("compaction", &self.compaction)
             .finish_non_exhaustive()
     }
 }

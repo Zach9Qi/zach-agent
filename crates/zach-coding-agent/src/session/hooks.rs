@@ -1,5 +1,6 @@
 //! 会话占用 Agent 的钩子位：串联宿主钩子，并在写入失败后停止运行
 
+use super::entry::CompactionReason;
 use super::shared::Shared;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -46,7 +47,19 @@ impl AgentHooks for SessionHooks {
         self.inner.finish_turn(turn, context).await
     }
 
+    /// 轮次之间超过阈值时压缩，并把本次运行后续请求的上下文换成新的投影
     async fn prepare_next_turn(&self, turn: &TurnInfo, request: &mut RequestState) -> Vec<Message> {
+        if self.shared.over_threshold(request.model.as_ref()) {
+            let compacted = self
+                .shared
+                .compact(&request.model, CompactionReason::Threshold)
+                .await;
+            if let Ok(Some(_)) = compacted {
+                if let Ok(context) = self.shared.context().await {
+                    request.context.messages = context;
+                }
+            }
+        }
         self.inner.prepare_next_turn(turn, request).await
     }
 }

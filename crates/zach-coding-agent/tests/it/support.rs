@@ -266,17 +266,22 @@ impl zach_agent::AgentTool for FlagTool {
     }
 }
 
-/// 按脚本逐次产出流式分块的模型；脚本用完后挂起，记录每次请求的对话
+/// 按脚本逐次产出流式分块（或在建立流之前失败）的模型；脚本用完后挂起，记录每次请求的对话
 #[derive(Default)]
 pub struct ScriptedModel {
-    scripts: Mutex<VecDeque<Vec<StreamPart>>>,
+    scripts: Mutex<VecDeque<Result<Vec<StreamPart>, ModelError>>>,
     requests: Mutex<Vec<Vec<Message>>>,
 }
 
 impl ScriptedModel {
     pub fn new(scripts: Vec<Vec<StreamPart>>) -> Arc<Self> {
+        Self::with_replies(scripts.into_iter().map(Ok).collect())
+    }
+
+    /// 每次请求依次取一个结果：成功时产出这些分块，失败时直接返回错误
+    pub fn with_replies(replies: Vec<Result<Vec<StreamPart>, ModelError>>) -> Arc<Self> {
         Arc::new(Self {
-            scripts: Mutex::new(scripts.into()),
+            scripts: Mutex::new(replies.into()),
             requests: Mutex::default(),
         })
     }
@@ -304,7 +309,8 @@ impl LanguageModel for ScriptedModel {
     async fn do_stream(&self, options: CallOptions) -> Result<LanguageModelStream, ModelError> {
         self.requests.lock().unwrap().push(options.prompt.messages);
         match self.scripts.lock().unwrap().pop_front() {
-            Some(parts) => Ok(Box::pin(futures::stream::iter(parts.into_iter().map(Ok)))),
+            Some(Ok(parts)) => Ok(Box::pin(futures::stream::iter(parts.into_iter().map(Ok)))),
+            Some(Err(error)) => Err(error),
             None => Ok(Box::pin(futures::stream::pending())),
         }
     }

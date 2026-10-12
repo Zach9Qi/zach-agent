@@ -5,15 +5,17 @@
 //! - 懒创建：日志中出现第一条消息时才在存储中创建会话，此前的条目（如配置）随之一起写入。
 //! - 任一写入失败即标记失败：钩子随即停止执行工具并结束运行，此后的写入一律拒绝。
 
-use super::blobs::externalize;
+use super::blobs::{externalize, internalize};
 use super::entry::{now_millis, Entry, EntryBody, EntryId, MessageEntry, SessionHeader};
 use super::error::SessionError;
 use super::log::SessionLog;
 use super::options::{Durability, SessionOptions};
+use super::run::SessionEvent;
 use super::store::SessionStore;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use tokio::sync::mpsc;
 use zach_agent::{Commit, CommitKind, TranscriptSink};
 use zach_ai_core::{AssistantPart, Message};
 
@@ -36,6 +38,8 @@ pub(super) struct Shared {
     state: Mutex<State>,
     /// 串行化写入，保证追加顺序
     writer: tokio::sync::Mutex<()>,
+    /// 当前运行的会话事件通道（压缩事件经此送达使用方）
+    events: Mutex<Option<mpsc::UnboundedSender<SessionEvent>>>,
 }
 
 impl Shared {
@@ -62,7 +66,30 @@ impl Shared {
                 failure: None,
             }),
             writer: tokio::sync::Mutex::new(()),
+            events: Mutex::new(None),
         }
+    }
+
+    /// 设置或清除当前运行的会话事件通道
+    pub(super) fn set_events(&self, sender: Option<mpsc::UnboundedSender<SessionEvent>>) {
+        *self.events.lock().unwrap_or_else(PoisonError::into_inner) = sender;
+    }
+
+    /// 向当前运行的使用方发送会话事件；没有运行时丢弃
+    pub(super) fn send_event(&self, event: SessionEvent) {
+        let events = self.events.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(sender) = events.as_ref() {
+            let _ = sender.send(event);
+        }
+    }
+
+    /// 当前分支投影出的模型上下文，大对象已还原
+    pub(super) async fn context(&self) -> Result<Vec<Message>, SessionError> {
+        let mut messages = self.lock().log.context();
+        for message in &mut messages {
+            internalize(message, self.store.as_ref()).await?;
+        }
+        Ok(messages)
     }
 
     pub(super) fn lock(&self) -> MutexGuard<'_, State> {

@@ -1,9 +1,8 @@
 //! 会话句柄：创建、打开、发起运行、回退与分叉
 
-use super::blobs::internalize;
 use super::entry::{
-    ConfigEntry, CustomEntry, Entry, EntryBody, EntryId, ForkOrigin, ModelRef, SessionHeader,
-    SessionId,
+    CompactionReason, ConfigEntry, CustomEntry, Entry, EntryBody, EntryId, ForkOrigin, ModelRef,
+    SessionHeader, SessionId,
 };
 use super::error::SessionError;
 use super::hooks::SessionHooks;
@@ -130,11 +129,16 @@ impl Session {
 
     /// 当前分支投影出的模型上下文（大对象已还原）
     pub async fn context(&self) -> Result<Vec<Message>, SessionError> {
-        let mut messages = self.shared.lock().log.context();
-        for message in &mut messages {
-            internalize(message, self.shared.store.as_ref()).await?;
+        self.shared.context().await
+    }
+
+    /// 手动压缩：以 Agent 当前的模型生成摘要；没有可压缩的内容时返回 `Ok(None)`
+    pub async fn compact(&self) -> Result<Option<EntryId>, SessionError> {
+        if self.is_running() {
+            return Err(SessionError::Busy);
         }
-        Ok(messages)
+        let model = self.agent.model();
+        self.shared.compact(&model, CompactionReason::Manual).await
     }
 
     /// 回退：把当前叶子移到 `to`，之后的运行从这里分出新分支，原分支保留

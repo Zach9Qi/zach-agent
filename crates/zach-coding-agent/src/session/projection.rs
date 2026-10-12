@@ -11,26 +11,39 @@ pub(crate) const INTERRUPTED: &str = "运行中断，工具未得出结果";
 
 /// 投影当前分支（按时间正序）
 pub(crate) fn project(branch: &[&Entry]) -> Vec<Message> {
-    let compaction = branch
+    let (compaction, visible) = visible(branch);
+    let mut messages: Vec<Message> = compaction
+        .and_then(|entry| match &entry.body {
+            EntryBody::Compaction(compaction) => Some(summary_message(compaction)),
+            _ => None,
+        })
+        .into_iter()
+        .collect();
+    messages.extend(visible.iter().filter_map(|entry| match &entry.body {
+        EntryBody::Message(message) => Some(message.message.clone()),
+        _ => None,
+    }));
+    repair_dangling_calls(messages)
+}
+
+/// 当前上下文的组成：最近一次压缩条目（如有），以及仍原样可见的消息条目（按时间正序）
+pub(crate) fn visible<'a>(branch: &[&'a Entry]) -> (Option<&'a Entry>, Vec<&'a Entry>) {
+    let position = branch
         .iter()
         .rposition(|entry| matches!(entry.body, EntryBody::Compaction(_)));
-    let messages = match compaction {
-        None => messages_of(branch),
-        Some(position) => {
-            let EntryBody::Compaction(compaction) = &branch[position].body else {
-                unreachable!("位置由 rposition 按压缩条目找到");
-            };
-            let kept_from = compaction
-                .first_kept
-                .and_then(|first| branch[..position].iter().position(|e| e.id == first))
-                .unwrap_or(position);
-            let mut messages = vec![summary_message(compaction)];
-            messages.extend(messages_of(&branch[kept_from..position]));
-            messages.extend(messages_of(&branch[position + 1..]));
-            messages
-        }
+    let Some(position) = position else {
+        return (None, messages_of(branch));
     };
-    repair_dangling_calls(messages)
+    let EntryBody::Compaction(compaction) = &branch[position].body else {
+        unreachable!("位置由 rposition 按压缩条目找到");
+    };
+    let kept_from = compaction
+        .first_kept
+        .and_then(|first| branch[..position].iter().position(|e| e.id == first))
+        .unwrap_or(position);
+    let mut kept = messages_of(&branch[kept_from..position]);
+    kept.extend(messages_of(&branch[position + 1..]));
+    (Some(branch[position]), kept)
 }
 
 /// 压缩摘要以用户消息的形式放在上下文最前
@@ -41,13 +54,12 @@ pub(crate) fn summary_message(compaction: &CompactionEntry) -> Message {
     ))
 }
 
-fn messages_of(entries: &[&Entry]) -> Vec<Message> {
+/// 其中的消息条目
+fn messages_of<'a>(entries: &[&'a Entry]) -> Vec<&'a Entry> {
     entries
         .iter()
-        .filter_map(|entry| match &entry.body {
-            EntryBody::Message(message) => Some(message.message.clone()),
-            _ => None,
-        })
+        .copied()
+        .filter(|entry| matches!(entry.body, EntryBody::Message(_)))
         .collect()
 }
 
