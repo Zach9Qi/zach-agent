@@ -18,6 +18,19 @@ ignore = "0.4"
 # 按行计算 edit 前后的统一差异
 similar = "2"
 
+[target.'cfg(unix)'.dependencies]
+# 向进程组发送信号，终止命令派生的整棵进程树
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+# 作业对象（Job Object），终止命令派生的整棵进程树
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 tokio-util.workspace = true
 futures.workspace = true

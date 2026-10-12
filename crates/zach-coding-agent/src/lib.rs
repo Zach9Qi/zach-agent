@@ -4,11 +4,13 @@
 //! 运行过程通过 `zach-agent` 的事件流透出。
 
 mod fs;
+mod shell;
 mod tools;
 mod truncate;
 mod workspace;
 
 pub use fs::{FileInfo, FileSystem, FsEntry, LocalFileSystem};
+pub use shell::{LocalShell, OutputSink, Shell, ShellExit, ShellRequest};
 pub use tools::CodingTools;
 pub use truncate::{truncate_head, truncate_tail, TruncatedBy, Truncation, TruncationLimits};
 pub use workspace::{OutsideAccess, Workspace};
