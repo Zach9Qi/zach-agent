@@ -164,7 +164,9 @@ fn apply_provider_options(
             "output_config" | "metadata" | "context_management" => {
                 merge_value(&mut body[key], value.clone())
             }
-            "service_tier" | "mcp_servers" | "container" => body[key] = value.clone(),
+            // `fallbacks` 是服务端回退（需 `server-side-fallback-*` beta）；回退产生的 `fallback`
+            // 块以未知内容块原位保留并回放。
+            "service_tier" | "mcp_servers" | "container" | "fallbacks" => body[key] = value.clone(),
             _ => {
                 return Err(ModelError::unsupported(
                     key,

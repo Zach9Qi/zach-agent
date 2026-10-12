@@ -67,7 +67,8 @@ user/assistant 交替的要求；末尾助手预填充文本会去掉结尾空�
 思考块以 `Reasoning` 事件透出，签名随 `ReasoningEnd` 的 `provider_metadata.anthropic.signature`
 给出；`redacted_thinking` 是正文为空、只带 `anthropic.redacted_thinking` 元数据的推理块。
 回放时两者分别还原为 `thinking` 与 `redacted_thinking` 块，没有签名的推理块不会发送。
-Anthropic 把思考 token 计入 `output_tokens`，适配器不单独报告推理 token 数量。
+Anthropic 把思考 token 计入 `output_tokens`，其中的思考部分由 `output_tokens_details.thinking_tokens`
+映射为 `output_tokens.reasoning`（见下文"响应映射"）。
 
 注意 Anthropic 的限制：**思考与强制工具选择不能共存**。`tool_choice` 为 `any` / `tool` 时，
 `enabled` 模式会被 API 以 400 拒绝，`adaptive` 模式虽被接受但该轮不会产生思考块。
@@ -103,7 +104,7 @@ Agent 层会以 `model.warnings` 事件呈现。
 `provider_options.anthropic` 支持以下键：
 
 - `thinking`、`output_config`、`metadata`、`service_tier`、`context_management`、
-  `mcp_servers`、`container`：写入请求正文（`output_config` 与 `metadata` 按字段合并）。
+  `mcp_servers`、`container`、`fallbacks`：写入请求正文（`output_config` 与 `metadata` 按字段合并）。
 - `betas`：字符串数组，与默认请求头中的 `anthropic-beta` 合并后发送。
 
 其他键会在请求前以 `ErrorKind::Unsupported` 拒绝，避免静默改变适配器行为。
@@ -163,9 +164,11 @@ Fable 5 / 5.1、Opus 5 / 5.5、Sonnet 5.5、Haiku 5.5 内置安全分类器，�
 `claude-fable-5` 偶发 `cyber`（思考数 token 后中途拒绝）。因此**不要靠改措辞或附件迁就
 分类器**，Anthropic 的官方做法是回退到另一模型重试：
 
-- 服务端：`provider_options.anthropic` 传 `fallbacks: "default"` 并在 `betas` 加
-  `server-side-fallback-2026-07-01`（仅 Claude API 直连；Vertex / Bedrock / Foundry 转发的
-  网关会静默忽略）。
+- 服务端：`provider_options.anthropic` 传 `fallbacks: "default"`（或至多 3 个模型的列表，如
+  `[{"model": "claude-opus-4-8"}]`），并在 `betas` 加 `server-side-fallback-2026-07-01`。仅 Claude API
+  直连可用：Bedrock、Vertex、Foundry 不支持该参数，Message Batches 会以错误结果返回。
+  回退发生时内容中会出现标记模型交接的 `fallback` 块，它以未知内容块透出并在下一轮原位回放
+  （服务端据其位置校验两侧的思考块）；接手的模型以该块的 `to.model` 为准。
 - 客户端：收到 `content_filter` 且 `stop_details` 非空时，由调用方换模型重发同一请求。
 
 内置场景在本次联调网关上的实测（`stream mixed.json` / `agent anthropic-tools.json`）：

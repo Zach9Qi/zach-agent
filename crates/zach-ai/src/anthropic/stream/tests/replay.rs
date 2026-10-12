@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::anthropic::{request::build_request, response::parse_response};
-use zach_ai_core::{CallOptions, Message, OutputContent, ToolPart, UnifiedFinishReason};
+use zach_ai_core::{
+    CallOptions, Message, OutputContent, ProviderOptions, ToolPart, UnifiedFinishReason,
+};
 
 #[tokio::test]
 async fn tool_input_deltas_are_joined_and_emitted_once_per_block() {
@@ -224,4 +226,48 @@ async fn omitted_display_thinking_keeps_only_the_signature_and_replays() {
             {"type": "text", "text": "答"}
         ])
     );
+}
+
+/// 服务端回退（`fallbacks`）发生时，内容中以 `fallback` 块标记模型交接。下一轮必须把它原样放回
+/// 原位：服务端据其位置校验两侧的思考块，缺失或移位会被拒绝。
+#[tokio::test]
+async fn server_side_fallback_is_requested_and_its_block_is_replayed_in_place() {
+    let mut options = CallOptions::new(vec![Message::user("x")]);
+    let mut provider = ProviderOptions::new();
+    provider.insert(
+        "anthropic",
+        json!({"fallbacks": "default", "betas": ["server-side-fallback-2026-07-01"]}),
+    );
+    options.provider_options = Some(provider);
+    let request = build_request("example", None, &options, false).unwrap();
+    assert_eq!(request.body["fallbacks"], "default");
+    assert_eq!(request.betas, ["server-side-fallback-2026-07-01"]);
+
+    let fallback = json!({"type": "fallback",
+        "from": {"model": "claude-opus-5-5"}, "to": {"model": "claude-opus-4-8"}});
+    let mut wire = start_frame();
+    for event in [
+        json!({"type": "content_block_start", "index": 0, "content_block": fallback}),
+        json!({"type": "content_block_stop", "index": 0}),
+        json!({"type": "content_block_start", "index": 1,
+            "content_block": {"type": "text", "text": ""}}),
+        json!({"type": "content_block_delta", "index": 1,
+            "delta": {"type": "text_delta", "text": "答案"}}),
+        json!({"type": "content_block_stop", "index": 1}),
+    ] {
+        wire.push_str(&event_frame(&event));
+    }
+    wire.push_str(&stop_frames("end_turn"));
+    let result = aggregate(parse_wire(wire).await);
+    let blocks = vec![fallback.clone(), json!({"type": "text", "text": "答案"})];
+    assert_eq!(
+        result,
+        parse_response(message(blocks.clone(), "end_turn")).unwrap()
+    );
+    options
+        .prompt
+        .messages
+        .push(result.into_assistant_message());
+    let request = build_request("example", None, &options, false).unwrap();
+    assert_eq!(request.body["messages"][1]["content"], json!(blocks));
 }
