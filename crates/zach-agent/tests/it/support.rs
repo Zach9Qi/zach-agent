@@ -8,8 +8,8 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 use zach_agent::{
-    AgentEvent, AgentTool, ApprovalDecision, ApprovalRequest, LoopHost, SharedTool, ToolContext,
-    ToolError, ToolOutcome,
+    AgentEvent, AgentHooks, AgentTool, ApprovalDecision, ApprovalRequest, Commit, LoopHost,
+    SharedTool, ToolCallDecision, ToolCallInfo, ToolContext, ToolError, ToolOutcome,
 };
 use zach_ai_core::{
     CallOptions, FinishReason, FunctionTool, GenerateResult, LanguageModel, LanguageModelStream,
@@ -187,6 +187,16 @@ impl AgentTool for FnTool {
     }
 }
 
+/// 执行前钩子直接 panic，模拟集成方代码缺陷
+pub struct PanickingHooks;
+
+#[async_trait]
+impl AgentHooks for PanickingHooks {
+    async fn before_tool_call(&self, _call: &ToolCallInfo<'_>) -> ToolCallDecision {
+        panic!("钩子崩了")
+    }
+}
+
 type ApprovalFn = Box<dyn Fn(&ApprovalRequest) -> ApprovalDecision + Send + Sync>;
 
 /// 记录事件与写入消息的宿主；排队消息每次读取弹出一批
@@ -247,8 +257,8 @@ impl LoopHost for TestHost {
         self.events.lock().unwrap().push(event);
     }
 
-    async fn on_message(&self, message: &Message) {
-        self.messages.lock().unwrap().push(message.clone());
+    async fn on_commit(&self, commit: &Commit<'_>) {
+        self.messages.lock().unwrap().push(commit.message.clone());
     }
 
     async fn poll_steering(&self) -> Vec<Message> {

@@ -6,6 +6,7 @@ use crate::approval::ApprovalHandler;
 use crate::config::RetryPolicy;
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
+use crate::transcript::TranscriptSink;
 use std::sync::Arc;
 use zach_ai_core::{CallOptions, ErrorInfo, LanguageModel, Message, ProviderTool, ReasoningEffort};
 
@@ -78,6 +79,11 @@ impl Agent {
     /// 替换审批处理器
     pub fn set_approval_handler(&self, handler: impl ApprovalHandler + 'static) {
         self.inner.lock().approval = Arc::new(handler);
+    }
+
+    /// 替换对话记录的接收方；`None` 表示不再通知
+    pub fn set_transcript(&self, sink: Option<Arc<dyn TranscriptSink>>) {
+        self.inner.lock().transcript = sink;
     }
 
     /// 设置工具批次执行方式

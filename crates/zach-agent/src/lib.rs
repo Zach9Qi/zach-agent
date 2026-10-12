@@ -10,6 +10,7 @@ pub mod event;
 pub mod hooks;
 pub mod host;
 pub mod tool;
+pub mod transcript;
 mod utils;
 
 pub use agent::{Agent, AgentBuilder, AgentRun, QueueMode};
@@ -28,3 +29,4 @@ pub use tool::{
     typed_tool, AgentTool, SharedTool, ToolContext, ToolError, ToolErrorKind, ToolExecutionMode,
     ToolOutcome, Typed, TypedTool,
 };
+pub use transcript::{Commit, CommitKind, ResponseInfo, TranscriptSink};

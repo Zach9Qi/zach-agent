@@ -7,6 +7,7 @@ use crate::context::AgentContext;
 use crate::event::AgentEvent;
 use crate::hooks::AgentHooks;
 use crate::tool::{SharedTool, ToolExecutionMode};
+use crate::transcript::TranscriptSink;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::{oneshot, watch};
@@ -19,6 +20,7 @@ pub(super) struct State {
     pub(super) options: CallOptions,
     pub(super) hooks: Arc<dyn AgentHooks>,
     pub(super) approval: Arc<dyn ApprovalHandler>,
+    pub(super) transcript: Option<Arc<dyn TranscriptSink>>,
     pub(super) tool_execution: ToolExecutionMode,
     pub(super) retry: RetryPolicy,
     pub(super) system_prompt: Option<String>,

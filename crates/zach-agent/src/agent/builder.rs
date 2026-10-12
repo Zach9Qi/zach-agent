@@ -7,6 +7,7 @@ use crate::approval::{ApprovalHandler, InteractiveApproval};
 use crate::config::RetryPolicy;
 use crate::hooks::{AgentHooks, NoopHooks};
 use crate::tool::{SharedTool, ToolExecutionMode};
+use crate::transcript::TranscriptSink;
 use std::collections::HashMap;
 use std::sync::Arc;
 use zach_ai_core::{CallOptions, LanguageModel, Message, ProviderTool, ReasoningEffort};
@@ -17,6 +18,7 @@ pub struct AgentBuilder {
     options: CallOptions,
     hooks: Arc<dyn AgentHooks>,
     approval: Arc<dyn ApprovalHandler>,
+    transcript: Option<Arc<dyn TranscriptSink>>,
     tool_execution: ToolExecutionMode,
     retry: RetryPolicy,
     system_prompt: Option<String>,
@@ -34,6 +36,7 @@ impl AgentBuilder {
             options: CallOptions::default(),
             hooks: Arc::new(NoopHooks),
             approval: Arc::new(InteractiveApproval::new()),
+            transcript: None,
             tool_execution: ToolExecutionMode::default(),
             retry: RetryPolicy::default(),
             system_prompt: None,
@@ -93,6 +96,12 @@ impl AgentBuilder {
         self
     }
 
+    /// 对话记录的接收方：每条消息写入时收到通知（持久化、审计）
+    pub fn transcript(mut self, sink: Arc<dyn TranscriptSink>) -> Self {
+        self.transcript = Some(sink);
+        self
+    }
+
     /// 工具批次执行方式
     pub fn tool_execution(mut self, mode: ToolExecutionMode) -> Self {
         self.tool_execution = mode;
@@ -130,6 +139,7 @@ impl AgentBuilder {
             options: self.options,
             hooks: self.hooks,
             approval: self.approval,
+            transcript: self.transcript,
             tool_execution: self.tool_execution,
             retry: self.retry,
             system_prompt: self.system_prompt,

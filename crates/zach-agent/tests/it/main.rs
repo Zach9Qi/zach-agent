@@ -14,3 +14,4 @@ mod config;
 mod event_mapping;
 mod event_serde;
 mod tool;
+mod transcript;

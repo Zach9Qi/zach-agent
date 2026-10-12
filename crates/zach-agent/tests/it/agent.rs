@@ -1,13 +1,11 @@
 //! 有状态 Agent：状态同步、忙碌保护、中止、队列、审批与继续
 
-use crate::support::{fn_tool, text, tool_calls, Script, ScriptedModel};
-use async_trait::async_trait;
+use crate::support::{fn_tool, text, tool_calls, PanickingHooks, Script, ScriptedModel};
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zach_agent::{
-    Agent, AgentError, AgentEvent, AgentHooks, ApprovalDecision, QueueMode, RetryPolicy, RunError,
-    ToolCallDecision, ToolCallInfo, ToolOutcome,
+    Agent, AgentError, AgentEvent, ApprovalDecision, QueueMode, RetryPolicy, RunError, ToolOutcome,
 };
 use zach_ai_core::{
     ErrorKind, Message, ModelError, ToolPart, ToolResultOutput, UnifiedFinishReason,
@@ -252,16 +250,6 @@ async fn continue_run_retries_after_failure_and_drains_queues_after_replies() {
         agent.messages().last(),
         Some(&Message::assistant("追加的回复"))
     );
-}
-
-/// 执行前钩子直接 panic，模拟集成方代码缺陷
-struct PanickingHooks;
-
-#[async_trait]
-impl AgentHooks for PanickingHooks {
-    async fn before_tool_call(&self, _call: &ToolCallInfo<'_>) -> ToolCallDecision {
-        panic!("钩子崩了")
-    }
 }
 
 #[tokio::test]

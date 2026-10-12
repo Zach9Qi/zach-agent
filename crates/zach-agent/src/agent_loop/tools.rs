@@ -12,6 +12,7 @@ use crate::tool::{ToolExecutionMode, ToolOutcome};
 use crate::utils::cancellable;
 use futures::future::join_all;
 use prepare::{Prepared, ABORTED};
+use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use zach_ai_core::tool::tool_input_for_display;
 use zach_ai_core::{Message, OutputContent, ToolPart};
@@ -41,6 +42,8 @@ pub(super) struct BatchInput<'a> {
 pub(super) struct ToolBatch {
     /// 待写入对话记录的工具消息
     pub(super) message: Option<Message>,
+    /// 各调用给宿主的详情，按 `(tool_call_id, details)` 列出
+    pub(super) details: Vec<(String, Value)>,
     /// 本批是否包含需要回传给模型的调用
     pub(super) has_calls: bool,
     /// 所有本地工具都请求终止
@@ -54,6 +57,7 @@ pub(super) async fn run_tool_batch(batch: BatchInput<'_>) -> ToolBatch {
     if calls.is_empty() && approvals.is_empty() {
         return ToolBatch {
             message: None,
+            details: Vec::new(),
             has_calls: false,
             terminate: false,
         };
@@ -68,20 +72,27 @@ pub(super) async fn run_tool_batch(batch: BatchInput<'_>) -> ToolBatch {
     };
     let terminate = !outcomes.is_empty() && outcomes.iter().all(|outcome| outcome.terminate);
 
+    let mut details = Vec::new();
     let mut parts: Vec<ToolPart> = calls
         .iter()
         .zip(outcomes)
-        .map(|(call, outcome)| ToolPart::ToolResult {
-            tool_call_id: call.tool_call_id.clone(),
-            tool_name: call.tool_name.clone(),
-            output: outcome.output,
-            provider_options: None,
+        .map(|(call, outcome)| {
+            if let Some(value) = outcome.details {
+                details.push((call.tool_call_id.clone(), value));
+            }
+            ToolPart::ToolResult {
+                tool_call_id: call.tool_call_id.clone(),
+                tool_name: call.tool_name.clone(),
+                output: outcome.output,
+                provider_options: None,
+            }
         })
         .collect();
     parts.extend(answer_provider_approvals(approvals, &batch).await);
 
     ToolBatch {
         message: Some(Message::tool(parts)),
+        details,
         has_calls: true,
         terminate,
     }

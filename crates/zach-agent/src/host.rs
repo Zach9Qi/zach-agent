@@ -1,10 +1,11 @@
 //! 循环宿主：循环与外部运行时之间的通道
 //!
-//! 循环通过宿主发出事件、同步写入的消息、读取排队消息并等待审批答复。
+//! 循环通过宿主发出事件、通知写入对话记录的消息、读取排队消息并等待审批答复。
 //! [`crate::Agent`] 是内置宿主；直接使用低层循环时可自行实现。
 
 use crate::approval::{ApprovalDecision, ApprovalRequest};
 use crate::event::AgentEvent;
+use crate::transcript::Commit;
 use async_trait::async_trait;
 use zach_ai_core::Message;
 
@@ -14,9 +15,9 @@ pub trait LoopHost: Send + Sync {
     /// 发出运行时事件
     async fn emit(&self, event: AgentEvent);
 
-    /// 一条消息写入了对话记录
-    async fn on_message(&self, message: &Message) {
-        let _ = message;
+    /// 一条消息写入了对话记录（按写入顺序调用，不受中止影响），见 [`Commit`]
+    async fn on_commit(&self, commit: &Commit<'_>) {
+        let _ = commit;
     }
 
     /// 取出插队消息（每轮结束后、以及运行开始时读取）

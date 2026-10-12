@@ -3,6 +3,7 @@
 //! 一个轮次（step）= 一次模型响应 + 执行其中的工具调用。循环在以下情况进入下一轮：
 //! 本轮有工具结果、有插队消息、钩子要求继续；本应结束时若有追加消息，也会继续。
 
+mod commit;
 mod step;
 mod tools;
 
@@ -12,6 +13,7 @@ use crate::error::{AgentError, RunError};
 use crate::event::AgentEvent;
 use crate::hooks::{AgentHooks, TurnDecision, TurnInfo};
 use crate::host::LoopHost;
+use crate::transcript::CommitKind;
 use crate::utils::{cancellable, new_id};
 use serde_json::json;
 use std::sync::Arc;
@@ -121,7 +123,7 @@ impl<'a> Runner<'a> {
             })
             .await;
         for message in prompts {
-            self.commit(message).await;
+            self.commit(message, CommitKind::Input).await;
         }
 
         let hooks = self.hooks.clone();
@@ -148,7 +150,7 @@ impl<'a> Runner<'a> {
                 let step_index = self.step_index;
                 self.host.emit(AgentEvent::StepStart { step_index }).await;
                 for message in prepared.into_iter().chain(pending.drain(..)) {
-                    self.commit(message).await;
+                    self.commit(message, CommitKind::Input).await;
                 }
                 let prepare = hooks.prepare_request(&mut self.state);
                 if cancellable(&self.cancel, prepare).await.is_none() {
@@ -168,7 +170,7 @@ impl<'a> Runner<'a> {
                     StepOutcome::Completed(result) => result,
                     StepOutcome::Aborted(partial) => {
                         if let Some(message) = partial.and_then(partial_assistant) {
-                            self.commit(message).await;
+                            self.commit_response(message, None).await;
                         }
                         return self.abort(true).await;
                     }
@@ -182,7 +184,8 @@ impl<'a> Runner<'a> {
                 let usage = result.usage.clone();
                 let content = result.content.clone();
                 let assistant = result.into_assistant_message();
-                self.commit(assistant.clone()).await;
+                self.commit_response(assistant.clone(), Some((&usage, &finish_reason)))
+                    .await;
 
                 let batch = run_tool_batch(BatchInput {
                     assistant: &assistant,
@@ -196,7 +199,10 @@ impl<'a> Runner<'a> {
                 })
                 .await;
                 if let Some(message) = &batch.message {
-                    self.commit(message.clone()).await;
+                    let kind = CommitKind::ToolResults {
+                        details: &batch.details,
+                    };
+                    self.commit(message.clone(), kind).await;
                 }
                 has_more_tool_calls = batch.has_calls && !batch.terminate;
                 if self.cancel.is_cancelled() {
@@ -240,12 +246,6 @@ impl<'a> Runner<'a> {
             break;
         }
         self.finish().await
-    }
-
-    async fn commit(&mut self, message: Message) {
-        self.host.on_message(&message).await;
-        self.state.context.messages.push(message.clone());
-        self.messages.push(message);
     }
 
     async fn abort(self, step_open: bool) -> Result<RunOutput, RunError> {

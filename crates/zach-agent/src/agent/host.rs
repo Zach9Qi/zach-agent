@@ -1,9 +1,10 @@
-//! `Agent` 内置的循环宿主：事件转发、消息镜像、队列读取、审批等待与 panic 善后
+//! `Agent` 内置的循环宿主：事件转发、消息镜像与提交通知、队列读取、审批等待与 panic 善后
 
 use super::state::Inner;
 use crate::approval::{ApprovalDecision, ApprovalHandler, ApprovalRequest, ApprovalRoute};
 use crate::event::AgentEvent;
 use crate::host::LoopHost;
+use crate::transcript::{Commit, CommitKind, TranscriptSink};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -21,6 +22,7 @@ pub(super) struct RunHost {
     terminal: mpsc::Sender<AgentEvent>,
     cancel: CancellationToken,
     approval: Arc<dyn ApprovalHandler>,
+    transcript: Option<Arc<dyn TranscriptSink>>,
     /// 首次读取插队消息时跳过（这些消息已作为本次运行的提示消息注入）
     skip_initial_steering: AtomicBool,
 }
@@ -32,6 +34,7 @@ impl RunHost {
         terminal: mpsc::Sender<AgentEvent>,
         cancel: CancellationToken,
         approval: Arc<dyn ApprovalHandler>,
+        transcript: Option<Arc<dyn TranscriptSink>>,
     ) -> Self {
         Self {
             inner,
@@ -39,6 +42,7 @@ impl RunHost {
             terminal,
             cancel,
             approval,
+            transcript,
             skip_initial_steering: AtomicBool::new(true),
         }
     }
@@ -75,7 +79,11 @@ impl RunHost {
         let reason = format!("运行异常中断，工具未得出结果：{}", error.message);
         self.emit(AgentEvent::RunError { error }).await;
         if let Some(repair) = self.dangling_tool_results(&reason) {
-            self.on_message(&repair).await;
+            let commit = Commit {
+                message: &repair,
+                kind: CommitKind::Recovery,
+            };
+            self.on_commit(&commit).await;
         }
     }
 
@@ -139,8 +147,11 @@ impl LoopHost for RunHost {
         }
     }
 
-    async fn on_message(&self, message: &Message) {
-        self.inner.lock().messages.push(message.clone());
+    async fn on_commit(&self, commit: &Commit<'_>) {
+        self.inner.lock().messages.push(commit.message.clone());
+        if let Some(sink) = &self.transcript {
+            sink.on_commit(commit).await;
+        }
     }
 
     async fn poll_steering(&self) -> Vec<Message> {

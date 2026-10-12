@@ -131,7 +131,7 @@ impl Agent {
 
     fn start(&self, prompts: Option<Vec<Message>>) -> Result<AgentRun, AgentError> {
         let cancel = CancellationToken::new();
-        let (prompts, context, config, approval) = {
+        let (prompts, context, config, approval, transcript) = {
             let mut state = self.inner.lock();
             if state.active.is_some() {
                 return Err(AgentError::Busy);
@@ -164,6 +164,7 @@ impl Agent {
                 state.context_snapshot(),
                 state.loop_config(),
                 state.approval.clone(),
+                state.transcript.clone(),
             )
         };
 
@@ -176,6 +177,7 @@ impl Agent {
             terminal_sender,
             cancel.clone(),
             approval,
+            transcript,
         );
         let guard = RunGuard(self.inner.clone());
         let token = cancel.clone();
