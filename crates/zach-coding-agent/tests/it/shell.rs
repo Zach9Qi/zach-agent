@@ -177,16 +177,19 @@ fn shell_tool_is_named_after_the_shell_and_only_present_when_configured() {
     };
     assert_eq!(
         names(tools(&fs).coding()),
-        ["read", "write", "edit", "find", "ls"]
+        ["read", "write", "edit", "grep", "find", "ls"]
     );
 
     let shell = FakeShell::new(&[], End::Exit(Some(0)));
     let with_shell = tools(&fs).with_shell(shell);
     assert_eq!(
         names(with_shell.coding()),
-        ["read", "write", "edit", "find", "ls", "bash"]
+        ["read", "write", "edit", "grep", "find", "ls", "bash"]
     );
-    assert_eq!(names(with_shell.read_only()), ["read", "find", "ls"]);
+    assert_eq!(
+        names(with_shell.read_only()),
+        ["read", "grep", "find", "ls"]
+    );
     let bash = tool(&with_shell.coding(), "bash");
     let description = bash.definition().description.as_deref().unwrap();
     assert!(description.contains("执行 bash 命令") && description.contains("默认超时 120 秒"));

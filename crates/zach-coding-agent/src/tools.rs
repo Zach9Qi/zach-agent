@@ -2,6 +2,7 @@
 
 mod edit;
 mod find;
+mod grep;
 mod locks;
 mod ls;
 mod pattern;
@@ -89,17 +90,18 @@ impl CodingTools {
         self
     }
 
-    /// 只读工具：read、find、ls
+    /// 只读工具：read、grep、find、ls
     pub fn read_only(&self) -> Vec<SharedTool> {
-        vec![self.read(), self.find(), self.ls()]
+        vec![self.read(), self.grep(), self.find(), self.ls()]
     }
 
-    /// 编码工具：read、write、edit、find、ls，以及配置了 shell 时的命令工具（以 shell 名称命名）
+    /// 编码工具：read、write、edit、grep、find、ls，以及配置了 shell 时的命令工具（以 shell 名称命名）
     pub fn coding(&self) -> Vec<SharedTool> {
         let mut tools = vec![
             self.read(),
             self.write(),
             self.edit(),
+            self.grep(),
             self.find(),
             self.ls(),
         ];
@@ -117,6 +119,10 @@ impl CodingTools {
 
     fn edit(&self) -> SharedTool {
         typed_tool(edit::EditTool::new(self.env.clone()))
+    }
+
+    fn grep(&self) -> SharedTool {
+        typed_tool(grep::GrepTool::new(self.env.clone()))
     }
 
     fn find(&self) -> SharedTool {

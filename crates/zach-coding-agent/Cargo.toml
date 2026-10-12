@@ -17,6 +17,8 @@ tokio.workspace = true
 ignore = "0.4"
 # find 与 grep 的 glob 过滤
 globset = "0.4"
+# grep 的正则匹配
+regex = "1"
 # 按行计算 edit 前后的统一差异
 similar = "2"
 
