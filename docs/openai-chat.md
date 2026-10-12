@@ -42,13 +42,14 @@ while let Some(part) = stream.next().await {
 内置目录未收录的模型仍可用 `with_profile(ModelProfile)` 注入档案。
 
 PDF 输入需要使用已上传的 OpenAI `file_id` 或内联 Base64 数据；Chat Completions 不接受
-PDF URL。服务端托管工具、音视频和助手历史中的原始推理块暂不在此适配器中回放。
+PDF URL。服务端托管工具和音视频暂不在此适配器中回放，推理块的回放见下文。
 
 DeepSeek、Qwen、xAI 等端点通过 `reasoning_content` 字段、OpenRouter、Ollama、Groq 等通过
 `reasoning` 字段返回思考链，适配器都会将其以 `Reasoning` 事件透出（流式与非流式一致）。思考阶段伴发的空 `content` 占位不会提前
 结束推理块；推理块在首个非空正文、拒绝或工具调用增量到达时关闭，收尾后迟到的增量
-一律忽略。由于 Chat Completions 的输入消息不接受
-思考链字段（部分端点收到会直接报错），历史中的推理块不会回传。
+一律忽略。声明为 `deepseek` 或 `moonshotai` 身份时，历史中的推理块以 `reasoning_content`
+回传：两家的思考模式在带工具的多步调用中要求原样回传，缺失时以 400 拒绝。其他端点的
+Chat Completions 输入消息没有思考链字段，历史推理不回传。
 
 ## 档案校验与警告
 
@@ -113,5 +114,5 @@ cargo xtask probe chat agent      # 只跑 Agent 场景
 ```
 
 `chat-tools.json` 与 `responses-tools.json` 是同一任务：附件、函数调用、工具结果、两轮历史
-回放和最终 JSON 的断言完全一致；由于 Chat Completions 不提供可见推理摘要、推理事件和
+回放和最终 JSON 的断言完全一致；由于 OpenAI 官方 Chat Completions 不提供可见推理摘要、推理事件和
 推理历史回放，该场景不包含这三类断言，也不携带 Responses 专属的 `reasoning.summary` 选项。

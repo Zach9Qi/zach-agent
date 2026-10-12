@@ -52,7 +52,7 @@ pub(super) fn build_request(
     let reasoning = disable_reasoning_for_provider(provider, reasoning, &mut warnings);
     let mut body = json!({
         "model": model_id,
-        "messages": messages::convert(&options.prompt.messages)?,
+        "messages": messages::convert(&options.prompt.messages, replays_reasoning(provider))?,
         "stream": stream,
     });
     if let Some(value) = options.max_output_tokens {
@@ -121,6 +121,14 @@ fn disable_reasoning_for_provider(
         }
         other => other,
     }
+}
+
+/// 是否在助手历史中回传 `reasoning_content`。
+///
+/// DeepSeek 与 Kimi（Moonshot）的思考模式在带工具的多步调用中要求原样回传思考链，缺失时以 400
+/// 拒绝；不带工具时回传的思考链会被忽略。其他兼容端点没有这个字段，按厂商身份启用。
+fn replays_reasoning(provider: &str) -> bool {
+    matches!(provider, "deepseek" | "moonshotai")
 }
 
 /// 输出上限的字段名。

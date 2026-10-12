@@ -5,20 +5,24 @@ use zach_ai_core::{AssistantPart, Message, ModelError, ToolPart, UserPart};
 
 use super::media;
 
-pub(super) fn convert(messages: &[Message]) -> Result<Vec<Value>, ModelError> {
+/// `replay_reasoning` 为真时，助手历史中的推理块以 `reasoning_content` 回传。
+pub(super) fn convert(
+    messages: &[Message],
+    replay_reasoning: bool,
+) -> Result<Vec<Value>, ModelError> {
     messages.iter().try_fold(Vec::new(), |mut all, item| {
-        all.extend(message(item)?);
+        all.extend(message(item, replay_reasoning)?);
         Ok(all)
     })
 }
 
-fn message(message: &Message) -> Result<Vec<Value>, ModelError> {
+fn message(message: &Message, replay_reasoning: bool) -> Result<Vec<Value>, ModelError> {
     match message {
         Message::System { content, .. } => Ok(vec![json!({"role":"system", "content": content})]),
         Message::User { content, .. } => Ok(vec![
             json!({"role":"user", "content": user_content(content)?}),
         ]),
-        Message::Assistant { content, .. } => assistant_message(content),
+        Message::Assistant { content, .. } => assistant_message(content, replay_reasoning),
         Message::Tool { content, .. } => tool_message(content),
     }
 }
@@ -44,8 +48,12 @@ fn user_content(parts: &[UserPart]) -> Result<Value, ModelError> {
         .map(Value::Array)
 }
 
-fn assistant_message(parts: &[AssistantPart]) -> Result<Vec<Value>, ModelError> {
+fn assistant_message(
+    parts: &[AssistantPart],
+    replay_reasoning: bool,
+) -> Result<Vec<Value>, ModelError> {
     let mut content = String::new();
+    let mut reasoning = String::new();
     let mut refusal = None;
     let mut calls = Vec::new();
     for part in parts {
@@ -78,9 +86,12 @@ fn assistant_message(parts: &[AssistantPart]) -> Result<Vec<Value>, ModelError> 
                 }
                 calls.push(json!({"id":tool_call_id, "type":"function", "function":{"name":tool_name, "arguments":input.to_string()}}));
             }
-            // Chat Completions 的输入消息不接受思考链字段（DeepSeek 等端点
-            // 收到 reasoning_content 会直接 400），历史推理不回传。
-            AssistantPart::Reasoning { .. } => {}
+            // 思考链只回传给要求它的端点（见 `replays_reasoning`），其余端点不认该字段。
+            AssistantPart::Reasoning { text, .. } => {
+                if replay_reasoning {
+                    reasoning.push_str(text);
+                }
+            }
             AssistantPart::ToolResult { .. }
             | AssistantPart::ReasoningFile { .. }
             | AssistantPart::File { .. }
@@ -95,6 +106,9 @@ fn assistant_message(parts: &[AssistantPart]) -> Result<Vec<Value>, ModelError> 
     let mut result = json!({"role":"assistant", "content": if content.is_empty() && !calls.is_empty() { Value::Null } else { json!(content) }});
     if !calls.is_empty() {
         result["tool_calls"] = Value::Array(calls);
+    }
+    if !reasoning.is_empty() {
+        result["reasoning_content"] = json!(reasoning);
     }
     if let Some(refusal) = refusal {
         result["refusal"] = json!(refusal);

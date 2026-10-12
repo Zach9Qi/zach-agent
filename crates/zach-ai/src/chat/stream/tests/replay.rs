@@ -245,9 +245,10 @@ async fn refusal_is_marked_in_metadata_and_replayed_as_refusal_field() {
     assert_eq!(body["messages"][1]["content"], "");
 }
 
-/// 思考链在流式与非流式下得到相同内容；回放时不回传（兼容端点会拒绝该字段）。
+/// 思考链在流式与非流式下得到相同内容；回放时只回传给要求它的端点：DeepSeek、Kimi 的思考模式
+/// 带工具时缺少 `reasoning_content` 会 400，其他兼容端点没有该字段。
 #[tokio::test]
-async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
+async fn reasoning_content_matches_across_modes_and_is_replayed_only_where_required() {
     let wire = data_frame(&delta(json!({"reasoning_content": "先算"}), None))
         + &data_frame(&delta(json!({"content": "3"}), None))
         + &data_frame(&delta(json!({}), Some("stop")))
@@ -274,4 +275,13 @@ async fn reasoning_content_matches_across_modes_and_is_not_replayed() {
         body["messages"][1],
         json!({"role": "assistant", "content": "3"})
     );
+    for provider in ["deepseek", "moonshotai"] {
+        let body = build_request("example", provider, None, &options, false)
+            .unwrap()
+            .body;
+        assert_eq!(
+            body["messages"][1],
+            json!({"role": "assistant", "content": "3", "reasoning_content": "先算"})
+        );
+    }
 }

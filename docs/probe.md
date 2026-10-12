@@ -268,7 +268,7 @@ Agent 循环根据可执行工具生成标准声明，因此该模式不允许�
 三份工具场景是同一任务的协议变体：提示词、附件、JSON 预期、工具调用参数与输入、
 工具结果回传断言完全一致，只在协议相关的请求选项和推理断言上有差异。场景文件所见即所得，
 不做跨文件合并；离线测试会比较这些共同部分，改动一份而漏改其他两份时会直接失败。
-Chat Completions 不提供可见推理摘要、推理事件和推理回放，`chat-tools.json` 因此不包含
+OpenAI 官方 Chat Completions 不提供可见推理摘要、推理事件和推理回放，`chat-tools.json` 因此不包含
 对应断言；输入和工具结果仍需在下一轮请求中完整回传。
 
 `anthropic-tools.json` 专用于 `--protocol anthropic-messages`：Anthropic 在强制 `tool_choice`
