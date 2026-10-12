@@ -4,6 +4,7 @@
 //! 运行过程通过 `zach-agent` 的事件流透出。
 
 mod fs;
+pub mod session;
 mod shell;
 mod tools;
 mod truncate;

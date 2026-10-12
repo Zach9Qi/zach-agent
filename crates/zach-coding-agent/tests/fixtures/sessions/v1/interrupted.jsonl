@@ -1,0 +1,4 @@
+{"type":"session","format_version":1,"id":"fixture-interrupted","created_at":1790000000000,"workspace_root":"/repo"}
+{"id":1,"ts":1790000001000,"kind":"message","origin":"input","message":{"role":"user","content":[{"type":"text","text":"执行两个工具"}]}}
+{"id":2,"parent":1,"ts":1790000002000,"kind":"message","origin":"response","message":{"role":"assistant","content":[{"type":"tool_call","tool_call_id":"c1","tool_name":"read","input":{"path":"a.txt"},"provider_executed":false},{"type":"tool_call","tool_call_id":"c2","tool_name":"bash","input":{"command":"ls"},"provider_executed":false}]},"model":{"provider":"anthropic","id":"claude-test"},"usage":{"input_tokens":{"total":100},"output_tokens":{"total":20}},"finish_reason":{"unified":"tool_calls"}}
+{"id":3,"parent":2,"ts":1790000003000,"kind":"message","origin":"input","message":{"role":"user","content":[{"type":"text","text":"继续"}]}}

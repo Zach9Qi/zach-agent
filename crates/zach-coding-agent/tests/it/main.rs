@@ -11,6 +11,7 @@ mod local_fs;
 mod local_shell;
 mod policy;
 mod read;
+mod session;
 mod shell;
 mod truncate;
 mod workspace;

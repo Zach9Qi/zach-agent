@@ -1,0 +1,8 @@
+{"type":"session","format_version":1,"id":"fixture-branched","created_at":1790000000000,"workspace_root":"/repo"}
+{"id":1,"ts":1790000001000,"kind":"message","origin":"input","message":{"role":"user","content":[{"type":"text","text":"原始问题"}]}}
+{"id":2,"parent":1,"ts":1790000002000,"kind":"message","origin":"response","message":{"role":"assistant","content":[{"type":"text","text":"第一版回答"}]},"model":{"provider":"anthropic","id":"claude-test"},"usage":{"input_tokens":{"total":100},"output_tokens":{"total":20}},"finish_reason":{"unified":"stop"}}
+{"id":3,"parent":2,"ts":1790000003000,"kind":"message","origin":"input","message":{"role":"user","content":[{"type":"text","text":"追问 A"}]}}
+{"id":4,"parent":3,"ts":1790000004000,"kind":"message","origin":"response","message":{"role":"assistant","content":[{"type":"text","text":"回答 A"}]},"model":{"provider":"anthropic","id":"claude-test"},"usage":{"input_tokens":{"total":100},"output_tokens":{"total":20}},"finish_reason":{"unified":"stop"}}
+{"id":5,"ts":1790000005000,"kind":"checkout","target":2}
+{"id":6,"parent":2,"ts":1790000006000,"kind":"message","origin":"input","message":{"role":"user","content":[{"type":"text","text":"追问 B"}]}}
+{"id":7,"parent":6,"ts":1790000007000,"kind":"message","origin":"response","message":{"role":"assistant","content":[{"type":"text","text":"回答 B"}]},"model":{"provider":"anthropic","id":"claude-test"},"usage":{"input_tokens":{"total":100},"output_tokens":{"total":20}},"finish_reason":{"unified":"stop"}}
