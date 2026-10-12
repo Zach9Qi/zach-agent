@@ -204,6 +204,35 @@ fn coding_agent(model: Arc<dyn LanguageModel>) -> Agent {
 
 可离线运行的完整示例：`cargo run -p zach-coding-agent --example edit_file`。
 
+### 会话
+
+`zach_coding_agent::session::Session` 驱动一个 `Agent`，把它写入对话记录的每条消息追加到会话日志。日志只追加、从不改写，模型上下文由当前分支投影得出：
+
+```rust
+use std::sync::Arc;
+use zach_agent::Agent;
+use zach_coding_agent::session::{MemoryStore, Session, SessionOptions};
+
+async fn chat(agent: Agent, later: Agent) -> Result<(), Box<dyn std::error::Error>> {
+    let store = Arc::new(MemoryStore::new());
+    let session = Session::create(store.clone(), agent, SessionOptions::new());
+    session.prompt_text("读一下 README")?.outcome().await?;
+
+    // 之后用新的 Agent 从同一位置继续
+    let resumed = Session::open(store, session.id(), later, SessionOptions::new()).await?;
+    resumed.prompt_text("继续")?.outcome().await?;
+    Ok(())
+}
+```
+
+- **逐条落盘**：经 `zach-agent` 的 `TranscriptSink` 接收每次提交（含回复用量与工具 `details`），第一条消息出现时才创建会话；默认在一轮完整写入后刷盘。写入失败时拒绝执行任何工具并结束运行，避免日志缺失时继续改动工作区。
+- **存储可替换**：会话层只经由 `SessionStore` 读写；当前内置进程内的 `MemoryStore`，文件存储待实现。超过阈值的文件数据以内容寻址的 blob 落盘，交给模型前还原。
+- **回退与分叉**：`rewind` 追加回退条目，位置随日志保留；`fork` 以一段分支创建新会话。
+- **上下文压缩**：上下文接近窗口时把较早的消息替换为结构化摘要（运行前、轮次之间自动，或手动 `compact`），切点绝不分开工具调用与其结果；模型报告上下文超长时压缩并自动继续一次。摘要器可替换（`Summarizer`），默认用当前模型。
+- **格式冻结**：仓库内的 v1 会话样例文件在 CI 中验证可加载且序列化不变，改动落盘格式必须提升版本并编写迁移。
+
+设计说明见 [会话持久化与上下文压缩设计](docs/session-persistence.md)；可离线运行的示例：`cargo run -p zach-coding-agent --example session_resume`。
+
 ---
 
 ## 开发与测试

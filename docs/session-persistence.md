@@ -1,6 +1,6 @@
 # 会话持久化与上下文压缩设计
 
-状态：设计稿，待确认后实施。适用范围：`zach-agent`（契约补充）与 `zach-coding-agent`（会话层）。
+状态：已实施，默认的文件存储尚未实现（见文末"实施状态"）。适用范围：`zach-agent`（契约补充）与 `zach-coding-agent`（会话层）。
 
 ## 目标与非目标
 
@@ -21,7 +21,7 @@ zach-agent            提交通知：每条消息写入对话记录后，有序�
      ▲
 zach-coding-agent
   session/            Session（驱动 Agent）、条目模型、投影、压缩
-  session/store       SessionStore trait、JsonlStore（默认）
+  session/store       SessionStore trait、MemoryStore（进程内）；文件存储待实现
 ```
 
 - `zach-agent` 不感知会话、文件与格式，只新增"提交通知"这一项契约。
@@ -142,7 +142,7 @@ pub trait TranscriptSink: Send + Sync {
 - **残行处理**：加载时最后一行不完整则忽略并给出诊断；以追加模式打开前先截断到最后一个换行符，
   避免新条目接在残行后面。这是除版本迁移外唯一允许的非追加写。
 - **单写者**：同一会话同时只允许一个 `Session` 实例写入；跨进程互斥本期不做，由宿主保证。
-- **写入失败**：会话进入失败状态，中止当前运行，并在运行结果中报告；不在日志缺失的情况下继续修改工作区。
+- **写入失败**：会话进入失败状态，钩子拒绝执行任何工具并结束当前运行，运行结果报告写入错误，之后拒绝新的运行；不在日志缺失的情况下继续修改工作区。
 
 ### 大对象
 
@@ -151,6 +151,8 @@ pub trait TranscriptSink: Send + Sync {
 按内容寻址天然去重。替换在会话层完成，存储只提供读写 blob 的原语。
 
 ## 五、存储抽象
+
+当前提供进程内的 `MemoryStore`（测试与不需要持久化的宿主）；下文的 `JsonlStore` 是待实现的默认文件存储规格。
 
 ```rust
 #[async_trait]
@@ -174,17 +176,18 @@ pub trait SessionStore: Send + Sync {
 
 ```rust
 impl Session {
-    pub async fn create(store, agent: Agent, options: SessionOptions) -> Result<Self, SessionError>;
+    pub fn create(store, agent: Agent, options: SessionOptions) -> Self;               // 懒创建，不触及存储
     pub async fn open(store, id, agent, options) -> Result<Self, SessionError>;
-    pub async fn prompt(&self, messages: Vec<Message>) -> Result<SessionRun, SessionError>;
-    pub fn steer(&self, message: Message);      // 直接转交 Agent，写入时经提交通知落盘
-    pub fn follow_up(&self, message: Message);
-    pub fn abort(&self);
-    pub async fn compact(&self) -> Result<(), SessionError>;          // 手动压缩
-    pub async fn rewind(&self, to: EntryId) -> Result<(), SessionError>; // 追加 checkout
-    pub async fn fork(&self, at: EntryId) -> Result<Session, SessionError>; // 新文件，复制根到 at 的路径
-    pub fn context(&self) -> Vec<Message>;   // 当前投影
-    pub fn entries(&self) -> Vec<Entry>;     // 供宿主展示树
+    pub fn prompt(&self, messages: Vec<Message>) -> Result<SessionRun, SessionError>;  // 后台任务驱动
+    pub fn continue_run(&self) -> Result<SessionRun, SessionError>;
+    pub fn agent(&self) -> &Agent;   // 插队、追加、中止、审批答复直接操作 Agent，写入时经提交通知落盘
+    pub async fn compact(&self) -> Result<Option<EntryId>, SessionError>;   // 手动压缩
+    pub async fn rewind(&self, to: EntryId) -> Result<(), SessionError>;    // 追加 checkout
+    pub async fn fork(&self, at: EntryId, agent: Agent, options: SessionOptions)
+        -> Result<Session, SessionError>;                                    // 以根到 at 的分支新建会话
+    pub async fn context(&self) -> Result<Vec<Message>, SessionError>;      // 当前投影，大对象已还原
+    pub fn entries(&self) -> Vec<Entry>;                                     // 供宿主展示树
+    pub async fn append_custom(&self, namespace, data: Value) -> Result<EntryId, SessionError>;
 }
 ```
 
@@ -216,7 +219,8 @@ impl Session {
 
 从叶子向前累加估算 token，直到达到 `keep_recent_tokens`（默认 20000），在不早于该处的最近一个合法切点切分。
 合法切点只有**用户消息或助手消息**的开头：绝不把工具调用与其结果分开。保留区若从轮次中途开始（切点是助手消息），
-被切掉的前半轮单独生成"轮内前情"摘要并入总摘要。
+该轮之前的部分随其他被压缩的消息一起进入摘要（不单独生成"轮内前情"摘要）。
+可见消息总量不足保留量时没有可压缩的内容；保留量不超过窗口的一半，避免小窗口模型永远无内容可压缩。
 
 ### 摘要
 
@@ -252,20 +256,19 @@ impl Session {
 | 大对象 | 内联 | 按内容寻址的 blob |
 | 工具详情 | 存于工具结果消息 | 存于条目元数据，`Message` 保持不变 |
 
-## 实施步骤
+## 实施状态
 
-每步一个或数个原子提交，均可独立编译并通过测试：
+| 步骤 | 提交 | 状态 |
+| :--- | :--- | :--- |
+| `zach-agent`：`Commit` / `CommitKind`、`LoopHost::on_commit`、`TranscriptSink` | `e464210` | 已完成 |
+| 会话模型与投影、v1 样例文件 | `e374222` | 已完成 |
+| 存储抽象与 `MemoryStore` | `d332314` | 已完成；**`JsonlStore` 待实现** |
+| `Session`：运行、逐条落盘、大对象、回退与分叉、写入失败处理 | `687bad7` | 已完成 |
+| 压缩：估算、切点、摘要、文件追踪、轮间压缩与溢出重试 | `4fa3cf5` | 已完成 |
 
-1. `zach-agent`：`Commit` / `CommitKind`、`LoopHost::on_commit` 替换 `on_message`、`TranscriptSink` 与构造器接入。
-2. 会话模型与投影：条目类型、文件头、`project`、崩溃修复，以及 v1 样例文件与样例测试。
-3. 存储：`SessionStore`、`JsonlStore`（残行处理、权限、blob），内存替身。
-4. `Session`：创建、打开、`prompt`、插队/追加/中止、`rewind`、`fork`、写入失败处理。
-5. 压缩：估算、切点、`Summarizer` 与默认实现、文件追踪、轮间压缩与溢出重试。
-6. 文档：README 与示例。
+## 已确认的决定
 
-## 待确认
-
-1. 会话层先放在 `zach-coding-agent` 内（建议），还是一开始就独立为 `zach-session` crate？
-2. 默认 fsync 策略取 `TurnBoundary`（建议），还是 `EveryEntry`？
-3. 摘要默认使用当前模型（建议），还是要求宿主显式指定摘要模型？
-4. 跨进程互斥本期不做（建议），是否有多进程同时打开同一会话的场景？
+1. 会话层放在 `zach-coding-agent` 的 `session` 模块，出现第二个使用方时再独立成 crate。
+2. 默认刷盘策略为 `TurnBoundary`。
+3. 摘要默认使用会话当前的模型，可经 `ModelSummarizer::with_model` 或自定义 `Summarizer` 替换。
+4. 跨进程互斥本期不做，由宿主保证同一会话只有一个写入方。
