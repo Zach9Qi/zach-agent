@@ -269,7 +269,7 @@ async fn large_files_are_stored_as_blobs_and_restored() {
     assert_eq!(session.context().await.unwrap()[0], message);
 }
 
-/// 写入失败后不再执行任何工具，运行以写入错误结束，会话拒绝后续运行
+/// 写入失败后不再执行任何工具，报告一次失败事件，运行以写入错误结束，会话拒绝后续运行
 #[tokio::test]
 async fn write_failures_stop_tools_and_the_session() {
     let model = ScriptedModel::new(vec![call_parts(&[("c1", "touch", json!({}))])]);
@@ -277,7 +277,16 @@ async fn write_failures_stop_tools_and_the_session() {
     let store = Arc::new(FailingStore::new(1));
     let session = Session::create(store, agent(&model, vec![touch]), SessionOptions::new());
 
-    let result = session.prompt_text("动手").unwrap().outcome().await;
+    let mut run = session.prompt_text("动手").unwrap();
+    let mut failures = Vec::new();
+    while let Some(event) = run.next().await {
+        if let SessionEvent::PersistFailed { reason } = event {
+            failures.push(reason);
+        }
+    }
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert!(failures[0].contains("磁盘已满"));
+    let result = run.outcome().await;
     assert!(matches!(result, Err(SessionError::Persist(reason)) if reason.contains("磁盘已满")));
     assert!(!executed.load(std::sync::atomic::Ordering::SeqCst));
     assert!(session.failure().is_some());

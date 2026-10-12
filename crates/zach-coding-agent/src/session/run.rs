@@ -28,6 +28,8 @@ pub enum SessionEvent {
     Agent(AgentEvent),
     /// 上下文压缩的进展
     Compaction(CompactionEvent),
+    /// 会话写入失败（每个会话只报告一次）：运行随即停止执行工具并结束，之后拒绝新的运行
+    PersistFailed { reason: String },
 }
 
 /// 一次会话运行：`Stream<Item = SessionEvent>`，消费完事件后用 [`Self::outcome`] 取得结果

@@ -178,11 +178,21 @@ impl Shared {
         Ok(())
     }
 
-    /// 标记失败并返回对外的错误
+    /// 标记失败并返回对外的错误；第一次失败时向当前运行的使用方报告
     fn fail(&self, error: SessionError) -> SessionError {
         let reason = error.to_string();
         tracing::error!(session = %self.header.id, %reason, "会话写入失败");
-        self.lock().failure.get_or_insert(reason.clone());
+        let first = {
+            let mut state = self.lock();
+            let first = state.failure.is_none();
+            state.failure.get_or_insert(reason.clone());
+            first
+        };
+        if first {
+            self.send_event(SessionEvent::PersistFailed {
+                reason: reason.clone(),
+            });
+        }
         SessionError::Persist(reason)
     }
 }

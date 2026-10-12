@@ -226,7 +226,7 @@ async fn chat(agent: Agent, later: Agent) -> Result<(), Box<dyn std::error::Erro
 }
 ```
 
-- **逐条落盘**：经 `zach-agent` 的 `TranscriptSink` 接收每次提交（含回复用量与工具 `details`），第一条消息出现时才创建会话；默认在一轮完整写入后刷盘。写入失败时拒绝执行任何工具并结束运行，避免日志缺失时继续改动工作区。
+- **逐条落盘**：经 `zach-agent` 的 `TranscriptSink` 接收每次提交（含回复用量与工具 `details`），第一条消息出现时才创建会话；默认在一轮完整写入后刷盘。写入失败时发出 `SessionEvent::PersistFailed`，拒绝执行任何工具并结束运行，避免日志缺失时继续改动工作区。
 - **存储可替换**：会话层只经由 `SessionStore` 读写；内置文件存储 `JsonlStore`（一个会话一个 JSONL 文件，崩溃留下的末尾残行在加载时忽略、追加前截掉）与进程内的 `MemoryStore`。超过阈值的文件数据以内容寻址的 blob 落盘，交给模型前还原。
 - **回退与分叉**：`rewind` 追加回退条目，位置随日志保留；`fork` 以一段分支创建新会话。
 - **上下文压缩**：上下文接近窗口时把较早的消息替换为结构化摘要（运行前、轮次之间自动，或手动 `compact`），切点绝不分开工具调用与其结果；模型报告上下文超长时压缩并自动继续一次。摘要器可替换（`Summarizer`），默认用当前模型。
