@@ -5,9 +5,11 @@
 mod entry;
 mod log;
 mod projection;
+mod store;
 
 pub use entry::{
     CompactionEntry, CompactionReason, ConfigEntry, CustomEntry, Entry, EntryBody, EntryId,
     ForkOrigin, MessageEntry, MessageOrigin, ModelRef, SessionHeader, SessionId, FORMAT_VERSION,
 };
 pub use log::{LogError, SessionLog};
+pub use store::{BlobRef, MemoryStore, SessionStore, StoreError, StoredSession};

@@ -1,7 +1,8 @@
-//! 会话：条目日志与投影、v1 样例文件；子模块共用的条目构造辅助放在这里
+//! 会话：条目日志与投影、v1 样例文件、存储契约；子模块共用的条目构造辅助放在这里
 
 mod fixtures;
 mod log;
+mod store;
 
 use serde_json::json;
 use zach_ai_core::{AssistantPart, Message, ToolPart, ToolResultOutput};

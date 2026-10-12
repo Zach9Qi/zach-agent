@@ -19,6 +19,9 @@ ignore = "0.4"
 globset = "0.4"
 # grep 的正则匹配
 regex = "1"
+thiserror.workspace = true
+# 会话大对象按内容的 SHA-256 寻址
+sha2 = "0.10"
 # 按行计算 edit 前后的统一差异
 similar = "2"
 
