@@ -1,0 +1,10 @@
+[package]
+name = "zach-coding-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+zach-agent.workspace = true
+zach-ai-core.workspace = true

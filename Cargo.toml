@@ -4,6 +4,7 @@ members = [
     "crates/zach-ai-core",
     "crates/zach-ai",
     "crates/zach-agent",
+    "crates/zach-coding-agent",
     "xtask",
 ]
 
@@ -17,6 +18,7 @@ license = "MIT OR Apache-2.0"
 zach-ai-core = { path = "crates/zach-ai-core" }
 zach-ai = { path = "crates/zach-ai" }
 zach-agent = { path = "crates/zach-agent" }
+zach-coding-agent = { path = "crates/zach-coding-agent" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
